@@ -1,0 +1,39 @@
+{
+  "total_count": 2,
+  "satisfied_count": 1,
+  "part_satisfied_count": 0,
+  "unfiltered_count": 2,
+  "items": [
+    {
+      "charge_code": "999999990002",
+      "status": "outstanding",
+      "created_on": "2024-03-01",
+      "delivered_on": "2024-03-05",
+      "classification": {
+        "type": "charge-description",
+        "description": "A registered charge"
+      },
+      "particulars": {
+        "type": "brief-description",
+        "description": "Fixed and floating charge over the undertaking and all property"
+      },
+      "persons_entitled": [{ "name": "FICTIONAL FINANCE PLC" }]
+    },
+    {
+      "charge_code": "999999990001",
+      "status": "fully-satisfied",
+      "created_on": "2020-07-01",
+      "delivered_on": "2020-07-03",
+      "satisfied_on": "2023-01-15",
+      "classification": {
+        "type": "charge-description",
+        "description": "A registered charge"
+      },
+      "particulars": {
+        "type": "brief-description",
+        "description": "Charge over book debts"
+      },
+      "persons_entitled": [{ "name": "IMAGINARY BANK PLC" }]
+    }
+  ]
+}

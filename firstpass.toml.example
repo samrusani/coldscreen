@@ -1,0 +1,39 @@
+# Optional configuration for firstpass. Copy to firstpass.toml in the
+# directory you run the tool from. Precedence: CLI flag, then environment
+# variable (FIRSTPASS_<NAME> upper case, for example FIRSTPASS_OUTPUT_DIR),
+# then this file, then built-in defaults.
+#
+# Secrets never live here. The Companies House key comes from the
+# COMPANIES_HOUSE_API_KEY environment variable only.
+
+# Where case directories are written.
+output_dir = "cases"
+
+# HTTP cache location. Empty string means the platform user cache directory.
+# Set to ".firstpass_cache" to keep the cache next to your project.
+cache_dir = ""
+
+# Cache time to live in days.
+cache_ttl_days = 7
+
+# Client-side throttle. Companies House documents 600 requests per 5 minute
+# window; stay under it.
+rate_limit_requests = 500
+rate_limit_window_seconds = 300
+
+# Pagination. Page size and caps are configuration because Companies House
+# does not document defaults or maxima. Truncation is always reported.
+items_per_page = 100
+max_pages_officers = 10
+max_pages_psc = 10
+max_pages_filing_history = 3
+
+# Officers resigned within this many years are kept in the casefile.
+officer_lookback_years = 5
+
+# Wholesale officer change finding triggers when resignations in the last
+# 12 months reach max(this value, half the active officer count).
+wholesale_change_min = 2
+
+# HTTP timeout in seconds.
+timeout_seconds = 30

@@ -1,0 +1,40 @@
+{
+  "total_count": 4,
+  "items_per_page": 100,
+  "start_index": 0,
+  "filing_history_status": "filing-history-available",
+  "items": [
+    {
+      "transaction_id": "fictTxn004",
+      "category": "officers",
+      "type": "TM01",
+      "date": "2026-05-16",
+      "description": "termination-director-company-with-name-termination-date",
+      "action_date": "2026-05-15"
+    },
+    {
+      "transaction_id": "fictTxn003",
+      "category": "accounts",
+      "type": "AA",
+      "date": "2025-02-20",
+      "description": "accounts-with-accounts-type-micro-entity",
+      "action_date": "2024-05-31"
+    },
+    {
+      "transaction_id": "fictTxn002",
+      "category": "mortgage",
+      "type": "MR01",
+      "date": "2024-03-05",
+      "description": "mortgage-create-with-date-charge-number",
+      "action_date": "2024-03-01"
+    },
+    {
+      "transaction_id": "fictTxn001",
+      "category": "incorporation",
+      "type": "NEWINC",
+      "date": "2019-05-14",
+      "description": "incorporation-company",
+      "action_date": "2019-05-14"
+    }
+  ]
+}

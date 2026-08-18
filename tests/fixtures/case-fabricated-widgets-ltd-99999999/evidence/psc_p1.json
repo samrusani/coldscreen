@@ -1,0 +1,38 @@
+{
+  "body": {
+    "active_count": 1,
+    "ceased_count": 0,
+    "items": [
+      {
+        "country_of_residence": "England",
+        "date_of_birth": {
+          "month": 1,
+          "year": 1980
+        },
+        "kind": "individual-person-with-significant-control",
+        "links": {
+          "self": "/company/99999999/persons-with-significant-control/individual/fictPsc001"
+        },
+        "name": "Ms Wanda Widgetsmith",
+        "nationality": "British",
+        "natures_of_control": [
+          "ownership-of-shares-75-to-100-percent",
+          "voting-rights-75-to-100-percent"
+        ],
+        "notified_on": "2019-05-14"
+      }
+    ],
+    "items_per_page": 100,
+    "start_index": 0,
+    "total_results": 1
+  },
+  "from_cache": false,
+  "name": "psc_p1",
+  "params": {
+    "items_per_page": "100",
+    "start_index": "0"
+  },
+  "retrieved_at": "2026-08-18T12:00:00+00:00",
+  "status": 200,
+  "url": "https://api.company-information.service.gov.uk/company/99999999/persons-with-significant-control"
+}

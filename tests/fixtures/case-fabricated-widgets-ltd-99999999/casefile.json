@@ -1,0 +1,350 @@
+{
+  "subject": {
+    "company_name": "FABRICATED WIDGETS LTD",
+    "company_number": "99999999",
+    "company_status": "active",
+    "company_status_detail": null,
+    "date_of_creation": "2019-05-14",
+    "date_of_cessation": null,
+    "company_type": "ltd",
+    "jurisdiction": "england-wales",
+    "sic_codes": [
+      "28990"
+    ],
+    "registered_office_address": {
+      "address_line_1": "1 Imaginary Way",
+      "locality": "Faketown",
+      "postal_code": "ZZ99 9ZZ",
+      "country": "England"
+    },
+    "registered_office_is_in_dispute": false,
+    "undeliverable_registered_office_address": false,
+    "previous_company_names": [
+      {
+        "name": "FICTIONAL WIDGETS LTD",
+        "effective_from": "2019-05-14",
+        "ceased_on": "2021-02-01"
+      }
+    ],
+    "accounts": {
+      "next_accounts": {
+        "overdue": true,
+        "due_on": "2026-02-28",
+        "period_end_on": "2025-05-31"
+      },
+      "last_accounts": {
+        "made_up_to": "2024-05-31",
+        "type": "micro-entity"
+      }
+    },
+    "confirmation_statement": {
+      "overdue": false,
+      "next_due": "2026-09-30",
+      "last_made_up_to": "2025-09-16"
+    },
+    "links": {
+      "self": "/company/99999999",
+      "officers": "/company/99999999/officers",
+      "filing_history": "/company/99999999/filing-history",
+      "persons_with_significant_control": "/company/99999999/persons-with-significant-control",
+      "charges": "/company/99999999/charges"
+    }
+  },
+  "officers": [
+    {
+      "name": "WIDGETSMITH, Wanda",
+      "officer_role": "director",
+      "appointed_on": "2019-05-14",
+      "resigned_on": null,
+      "nationality": "British",
+      "occupation": "Engineer",
+      "country_of_residence": "England",
+      "links": {
+        "officer": {
+          "appointments": "/officers/fictOfficer001/appointments"
+        }
+      }
+    },
+    {
+      "name": "COGWHEEL, Cornelius",
+      "officer_role": "director",
+      "appointed_on": "2021-03-01",
+      "resigned_on": null,
+      "nationality": "British",
+      "occupation": "Sales Director",
+      "country_of_residence": "Wales",
+      "links": {
+        "officer": {
+          "appointments": "/officers/fictOfficer002/appointments"
+        }
+      }
+    },
+    {
+      "name": "SPROCKET, Sybil",
+      "officer_role": "secretary",
+      "appointed_on": "2019-05-14",
+      "resigned_on": null,
+      "nationality": null,
+      "occupation": null,
+      "country_of_residence": null,
+      "links": {
+        "officer": {
+          "appointments": "/officers/fictOfficer003/appointments"
+        }
+      }
+    },
+    {
+      "name": "FLYWHEEL, Ferdinand",
+      "officer_role": "director",
+      "appointed_on": "2020-01-15",
+      "resigned_on": "2026-03-01",
+      "nationality": "British",
+      "occupation": "Operations Director",
+      "country_of_residence": "England",
+      "links": {
+        "officer": {
+          "appointments": "/officers/fictOfficer004/appointments"
+        }
+      }
+    },
+    {
+      "name": "GASKET, Griselda",
+      "officer_role": "director",
+      "appointed_on": "2019-06-01",
+      "resigned_on": "2026-05-15",
+      "nationality": "British",
+      "occupation": "Finance Director",
+      "country_of_residence": "Scotland",
+      "links": {
+        "officer": {
+          "appointments": "/officers/fictOfficer005/appointments"
+        }
+      }
+    }
+  ],
+  "pscs": [
+    {
+      "name": "Ms Wanda Widgetsmith",
+      "kind": "individual-person-with-significant-control",
+      "natures_of_control": [
+        "ownership-of-shares-75-to-100-percent",
+        "voting-rights-75-to-100-percent"
+      ],
+      "notified_on": "2019-05-14",
+      "ceased_on": null
+    }
+  ],
+  "charges": [
+    {
+      "charge_code": "999999990002",
+      "status": "outstanding",
+      "created_on": "2024-03-01",
+      "delivered_on": "2024-03-05",
+      "satisfied_on": null,
+      "classification": {
+        "type": "charge-description",
+        "description": "A registered charge"
+      },
+      "particulars": {
+        "type": "brief-description",
+        "description": "Fixed and floating charge over the undertaking and all property"
+      },
+      "persons_entitled": [
+        {
+          "name": "FICTIONAL FINANCE PLC"
+        }
+      ]
+    },
+    {
+      "charge_code": "999999990001",
+      "status": "fully-satisfied",
+      "created_on": "2020-07-01",
+      "delivered_on": "2020-07-03",
+      "satisfied_on": "2023-01-15",
+      "classification": {
+        "type": "charge-description",
+        "description": "A registered charge"
+      },
+      "particulars": {
+        "type": "brief-description",
+        "description": "Charge over book debts"
+      },
+      "persons_entitled": [
+        {
+          "name": "IMAGINARY BANK PLC"
+        }
+      ]
+    }
+  ],
+  "filings": [
+    {
+      "transaction_id": "fictTxn004",
+      "category": "officers",
+      "filing_type": "TM01",
+      "date": "2026-05-16",
+      "description": "termination-director-company-with-name-termination-date",
+      "action_date": "2026-05-15"
+    },
+    {
+      "transaction_id": "fictTxn003",
+      "category": "accounts",
+      "filing_type": "AA",
+      "date": "2025-02-20",
+      "description": "accounts-with-accounts-type-micro-entity",
+      "action_date": "2024-05-31"
+    },
+    {
+      "transaction_id": "fictTxn002",
+      "category": "mortgage",
+      "filing_type": "MR01",
+      "date": "2024-03-05",
+      "description": "mortgage-create-with-date-charge-number",
+      "action_date": "2024-03-01"
+    },
+    {
+      "transaction_id": "fictTxn001",
+      "category": "incorporation",
+      "filing_type": "NEWINC",
+      "date": "2019-05-14",
+      "description": "incorporation-company",
+      "action_date": "2019-05-14"
+    }
+  ],
+  "filings_total": 4,
+  "insolvency_cases": [],
+  "findings": [
+    {
+      "id": "REG-001",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Company status is active.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999999",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "company_status=active"
+        }
+      ]
+    },
+    {
+      "id": "REG-002",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Incorporated on 2019-05-14 (7 full years before the screening date).",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999999",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "date_of_creation=2019-05-14"
+        }
+      ]
+    },
+    {
+      "id": "REG-003",
+      "stage": "registry",
+      "severity": "amber",
+      "confidence": "confirmed",
+      "statement": "The registry marks the next accounts as overdue.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999999",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "accounts.next_accounts.overdue=true"
+        }
+      ]
+    },
+    {
+      "id": "REG-006",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Charges register: 2 charge(s) listed (1 outstanding, 1 satisfied).",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999999/charges",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "items=2 outstanding=1"
+        }
+      ]
+    },
+    {
+      "id": "REG-007",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No insolvency history is registered. The company profile offers no insolvency link, so the insolvency resource was not queried.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999999",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "links.insolvency absent"
+        }
+      ]
+    },
+    {
+      "id": "REG-008",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "3 active officer(s) on the register.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999999/officers",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "active officers=3"
+        }
+      ]
+    },
+    {
+      "id": "REG-009",
+      "stage": "registry",
+      "severity": "amber",
+      "confidence": "confirmed",
+      "statement": "Wholesale officer changes: 2 officer(s) resigned in the 12 months before the screening date, against 3 currently active.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999999/officers",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "resignations last 12 months=2"
+        }
+      ]
+    },
+    {
+      "id": "REG-010",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "The company has 1 previous name(s) on the register: FICTIONAL WIDGETS LTD.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999999",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "previous_company_names=1"
+        }
+      ]
+    },
+    {
+      "id": "REG-011",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "1 PSC entry(ies) on the register, 1 not ceased. Natures of control: ownership-of-shares-75-to-100-percent, voting-rights-75-to-100-percent.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999999/persons-with-significant-control",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "psc items=1"
+        }
+      ]
+    }
+  ],
+  "claims": [],
+  "assessments": [],
+  "verdict": null,
+  "tool_version": "0.1.0.dev0",
+  "screened_at": "2026-08-18T12:00:00Z",
+  "disclaimer": "This memo is a research aid generated from public sources at a point in time. It is not investment advice, not a credit reference, and not a consumer report. Do not use it for decisions regulated under the US Fair Credit Reporting Act (employment, credit, tenancy screening) or equivalent regimes. Officer and PSC data is personal data from public registers; you are responsible for processing it lawfully. Verify everything independently before acting on it.",
+  "clock_override": true
+}

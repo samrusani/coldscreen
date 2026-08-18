@@ -1,0 +1,133 @@
+# Screening memo: {{ c.subject.company_name }}
+
+Company {{ c.subject.company_number }}{% if c.subject.jurisdiction %} ({{ c.subject.jurisdiction }}){% endif %}. Screened {{ c.screened_at|fmt_datetime }}. Tool version {{ c.tool_version }}.
+
+{% if c.subject.registered_office_display %}
+Registered office: {{ c.subject.registered_office_display }}
+{% endif %}
+{% if c.subject.sic_codes %}
+SIC codes: {{ c.subject.sic_codes|join(", ") }}
+{% endif %}
+
+## Verdict
+
+{{ verdict_text }}
+
+## Findings
+
+### Red
+
+{% for f in findings_red %}
+- **{{ f.id }}** ({{ f.confidence }}) {{ f.statement }}
+{% for e in f.evidence %}
+  - Evidence: {{ e.source_url }} (retrieved {{ e.retrieved_at|fmt_date }})
+{% endfor %}
+{% else %}
+None recorded.
+{% endfor %}
+
+### Amber
+
+{% for f in findings_amber %}
+- **{{ f.id }}** ({{ f.confidence }}) {{ f.statement }}
+{% for e in f.evidence %}
+  - Evidence: {{ e.source_url }} (retrieved {{ e.retrieved_at|fmt_date }})
+{% endfor %}
+{% else %}
+None recorded.
+{% endfor %}
+
+### Info
+
+{% for f in findings_info %}
+- **{{ f.id }}** ({{ f.confidence }}) {{ f.statement }}
+{% for e in f.evidence %}
+  - Evidence: {{ e.source_url }} (retrieved {{ e.retrieved_at|fmt_date }})
+{% endfor %}
+{% else %}
+None recorded.
+{% endfor %}
+
+## Officers
+
+### Current
+
+{% if current_officers %}
+| Name | Role | Appointed |
+|---|---|---|
+{% for o in current_officers %}
+| {{ o.name }} | {{ o.officer_role or "" }} | {{ o.appointed_on|fmt_date }} |
+{% endfor %}
+{% else %}
+No current officers were returned.
+{% endif %}
+
+### Resigned within the lookback window
+
+{% if resigned_officers %}
+| Name | Role | Appointed | Resigned |
+|---|---|---|---|
+{% for o in resigned_officers %}
+| {{ o.name }} | {{ o.officer_role or "" }} | {{ o.appointed_on|fmt_date }} | {{ o.resigned_on|fmt_date }} |
+{% endfor %}
+{% else %}
+No resignations within the lookback window.
+{% endif %}
+
+## Persons with significant control
+
+{% if c.pscs %}
+| Name | Kind | Natures of control | Notified | Ceased |
+|---|---|---|---|---|
+{% for p in c.pscs %}
+| {{ p.name or "" }} | {{ p.kind or "" }} | {{ p.natures_of_control|join("; ") }} | {{ p.notified_on|fmt_date }} | {{ p.ceased_on|fmt_date }} |
+{% endfor %}
+{% else %}
+No PSC entries in this casefile. See the findings for whether that is an
+absence on the register or an unqueried resource.
+{% endif %}
+
+## Filing history
+
+{% if c.filings %}
+{{ c.filings|length }} filing(s) retrieved{% if c.filings_total is not none %} of {{ c.filings_total }} on the register{% endif %}. Filings are inventoried, not parsed.
+
+| Date | Category | Description |
+|---|---|---|
+{% for f in c.filings %}
+| {{ f.date|fmt_date }} | {{ f.category or "" }} | {{ f.description or "" }} |
+{% endfor %}
+{% else %}
+No filing history entries were retrieved.
+{% endif %}
+
+## Charges
+
+{% if c.charges %}
+| Charge code | Status | Created | Satisfied |
+|---|---|---|---|
+{% for ch in c.charges %}
+| {{ ch.charge_code or "" }} | {{ ch.status or "" }} | {{ ch.created_on|fmt_date }} | {{ ch.satisfied_on|fmt_date }} |
+{% endfor %}
+{% else %}
+No charge entries in this casefile. See the findings for whether that is an
+absence on the register or an unqueried resource.
+{% endif %}
+
+## Insolvency
+
+{% if c.insolvency_cases %}
+{{ c.insolvency_cases|length }} insolvency case(s) on the register. See the red findings.
+{% else %}
+No insolvency cases in this casefile. See the findings for the basis.
+{% endif %}
+
+---
+
+{{ c.disclaimer }}
+
+{% if c.clock_override %}
+Note: the clock for this run was overridden through FIRSTPASS_SCREENED_AT, so the screening and retrieval timestamps above were injected, not observed. This is a reproducibility feature for tests and demos.
+
+{% endif %}
+{{ ogl_attribution }}

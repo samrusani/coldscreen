@@ -1,0 +1,60 @@
+{
+  "body": {
+    "accounts": {
+      "last_accounts": {
+        "made_up_to": "2024-05-31",
+        "type": "micro-entity"
+      },
+      "next_accounts": {
+        "due_on": "2026-02-28",
+        "overdue": true,
+        "period_end_on": "2025-05-31"
+      }
+    },
+    "company_name": "FABRICATED WIDGETS LTD",
+    "company_number": "99999999",
+    "company_status": "active",
+    "confirmation_statement": {
+      "last_made_up_to": "2025-09-16",
+      "next_due": "2026-09-30",
+      "overdue": false
+    },
+    "date_of_creation": "2019-05-14",
+    "etag": "fixture0000000000000000000000000000000000",
+    "has_charges": true,
+    "has_insolvency_history": false,
+    "jurisdiction": "england-wales",
+    "links": {
+      "charges": "/company/99999999/charges",
+      "filing_history": "/company/99999999/filing-history",
+      "officers": "/company/99999999/officers",
+      "persons_with_significant_control": "/company/99999999/persons-with-significant-control",
+      "self": "/company/99999999"
+    },
+    "previous_company_names": [
+      {
+        "ceased_on": "2021-02-01",
+        "effective_from": "2019-05-14",
+        "name": "FICTIONAL WIDGETS LTD"
+      }
+    ],
+    "registered_office_address": {
+      "address_line_1": "1 Imaginary Way",
+      "country": "England",
+      "locality": "Faketown",
+      "postal_code": "ZZ99 9ZZ"
+    },
+    "registered_office_is_in_dispute": false,
+    "sic_codes": [
+      "28990"
+    ],
+    "type": "ltd",
+    "undeliverable_registered_office_address": false
+  },
+  "from_cache": false,
+  "name": "registry_profile",
+  "params": {},
+  "retrieved_at": "2026-08-18T12:00:00+00:00",
+  "status": 200,
+  "url": "https://api.company-information.service.gov.uk/company/99999999"
+}

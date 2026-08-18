@@ -1,0 +1,101 @@
+{
+  "body": {
+    "active_count": 3,
+    "items": [
+      {
+        "appointed_on": "2019-05-14",
+        "country_of_residence": "England",
+        "date_of_birth": {
+          "month": 1,
+          "year": 1980
+        },
+        "links": {
+          "officer": {
+            "appointments": "/officers/fictOfficer001/appointments"
+          }
+        },
+        "name": "WIDGETSMITH, Wanda",
+        "nationality": "British",
+        "occupation": "Engineer",
+        "officer_role": "director"
+      },
+      {
+        "appointed_on": "2021-03-01",
+        "country_of_residence": "Wales",
+        "date_of_birth": {
+          "month": 6,
+          "year": 1975
+        },
+        "links": {
+          "officer": {
+            "appointments": "/officers/fictOfficer002/appointments"
+          }
+        },
+        "name": "COGWHEEL, Cornelius",
+        "nationality": "British",
+        "occupation": "Sales Director",
+        "officer_role": "director"
+      },
+      {
+        "appointed_on": "2019-05-14",
+        "links": {
+          "officer": {
+            "appointments": "/officers/fictOfficer003/appointments"
+          }
+        },
+        "name": "SPROCKET, Sybil",
+        "officer_role": "secretary"
+      },
+      {
+        "appointed_on": "2020-01-15",
+        "country_of_residence": "England",
+        "date_of_birth": {
+          "month": 9,
+          "year": 1968
+        },
+        "links": {
+          "officer": {
+            "appointments": "/officers/fictOfficer004/appointments"
+          }
+        },
+        "name": "FLYWHEEL, Ferdinand",
+        "nationality": "British",
+        "occupation": "Operations Director",
+        "officer_role": "director",
+        "resigned_on": "2026-03-01"
+      },
+      {
+        "appointed_on": "2019-06-01",
+        "country_of_residence": "Scotland",
+        "date_of_birth": {
+          "month": 12,
+          "year": 1982
+        },
+        "links": {
+          "officer": {
+            "appointments": "/officers/fictOfficer005/appointments"
+          }
+        },
+        "name": "GASKET, Griselda",
+        "nationality": "British",
+        "occupation": "Finance Director",
+        "officer_role": "director",
+        "resigned_on": "2026-05-15"
+      }
+    ],
+    "items_per_page": 100,
+    "kind": "officer-list",
+    "resigned_count": 2,
+    "start_index": 0,
+    "total_results": 5
+  },
+  "from_cache": false,
+  "name": "officers_p1",
+  "params": {
+    "items_per_page": "100",
+    "start_index": "0"
+  },
+  "retrieved_at": "2026-08-18T12:00:00+00:00",
+  "status": 200,
+  "url": "https://api.company-information.service.gov.uk/company/99999999/officers"
+}

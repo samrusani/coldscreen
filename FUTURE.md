@@ -11,3 +11,12 @@ Ideas that are out of scope for v0.1. The non-goals in ARCHITECTURE.md section 1
 - Continuous monitoring and alerting. Explicit non-goal for v0.1.
 - Financial statement parsing. Explicit non-goal for v0.1; filings are inventoried, not read.
 - People search beyond registered officers and PSCs. Explicit non-goal for v0.1.
+
+Tooling ideas deferred from the weekend 1 build:
+
+- A --refresh flag to bypass the HTTP cache, plus cache clear and cache stats subcommands.
+- A --no-write mode for pure JSON pipeline use of screen.
+- A per-run fetch log file in the case directory, beyond the evidence index timestamps.
+- Extend the language check to casefile.json statements, not only rendered memos and templates.
+- Probe Companies House charges pagination and 429 response headers empirically once a key exists; both are undocumented upstream.
+- Document a Companies House sandbox recipe (reachable today via the base URL setting) once a test key exists.

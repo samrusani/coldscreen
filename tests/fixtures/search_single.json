@@ -1,0 +1,18 @@
+{
+  "total_results": 1,
+  "items_per_page": 100,
+  "start_index": 0,
+  "kind": "search#companies",
+  "items": [
+    {
+      "title": "FABRICATED WIDGETS LTD",
+      "company_number": "99999999",
+      "company_status": "active",
+      "company_type": "ltd",
+      "date_of_creation": "2019-05-14",
+      "address_snippet": "1 Imaginary Way, Faketown, ZZ99 9ZZ",
+      "kind": "searchresults#company",
+      "links": { "self": "/company/99999999" }
+    }
+  ]
+}

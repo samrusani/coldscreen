@@ -1,0 +1,55 @@
+{
+  "body": {
+    "items": [
+      {
+        "charge_code": "999999990002",
+        "classification": {
+          "description": "A registered charge",
+          "type": "charge-description"
+        },
+        "created_on": "2024-03-01",
+        "delivered_on": "2024-03-05",
+        "particulars": {
+          "description": "Fixed and floating charge over the undertaking and all property",
+          "type": "brief-description"
+        },
+        "persons_entitled": [
+          {
+            "name": "FICTIONAL FINANCE PLC"
+          }
+        ],
+        "status": "outstanding"
+      },
+      {
+        "charge_code": "999999990001",
+        "classification": {
+          "description": "A registered charge",
+          "type": "charge-description"
+        },
+        "created_on": "2020-07-01",
+        "delivered_on": "2020-07-03",
+        "particulars": {
+          "description": "Charge over book debts",
+          "type": "brief-description"
+        },
+        "persons_entitled": [
+          {
+            "name": "IMAGINARY BANK PLC"
+          }
+        ],
+        "satisfied_on": "2023-01-15",
+        "status": "fully-satisfied"
+      }
+    ],
+    "part_satisfied_count": 0,
+    "satisfied_count": 1,
+    "total_count": 2,
+    "unfiltered_count": 2
+  },
+  "from_cache": false,
+  "name": "charges",
+  "params": {},
+  "retrieved_at": "2026-08-18T12:00:00+00:00",
+  "status": 200,
+  "url": "https://api.company-information.service.gov.uk/company/99999999/charges"
+}

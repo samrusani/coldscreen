@@ -1,0 +1,252 @@
+"""Data models for the screening pipeline.
+
+Implements ARCHITECTURE.md section 6. The core rule lives in the schema:
+a Finding without at least one piece of Evidence cannot be constructed.
+
+Registry payload models parse defensively. Unknown fields are ignored and
+the raw JSON persisted under evidence/ remains the source of truth.
+"""
+
+from __future__ import annotations
+
+import datetime as _datetime
+from datetime import date, datetime
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+RESEARCH_AID_DISCLAIMER = (
+    "This memo is a research aid generated from public sources at a point in time. "
+    "It is not investment advice, not a credit reference, and not a consumer report. "
+    "Do not use it for decisions regulated under the US Fair Credit Reporting Act "
+    "(employment, credit, tenancy screening) or equivalent regimes. Officer and PSC "
+    "data is personal data from public registers; you are responsible for processing "
+    "it lawfully. Verify everything independently before acting on it."
+)
+
+OGL_ATTRIBUTION = (
+    "Contains public sector information licensed under the "
+    "Open Government Licence v3.0. Source: Companies House."
+)
+
+
+class Evidence(BaseModel):
+    """A pointer to a persisted public source: where it came from and when."""
+
+    source_url: str
+    retrieved_at: datetime
+    excerpt: str | None = None
+
+
+class Finding(BaseModel):
+    """A single screening observation. Unconstructable without evidence.
+
+    validate_assignment covers attribute assignment after construction, so
+    finding.evidence = [] fails too. Note that model_copy(update=...) skips
+    validation by pydantic design; the backstop is that every casefile is
+    re-validated on load, so an evidence-free finding cannot re-enter the
+    pipeline from disk.
+    """
+
+    model_config = ConfigDict(validate_assignment=True)
+
+    id: str
+    stage: str
+    severity: Literal["red", "amber", "info"]
+    confidence: Literal["confirmed", "indicated", "unverified"]
+    statement: str
+    evidence: list[Evidence] = Field(min_length=1)
+
+
+class Claim(BaseModel):
+    """A discrete checkable statement a company makes about itself.
+
+    Populated from the claims extraction stage in a later milestone.
+    """
+
+    id: str
+    text: str
+    source: str
+    category: Literal["history", "financials", "team", "traction", "regulatory", "other"]
+    checkable: bool
+
+
+class ClaimAssessment(BaseModel):
+    """The outcome of testing one claim against the public record."""
+
+    claim_id: str
+    status: Literal["supported", "contradicted", "unverified"]
+    basis: list[Evidence]
+
+
+class Verdict(BaseModel):
+    """Rubric-bound verdict. Not produced in the deterministic milestone."""
+
+    level: Literal["red", "amber", "green"]
+    triggered: list[str]
+    rationale: str
+    questions: list[str]
+
+
+class _RegistryModel(BaseModel):
+    """Base for models parsed from registry JSON: tolerate unknown fields."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+
+class CompanyCandidate(_RegistryModel):
+    """One company search result, as offered to the user for disambiguation."""
+
+    title: str
+    company_number: str
+    company_status: str | None = None
+    company_type: str | None = None
+    date_of_creation: date | None = None
+    date_of_cessation: date | None = None
+    address_snippet: str | None = None
+
+
+class PreviousCompanyName(_RegistryModel):
+    name: str | None = None
+    effective_from: date | None = None
+    ceased_on: date | None = None
+
+
+class CompanyProfile(_RegistryModel):
+    """Company profile as returned by /company/{number}, parsed defensively."""
+
+    company_name: str
+    company_number: str
+    company_status: str | None = None
+    company_status_detail: str | None = None
+    date_of_creation: date | None = None
+    date_of_cessation: date | None = None
+    company_type: str | None = Field(default=None, alias="type")
+    jurisdiction: str | None = None
+    sic_codes: list[str] = Field(default_factory=list)
+    registered_office_address: dict[str, Any] = Field(default_factory=dict)
+    registered_office_is_in_dispute: bool | None = None
+    undeliverable_registered_office_address: bool | None = None
+    previous_company_names: list[PreviousCompanyName] = Field(default_factory=list)
+    accounts: dict[str, Any] = Field(default_factory=dict)
+    confirmation_statement: dict[str, Any] = Field(default_factory=dict)
+    links: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def accounts_overdue(self) -> bool:
+        """True when the next accounts are flagged overdue by the registry."""
+        next_accounts = self.accounts.get("next_accounts")
+        if isinstance(next_accounts, dict):
+            return bool(next_accounts.get("overdue"))
+        return False
+
+    @property
+    def confirmation_statement_overdue(self) -> bool:
+        return bool(self.confirmation_statement.get("overdue"))
+
+    @property
+    def registered_office_display(self) -> str:
+        parts = [
+            self.registered_office_address.get(key)
+            for key in (
+                "care_of",
+                "premises",
+                "address_line_1",
+                "address_line_2",
+                "locality",
+                "region",
+                "postal_code",
+                "country",
+            )
+        ]
+        return ", ".join(str(p) for p in parts if p)
+
+
+class Officer(_RegistryModel):
+    """One officer list entry. resigned_on absent means currently serving."""
+
+    name: str
+    officer_role: str | None = None
+    appointed_on: date | None = None
+    resigned_on: date | None = None
+    nationality: str | None = None
+    occupation: str | None = None
+    country_of_residence: str | None = None
+    links: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def is_active(self) -> bool:
+        return self.resigned_on is None
+
+
+class PSC(_RegistryModel):
+    """Person with significant control entry. Full schema unverified; keep loose."""
+
+    name: str | None = None
+    kind: str | None = None
+    natures_of_control: list[str] = Field(default_factory=list)
+    notified_on: date | None = None
+    ceased_on: date | None = None
+
+
+class Charge(_RegistryModel):
+    """One registered charge."""
+
+    charge_code: str | None = None
+    status: str | None = None
+    created_on: date | None = None
+    delivered_on: date | None = None
+    satisfied_on: date | None = None
+    classification: dict[str, Any] = Field(default_factory=dict)
+    particulars: dict[str, Any] = Field(default_factory=dict)
+    persons_entitled: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class InsolvencyCase(_RegistryModel):
+    """One insolvency case. Schema unverified upstream; parse defensively."""
+
+    number: int | str | None = None
+    type: str | None = None
+    dates: list[dict[str, Any]] = Field(default_factory=list)
+    practitioners: list[dict[str, Any]] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+class FilingSummary(_RegistryModel):
+    """Filing history metadata. Filings are inventoried, never parsed."""
+
+    transaction_id: str | None = None
+    category: str | None = None
+    filing_type: str | None = Field(default=None, alias="type")
+    # The field is named "date" upstream; the module alias avoids the name
+    # shadowing the type during annotation evaluation.
+    date: _datetime.date | None = None
+    description: str | None = None
+    action_date: _datetime.date | None = None
+
+
+class CaseFile(BaseModel):
+    """Everything one screening run produced, serialized to casefile.json.
+
+    Extends the ARCHITECTURE.md section 6 sketch with the registry lists the
+    memo needs so that `firstpass rerun` can re-render fully offline from
+    this file alone.
+    """
+
+    subject: CompanyProfile
+    officers: list[Officer] = Field(default_factory=list)
+    pscs: list[PSC] = Field(default_factory=list)
+    charges: list[Charge] = Field(default_factory=list)
+    filings: list[FilingSummary] = Field(default_factory=list)
+    filings_total: int | None = None
+    insolvency_cases: list[InsolvencyCase] = Field(default_factory=list)
+    findings: list[Finding] = Field(default_factory=list)
+    claims: list[Claim] = Field(default_factory=list)
+    assessments: list[ClaimAssessment] = Field(default_factory=list)
+    verdict: Verdict | None = None
+    tool_version: str
+    screened_at: datetime
+    disclaimer: str = RESEARCH_AID_DISCLAIMER
+    # True when FIRSTPASS_SCREENED_AT overrode the clock for this run. The
+    # memo footer states it, so audit packs cannot be silently backdated.
+    clock_override: bool = False

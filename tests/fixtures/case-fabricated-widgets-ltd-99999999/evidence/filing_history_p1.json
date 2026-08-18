@@ -1,0 +1,51 @@
+{
+  "body": {
+    "filing_history_status": "filing-history-available",
+    "items": [
+      {
+        "action_date": "2026-05-15",
+        "category": "officers",
+        "date": "2026-05-16",
+        "description": "termination-director-company-with-name-termination-date",
+        "transaction_id": "fictTxn004",
+        "type": "TM01"
+      },
+      {
+        "action_date": "2024-05-31",
+        "category": "accounts",
+        "date": "2025-02-20",
+        "description": "accounts-with-accounts-type-micro-entity",
+        "transaction_id": "fictTxn003",
+        "type": "AA"
+      },
+      {
+        "action_date": "2024-03-01",
+        "category": "mortgage",
+        "date": "2024-03-05",
+        "description": "mortgage-create-with-date-charge-number",
+        "transaction_id": "fictTxn002",
+        "type": "MR01"
+      },
+      {
+        "action_date": "2019-05-14",
+        "category": "incorporation",
+        "date": "2019-05-14",
+        "description": "incorporation-company",
+        "transaction_id": "fictTxn001",
+        "type": "NEWINC"
+      }
+    ],
+    "items_per_page": 100,
+    "start_index": 0,
+    "total_count": 4
+  },
+  "from_cache": false,
+  "name": "filing_history_p1",
+  "params": {
+    "items_per_page": "100",
+    "start_index": "0"
+  },
+  "retrieved_at": "2026-08-18T12:00:00+00:00",
+  "status": 200,
+  "url": "https://api.company-information.service.gov.uk/company/99999999/filing-history"
+}

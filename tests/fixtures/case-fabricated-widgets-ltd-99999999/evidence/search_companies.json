@@ -1,0 +1,31 @@
+{
+  "body": {
+    "items": [
+      {
+        "address_snippet": "1 Imaginary Way, Faketown, ZZ99 9ZZ",
+        "company_number": "99999999",
+        "company_status": "active",
+        "company_type": "ltd",
+        "date_of_creation": "2019-05-14",
+        "kind": "searchresults#company",
+        "links": {
+          "self": "/company/99999999"
+        },
+        "title": "FABRICATED WIDGETS LTD"
+      }
+    ],
+    "items_per_page": 100,
+    "kind": "search#companies",
+    "start_index": 0,
+    "total_results": 1
+  },
+  "from_cache": false,
+  "name": "search_companies",
+  "params": {
+    "items_per_page": "100",
+    "q": "Fabricated Widgets Ltd"
+  },
+  "retrieved_at": "2026-08-18T12:00:00+00:00",
+  "status": 200,
+  "url": "https://api.company-information.service.gov.uk/search/companies"
+}
