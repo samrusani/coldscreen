@@ -1,0 +1,28 @@
+# internal wiki, intentionally never published
+wiki/
+
+# secrets and local configuration
+.env
+
+# screening output and local http cache
+cases/
+.firstpass_cache/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# editors and os
+.DS_Store
+.idea/
+.vscode/
