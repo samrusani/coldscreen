@@ -139,4 +139,4 @@ MIT. Data sources retain their own licenses.
 
 ## Maintainer
 
-Maintained by the team behind [Type3 Capital](https://type3.capital). Maintainer GitHub handle lands here at launch.
+Maintained by [@samrusani](https://github.com/samrusani) and the team behind [Type3 Capital](https://type3.capital).
