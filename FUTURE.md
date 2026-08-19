@@ -15,7 +15,7 @@ Ideas that are out of scope for v0.1. The non-goals in ARCHITECTURE.md section 1
 
 Deferred from the pre-launch hardening review:
 
-- Residual: unseen future model phrasing can still miss the stage-honesty phrase set. The observed not-run miss classes are now in the tuples. The set stays deliberately narrow so honest gap sentences still pass.
+- Residual: unseen future model phrasing can still miss the stage-honesty phrase set, and an honest gap sentence that uses a clean-claim substring without a not-run marker still fails closed. Observed not-run miss classes are in the tuples; a same-field not-run marker suppresses a clean-claim substring. The set stays deliberately narrow so honest gap sentences still pass.
 - Add a hermetic TLS test for SNI preservation through the pinned network backend. Preservation is proven by design (httpcore derives server_hostname from the origin, which the pin never touches) and by a plain-HTTP Host-header test, but no HTTPS handshake test exists yet.
 - Revisit the httpx-internals coupling in the pinned transport if httpx changes its connection-pool shape. It is pinned to the tested versions and fails closed (refuses to run the site stage) otherwise; a public-API path would remove the coupling.
 

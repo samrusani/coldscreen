@@ -740,6 +740,59 @@ def test_new_clean_phrases_are_allowed_when_the_stage_ran() -> None:
     assert result.metadata.language_retries == 0
 
 
+HONEST_CLEAN_CLAIM_WITH_NOT_RUN_MARKERS = (
+    "no PEP matches were available because screening was not performed",
+    "no evidence of sanctions or PEP is available because the screen did not run",
+    "no adverse media was available because screening was not performed",
+)
+
+
+@pytest.mark.parametrize("narrative", HONEST_CLEAN_CLAIM_WITH_NOT_RUN_MARKERS)
+def test_clean_claim_with_a_not_run_marker_in_the_same_field_passes(
+    narrative: str,
+) -> None:
+    """A gap sentence that uses a clean-claim substring and also says the
+    stage did not run is not a clean result. The corrective retry would
+    otherwise fail closed on the same wording."""
+    assert stage_honesty_violations(minimal_casefile(), [narrative]) == []
+    honest = synthesis_json("green", narrative=narrative)
+    provider = FakeModelProvider([honest])
+    result = synthesize(minimal_casefile(), provider, provider_name="fake", model="canned")
+    assert result.metadata.language_retries == 0
+
+
+def test_citing_the_not_run_finding_is_not_a_not_run_marker() -> None:
+    """Observed lies already cited SAN-000 / MED-000 while claiming a
+    completed empty screen. Those ids are not an acknowledgement."""
+    narrative = (
+        "No PEP or sanctions matches were found (SAN-000), and no adverse"
+        " media items were identified (MED-000)."
+    )
+    assert stage_honesty_violations(minimal_casefile(), [narrative]) == [
+        "sanctions",
+        "adverse media",
+    ]
+
+
+def test_a_not_run_marker_in_another_field_does_not_excuse_a_lie() -> None:
+    """Per-field: an honest question cannot suppress a lying narrative."""
+    narrative = "No PEP matches were found."
+    question = "Why was screening not performed?"
+    assert stage_honesty_violations(minimal_casefile(), [narrative, question]) == ["sanctions"]
+    dishonest = synthesis_json(
+        "green",
+        narrative=narrative,
+        questions=[
+            question,
+            "Can you confirm the current trading status of the company?",
+            "Who currently manages day-to-day operations?",
+        ],
+    )
+    provider = FakeModelProvider([dishonest, dishonest])
+    with pytest.raises(SynthesisError, match=r"described the sanctions stage\(s\) as clean"):
+        synthesize(minimal_casefile(), provider, provider_name="fake", model="canned")
+
+
 # -- assessments: happy path through synthesize -----------------------------------
 
 
