@@ -126,6 +126,13 @@ Declined, with the orchestrator's agreement: a declared output schema with a sta
 
 Nothing was relaxed to make the fixes fit: pytest-socket stays armed, the rubric was not touched, and no transport was added. The reviewer's own attack was reproduced against the fixed code as a test rather than trusted from the report, and the memo snapshots are still byte-identical, which is the useful proof that `O_NOFOLLOW` changed only where the bytes go and not what they are.
 
+### 2026-08-19: charges list walk; official spec still has no query params
+The official public-data charges list still documents path parameter `company_number` only. Filing history and officer appointments on the same spec site document `items_per_page` and `start_index`. The client now walks charges with `get_paginated`, `total_key=total_count`, and the same received-count advance as officers and filings. Each page is persisted as `charges_p1`, `charges_p2`, and so on. Config adds `max_pages_charges` (default 10, validated like the other page caps).
+
+If a later page adds no new items, the walk stops. Unique items are kept by `charge_code` when present, otherwise by a conservative serialization of the item so two distinct charges are not dropped. REG-015 still fires when `total_count` exceeds the unique retrieved set, and now states retrieved N of M plus whether retrieval stopped at the page cap or because further pages did not advance. A first page that already covers `total_count`, or that carries no total, is one GET. 404-behind-a-link is unchanged: persist the 404, leave charges unset.
+
+Live page-size maxima, whether the live endpoint honors those query fields, and live 429 headers remain UNVERIFIED. This sprint did not call the live API and did not try to trip the production rate limit. Offline tests cover Retry-After (recorded sleep, not a real wait) and backoff when the header is absent.
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.

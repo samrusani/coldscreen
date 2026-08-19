@@ -27,6 +27,7 @@ items_per_page = 100
 max_pages_officers = 10
 max_pages_psc = 10
 max_pages_filing_history = 3
+max_pages_charges = 10
 max_pages_appointments = 5
 
 # Officers resigned within this many years are kept in the casefile.

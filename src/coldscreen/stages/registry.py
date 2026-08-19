@@ -77,6 +77,10 @@ class RegistryResult:
     charges: list[Charge] | None = None
     charges_link_present: bool = False
     charges_total: int | None = None
+    charges_truncated: bool = False
+    charges_page_cap_hit: bool = False
+    charges_server_clamped: bool = False
+    charges_did_not_advance: bool = False
     insolvency_cases: list[InsolvencyCase] | None = None
     insolvency_link_present: bool = False
     records: list[NamedRecord] = field(default_factory=list)
@@ -176,21 +180,24 @@ def run_registry_pass(
     if links.get("charges"):
         result.charges_link_present = True
         try:
-            charges_record: FetchRecord | None = client.charges(company_number)
+            charges_pages = client.charges(
+                company_number,
+                items_per_page=settings.items_per_page,
+                max_pages=settings.max_pages_charges,
+            )
         except NotFoundError as error:
             # Same posture as insolvency below: the link promised data, the
             # resource 404ed. Keep the 404 as evidence, leave charges None.
-            _keep_404(result, "charges", error)
-            charges_record = None
-        if charges_record is not None:
-            result.records.append(NamedRecord("charges", charges_record))
-            body = charges_record.body if isinstance(charges_record.body, dict) else {}
-            items = body.get("items") or []
-            result.charges = [
-                Charge.model_validate(item) for item in items if isinstance(item, dict)
-            ]
-            total_count = body.get("total_count")
-            result.charges_total = total_count if isinstance(total_count, int) else None
+            _keep_404(result, "charges_p1", error)
+        else:
+            for index, record in enumerate(charges_pages.records, start=1):
+                result.records.append(NamedRecord(f"charges_p{index}", record))
+            result.charges = [Charge.model_validate(item) for item in charges_pages.items]
+            result.charges_total = charges_pages.total
+            result.charges_truncated = charges_pages.truncated
+            result.charges_page_cap_hit = charges_pages.hit_page_cap
+            result.charges_server_clamped = charges_pages.server_clamped
+            result.charges_did_not_advance = charges_pages.did_not_advance
 
     if links.get("insolvency"):
         result.insolvency_link_present = True

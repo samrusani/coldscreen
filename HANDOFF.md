@@ -8,7 +8,7 @@ The repository is at github.com/samrusani/coldscreen. Branch `main` is current a
 
 A CLI that turns a UK company name into a first-pass screening memo built entirely from public sources, with every finding traceable to evidence. It is not due diligence. It is the screen that decides whether due diligence is worth anyone's time. The same pipeline is also an MCP stdio server, so the screen runs inside agent workflows without a second implementation of it.
 
-Current state: 683 tests, 28 modules, roughly 9,600 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI. Rubric 0.3 adds a mechanical R4 floor for origin-year contradictions ("operating since 2015" against incorporation in 2019), so that class of claims-bearing case now anchors unconditionally.
+Current state: 695 tests, 28 modules, roughly 9,600 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI. Rubric 0.3 adds a mechanical R4 floor for origin-year contradictions ("operating since 2015" against incorporation in 2019), so that class of claims-bearing case now anchors unconditionally.
 
 ## The five non-negotiables
 
@@ -76,11 +76,10 @@ Findings this loop caught that the test suite did not: pagination that silently 
 
 FUTURE.md holds remaining items. My recommended ordering:
 
-1. **Charges pagination and the undocumented limits.** Charges are currently a single unpaginated GET. While you are there, probe the pagination maxima and 429 behavior empirically now that a key exists, and record the findings in DECISIONS.md.
-2. **Cache UX**: a `--refresh` flag, plus commands to print the cache path and clear it. Today a filing that lands is invisible for up to seven days and the cache path is undiscoverable from the CLI.
-3. **Extend the stage-honesty phrase set** from real model phrasing observed in live runs. The mechanical backstop that stops a memo describing a not-run stage as clean uses a deliberately narrow fixed phrase set.
-4. **A hermetic TLS test for SNI preservation** through the pinned network backend, and a plan for the httpx internals coupling in `site.py` (it fails closed if httpx changes shape, but it is coupled).
-5. Registry adapters for other jurisdictions. Design the adapter interface when a second registry forces it, not before.
+1. **Cache UX**: a `--refresh` flag, plus commands to print the cache path and clear it. Today a filing that lands is invisible for up to seven days and the cache path is undiscoverable from the CLI.
+2. **Extend the stage-honesty phrase set** from real model phrasing observed in live runs. The mechanical backstop that stops a memo describing a not-run stage as clean uses a deliberately narrow fixed phrase set.
+3. **A hermetic TLS test for SNI preservation** through the pinned network backend, and a plan for the httpx internals coupling in `site.py` (it fails closed if httpx changes shape, but it is coupled).
+4. Registry adapters for other jurisdictions. Design the adapter interface when a second registry forces it, not before.
 
 ## Known open items that are not code
 

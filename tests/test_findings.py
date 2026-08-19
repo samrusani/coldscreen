@@ -153,7 +153,8 @@ def test_charges_truncation_is_an_explicit_finding() -> None:
     truncation = findings["REG-015"]
     assert truncation.severity == "info"
     assert "retrieved 1 of 7 charge(s)" in truncation.statement
-    assert "no pagination" in truncation.statement
+    assert "page cap" not in truncation.statement
+    assert "did not advance" not in truncation.statement
 
 
 def test_no_charges_truncation_finding_when_counts_agree() -> None:
@@ -165,6 +166,34 @@ def test_no_charges_truncation_finding_when_counts_agree() -> None:
     result.charges_total = 1
     findings = by_id(result)
     assert "REG-015" not in findings
+
+
+def test_charges_truncation_names_the_page_cap() -> None:
+    from coldscreen.models import Charge
+
+    result = make_result()
+    result.charges_link_present = True
+    result.charges = [Charge.model_validate({"status": "outstanding"})]
+    result.charges_total = 7
+    result.charges_page_cap_hit = True
+    statement = by_id(result)["REG-015"].statement
+    assert "retrieved 1 of 7 charge(s)" in statement
+    assert "page cap" in statement
+    assert "did not advance" not in statement
+
+
+def test_charges_truncation_names_a_page_that_did_not_advance() -> None:
+    from coldscreen.models import Charge
+
+    result = make_result()
+    result.charges_link_present = True
+    result.charges = [Charge.model_validate({"status": "outstanding"})]
+    result.charges_total = 7
+    result.charges_did_not_advance = True
+    statement = by_id(result)["REG-015"].statement
+    assert "retrieved 1 of 7 charge(s)" in statement
+    assert "did not advance" in statement
+    assert "page cap" not in statement
 
 
 def test_missing_charges_link_yields_absence_finding_citing_profile() -> None:
@@ -242,7 +271,7 @@ def test_charges_link_with_unretrievable_resource_is_flagged_not_dropped() -> No
     result.charges = None
     result.records.append(
         NamedRecord(
-            "charges",
+            "charges_p1",
             FetchRecord(
                 url=f"{PROFILE_URL}/charges",
                 params={},

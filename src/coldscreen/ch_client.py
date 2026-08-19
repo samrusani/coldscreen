@@ -16,6 +16,8 @@ Coded from wiki/research/companies-house.md, not from memory:
   official defaults or maxima are documented. The paginator advances by the
   number of items actually received, so a server that clamps page size below
   the requested value skips nothing. Truncation is reported, never silent.
+  The charges list documents no query parameters; the client still walks
+  pages the same way, and stops if a later page does not advance.
 
 Terminal non-200 responses (404, 401, other 4xx) carry a FetchRecord on the
 raised exception so callers can persist them as evidence. The API key
@@ -28,7 +30,7 @@ from __future__ import annotations
 import json
 import time
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -128,6 +130,9 @@ class PaginatedResult:
     cap was reached while more records remained. server_clamped is True when
     a page returned fewer items than requested while more records remained,
     which means the server enforces a smaller page size than configured.
+    did_not_advance is True when a later page added no new items (for
+    example the same page repeated), so the walk stopped rather than
+    spinning until the page cap.
     """
 
     items: list[dict[str, Any]]
@@ -136,6 +141,7 @@ class PaginatedResult:
     truncated: bool
     hit_page_cap: bool = False
     server_clamped: bool = False
+    did_not_advance: bool = False
     top_level: dict[str, Any] = field(default_factory=dict)
 
 
@@ -197,6 +203,18 @@ def _parse_retry_after(value: str | None) -> float | None:
         return float(value)
     except ValueError:
         return None
+
+
+def _charge_item_key(item: dict[str, Any]) -> Hashable:
+    """Stable identity for a charges list item.
+
+    charge_code is the register's own id when present. Without one, the
+    whole item is the key so two distinct charges are not collapsed.
+    """
+    code = item.get("charge_code")
+    if isinstance(code, str) and code:
+        return ("charge_code", code)
+    return ("body", json.dumps(item, sort_keys=True, default=str))
 
 
 class CompaniesHouseClient:
@@ -338,12 +356,18 @@ class CompaniesHouseClient:
         max_pages: int,
         total_key: str,
         extra_params: dict[str, str | int] | None = None,
+        item_key: Callable[[dict[str, Any]], Hashable] | None = None,
+        stop_if_no_total: bool = False,
     ) -> PaginatedResult:
         """Collect items across pages, stopping at max_pages or the total.
 
         start_index advances by the number of items actually received, not by
         the requested page size, so nothing is skipped when the server clamps
         pages to a smaller size than requested.
+
+        When item_key is set, items are kept unique by that key and the walk
+        stops if a later page adds nothing new. When stop_if_no_total is set
+        and the first page carries no total, one GET is enough.
         """
         items: list[dict[str, Any]] = []
         records: list[FetchRecord] = []
@@ -351,6 +375,8 @@ class CompaniesHouseClient:
         top_level: dict[str, Any] = {}
         server_clamped = False
         stopped_early = False
+        did_not_advance = False
+        seen_keys: set[Hashable] = set()
         pages = 0
         start_index = 0
         while pages < max_pages:
@@ -364,14 +390,32 @@ class CompaniesHouseClient:
             if pages == 1:
                 top_level = {k: v for k, v in body.items() if k != "items"}
             page_items = body.get("items") or []
-            items.extend(i for i in page_items if isinstance(i, dict))
+            dict_items = [i for i in page_items if isinstance(i, dict)]
             raw_total = body.get(total_key)
             if isinstance(raw_total, int):
                 total = raw_total
+            if item_key is not None:
+                new_items: list[dict[str, Any]] = []
+                for item in dict_items:
+                    key = item_key(item)
+                    if key in seen_keys:
+                        continue
+                    seen_keys.add(key)
+                    new_items.append(item)
+                if pages > 1 and not new_items:
+                    did_not_advance = True
+                    stopped_early = True
+                    break
+                items.extend(new_items)
+            else:
+                items.extend(dict_items)
             if not page_items:
                 stopped_early = True
                 break
             if total is not None and len(items) >= total:
+                stopped_early = True
+                break
+            if stop_if_no_total and total is None:
                 stopped_early = True
                 break
             if len(page_items) < items_per_page:
@@ -386,6 +430,7 @@ class CompaniesHouseClient:
             truncated=truncated,
             hit_page_cap=hit_page_cap,
             server_clamped=server_clamped,
+            did_not_advance=did_not_advance,
             top_level=top_level,
         )
 
@@ -423,9 +468,23 @@ class CompaniesHouseClient:
             total_key="total_count",
         )
 
-    def charges(self, company_number: str) -> FetchRecord:
-        # No pagination params are documented for charges; single call.
-        return self.get(f"/company/{company_number}/charges")
+    def charges(self, company_number: str, items_per_page: int, max_pages: int) -> PaginatedResult:
+        """Walk the charges list with the same received-count paginator.
+
+        Official spec still lists no query parameters on this endpoint. The
+        walk still sends items_per_page and start_index. If a later page
+        adds no new charges, retrieval stops instead of repeating the same
+        page until the cap. One GET is enough when the first page already
+        covers total_count, or when the response carries no total.
+        """
+        return self.get_paginated(
+            f"/company/{company_number}/charges",
+            items_per_page=items_per_page,
+            max_pages=max_pages,
+            total_key="total_count",
+            item_key=_charge_item_key,
+            stop_if_no_total=True,
+        )
 
     def insolvency(self, company_number: str) -> FetchRecord:
         # Callers must gate this on profile links.insolvency. A 404 here is

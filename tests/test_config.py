@@ -17,6 +17,7 @@ def test_defaults_match_the_documented_values() -> None:
     assert settings.cache_ttl_days == 7.0
     assert settings.items_per_page == 100
     assert settings.max_pages_filing_history == 3
+    assert settings.max_pages_charges == 10
     assert settings.officer_lookback_years == 5
     assert settings.output_dir == "cases"
     assert settings.ollama_num_ctx == 16384
@@ -181,6 +182,7 @@ def test_sanctions_threshold_must_be_within_zero_and_one() -> None:
         ("items_per_page", "0"),
         ("rate_limit_requests", "-1"),
         ("max_pages_officers", "0"),
+        ("max_pages_charges", "0"),
         ("max_deck_bytes", "0"),
         ("media_results_per_query", "0"),
         ("ollama_num_ctx", "-5"),
