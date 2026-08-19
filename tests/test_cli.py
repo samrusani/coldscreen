@@ -68,9 +68,11 @@ def flat_output(result: Result) -> str:
 
     Rich wraps its error panels to the terminal width, so a phrase like
     "Invalid value for '--config'" is split across lines on a narrow CI
-    terminal but not on a wide developer one. Collapsing whitespace and
-    dropping escape sequences makes assertions about wording independent
-    of the width the tests happen to run at.
+    terminal but not on a wide developer one. It also styles the two hyphens
+    of a long option as separate spans (`-` then `-refresh`), so a raw
+    `--refresh` substring is absent from colored help even when the flag is
+    on the command. Collapsing whitespace and dropping escape sequences
+    makes assertions about wording independent of width and color.
     """
     text = _ANSI_RE.sub("", all_output(result))
     return " ".join(text.split())
@@ -1201,15 +1203,16 @@ def test_language_gate_exhaustion_memo_survives_the_backstop(
 
 
 def test_screen_help_includes_refresh() -> None:
-    result = runner.invoke(app, ["screen", "--help"])
+    # color=True matches CI: Rich splits `--refresh` into `-` + `-refresh`.
+    result = runner.invoke(app, ["screen", "--help"], color=True)
     assert result.exit_code == 0
-    assert "--refresh" in result.output
+    assert "--refresh" in flat_output(result)
 
 
 def test_rerun_help_does_not_include_refresh() -> None:
-    result = runner.invoke(app, ["rerun", "--help"])
+    result = runner.invoke(app, ["rerun", "--help"], color=True)
     assert result.exit_code == 0
-    assert "--refresh" not in result.output
+    assert "--refresh" not in flat_output(result)
 
 
 def test_screen_refresh_runs_a_mocked_screen(
