@@ -202,6 +202,35 @@ def test_json_stdout_is_pure_json(screen_env: Path, respx_mock: respx.MockRouter
     assert parsed["subject"]["company_number"] == "99999999"
     assert parsed["clock_override"] is True
     assert "Case directory written" in result.stderr
+    assert (screen_env / "cases" / "fabricated-widgets-ltd-99999999").is_dir()
+
+
+def test_no_write_prints_casefile_json_and_creates_no_case_directory(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    mock_company_routes(respx_mock)
+    result = runner.invoke(app, ["screen", "Fabricated Widgets Ltd", "--no-write"])
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.stdout)
+    assert parsed["subject"]["company_number"] == "99999999"
+    assert parsed["schema_version"] == 1
+    assert SECRET not in all_output(result)
+    assert "Case directory written" not in all_output(result)
+    assert "Case directory was not written" in result.stderr
+    assert not (screen_env / "cases").exists()
+
+
+def test_json_and_no_write_print_the_casefile_once(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    mock_company_routes(respx_mock)
+    result = runner.invoke(app, ["screen", "99999999", "--json", "--no-write"])
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.stdout)
+    assert parsed["subject"]["company_number"] == "99999999"
+    assert result.stdout.count('"schema_version"') == 1
+    assert "Case directory written" not in all_output(result)
+    assert not (screen_env / "cases").exists()
 
 
 def test_screen_records_the_clock_override(screen_env: Path, respx_mock: respx.MockRouter) -> None:
@@ -436,6 +465,42 @@ def test_screening_into_an_existing_case_directory_is_an_error(
     assert "--overwrite" in all_output(second)
     # Nothing was touched.
     assert (case_dir / "memo.md").read_bytes() == marker
+
+
+def test_no_write_against_an_existing_case_does_not_need_overwrite(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    mock_company_routes(respx_mock)
+    first = runner.invoke(app, ["screen", "99999999"])
+    assert first.exit_code == 0, first.output
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    marker = (case_dir / "memo.md").read_bytes()
+
+    second = runner.invoke(app, ["screen", "99999999", "--no-write"])
+    assert second.exit_code == 0, second.output
+    parsed = json.loads(second.stdout)
+    assert parsed["subject"]["company_number"] == "99999999"
+    assert (case_dir / "memo.md").read_bytes() == marker
+    assert "Case directory written" not in all_output(second)
+
+
+def test_overwrite_with_no_write_does_not_touch_an_existing_case(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    mock_company_routes(respx_mock)
+    first = runner.invoke(app, ["screen", "99999999"])
+    assert first.exit_code == 0, first.output
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    marker = (case_dir / "memo.md").read_bytes()
+    user_note = case_dir / "my-notes.txt"
+    user_note.write_text("keep me", encoding="utf-8")
+
+    second = runner.invoke(app, ["screen", "99999999", "--overwrite", "--no-write"])
+    assert second.exit_code == 0, second.output
+    assert (case_dir / "memo.md").read_bytes() == marker
+    assert user_note.read_text(encoding="utf-8") == "keep me"
+    assert (case_dir / "casefile.json").is_file()
+    assert (case_dir / "evidence").is_dir()
 
 
 def test_overwrite_flag_replaces_the_case_directory_and_clears_stale_evidence(
@@ -1215,6 +1280,19 @@ def test_rerun_help_does_not_include_refresh() -> None:
     assert "--refresh" not in flat_output(result)
 
 
+def test_screen_help_includes_no_write() -> None:
+    # color=True matches CI: Rich splits `--no-write` into styled spans.
+    result = runner.invoke(app, ["screen", "--help"], color=True)
+    assert result.exit_code == 0
+    assert "--no-write" in flat_output(result)
+
+
+def test_rerun_help_does_not_include_no_write() -> None:
+    result = runner.invoke(app, ["rerun", "--help"], color=True)
+    assert result.exit_code == 0
+    assert "--no-write" not in flat_output(result)
+
+
 def test_screen_refresh_runs_a_mocked_screen(
     screen_env: Path, respx_mock: respx.MockRouter
 ) -> None:
@@ -1223,6 +1301,27 @@ def test_screen_refresh_runs_a_mocked_screen(
     assert result.exit_code == 0, result.output
     case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
     assert (case_dir / "casefile.json").is_file()
+
+
+def test_no_write_still_puts_http_cache_for_a_later_hit(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    """--no-write skips the case directory and still cache.put 200s."""
+    mock_company_routes(respx_mock)
+    first = runner.invoke(app, ["screen", "99999999", "--no-write"])
+    assert first.exit_code == 0, first.output
+    assert not (screen_env / "cases").exists()
+    calls_after_first = len(respx_mock.calls)
+    assert calls_after_first >= 1
+
+    second = runner.invoke(app, ["screen", "99999999"])
+    assert second.exit_code == 0, second.output
+    assert len(respx_mock.calls) == calls_after_first
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    evidence = json.loads(
+        (case_dir / "evidence" / "registry_profile.json").read_text(encoding="utf-8")
+    )
+    assert evidence["from_cache"] is True
 
 
 @pytest.fixture

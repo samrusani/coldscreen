@@ -176,6 +176,7 @@ R4 is hybrid as of version 0.3. A stored claim whose text places the company's o
 coldscreen screen "Acme Holdings Ltd"
 coldscreen screen 01234567 --deck pitch.pdf --site https://example.com
 coldscreen screen 01234567 --model <provider:model> --json
+coldscreen screen 01234567 --no-write
 coldscreen rerun cases/acme-holdings-01234567
 coldscreen mcp                                  # MCP stdio server, see section 18
 ```
@@ -248,7 +249,8 @@ The screen and rerun flows live in `coldscreen.pipeline`, which returns structur
 coldscreen mcp        # stdio transport, stdout is JSON-RPC only
 
 screen_company(query, company_number=None, deck_path=None,
-               site_url=None, model=None, overwrite=False)
+               site_url=None, model=None, overwrite=False,
+               refresh=False, no_write=False)
 rerun_case(case_dir, model=None, render_only=False)
 ```
 

@@ -17,6 +17,8 @@ coldscreen processes personal data from public registers: officer and PSC names,
 - **Case directories** (default `./cases/`): the memo, the casefile, and every raw API response as evidence. These contain personal data from the register and are yours to protect and to delete.
 - **The HTTP cache**: full Companies House responses for up to 7 days, in your platform's user cache directory under `coldscreen` (on macOS, `~/Library/Caches/coldscreen/`). Print the resolved path with `coldscreen cache path`. Erase it with `coldscreen cache clear`. `coldscreen cache stats` reports the entry count and file size without printing URLs or bodies.
 
+A `--no-write` CLI screen, or `no_write=true` on `screen_company`, does not create a case directory for that run. The HTTP cache can still hold Companies House responses from the same run. Erasure of that run is `coldscreen cache clear` (plus whatever an MCP host retained of the tool result). The default path still writes the full case directory.
+
 Erasure means deleting both: the case directories you have written, and the HTTP cache (`coldscreen cache clear`, after `coldscreen cache path` if you want to confirm the location). Cases written by an MCP client land in the same place, under the configured output directory, so they are covered by the same deletion. If you have connected an MCP host, its own conversation history is a third location that only that host can clear.
 
 ## Your responsibilities

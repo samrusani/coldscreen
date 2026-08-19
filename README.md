@@ -55,6 +55,14 @@ coldscreen screen 01234567 --refresh
 
 `--refresh` still writes successful HTTP 200 responses back into the cache, so the next ordinary screen sees the new pages. `coldscreen rerun` does not fetch and has no `--refresh` flag.
 
+For a JSON-only pipeline that must not leave an audit pack on disk:
+
+```bash
+coldscreen screen 01234567 --no-write
+```
+
+`--no-write` prints the casefile JSON to stdout (same as `--json`) and does not create a case directory. The HTTP cache is unchanged: successful 200 responses are still stored. `--json` without `--no-write` still writes the case directory. `coldscreen rerun` has no `--no-write` flag.
+
 Inspect or erase the HTTP cache (no API key needed). Print the configured path rather than guessing a machine-local location:
 
 ```bash
@@ -133,7 +141,7 @@ coldscreen mcp         # serves on stdio; stdout is JSON-RPC only
 
 Two tools, and only two:
 
-- `screen_company(query, company_number, deck_path, site_url, model, overwrite, refresh)` runs the full screen and writes a case directory. It returns the company name and number, the enforced verdict level with its rubric trigger ids, the case directory path, and the memo markdown. `refresh` skips HTTP cache reads and still writes successful 200 responses back.
+- `screen_company(query, company_number, deck_path, site_url, model, overwrite, refresh, no_write)` runs the full screen and writes a case directory. It returns the company name and number, the enforced verdict level with its rubric trigger ids, the case directory path, and the memo markdown. `refresh` skips HTTP cache reads and still writes successful 200 responses back. `no_write` skips the case directory for that run; the payload still carries the memo and verdict, and `case_dir` is JSON null. The HTTP cache is unchanged.
 - `rerun_case(case_dir, model, render_only)` re-synthesizes from a case directory that already exists, without refetching anything.
 
 Three properties worth knowing before you wire it up:

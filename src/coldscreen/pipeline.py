@@ -4,12 +4,13 @@
 commands. They return structured results and never exit the process, so the
 CLI and the MCP server share one pipeline instead of keeping two copies of it.
 
-Result shapes: "ok" (the run reached persistence), "ambiguous" (the query
-matched several plausible companies and nothing was picked), "configuration"
-(the caller's inputs are wrong, detected before any fetching), and "failure"
-(the run could not complete). Stage failures and synthesis failures are not
-statuses: they arrive on an "ok" result, because the case directory is still
-written and the audit pack is still the point.
+Result shapes: "ok" (the run completed: the case directory is written unless
+`no_write` was set), "ambiguous" (the query matched several plausible
+companies and nothing was picked), "configuration" (the caller's inputs are
+wrong, detected before any fetching), and "failure" (the run could not
+complete). Stage failures and synthesis failures are not statuses: they
+arrive on an "ok" result, because the gathered casefile is still returned
+and, on the default path, the case directory is still written.
 
 Secrets are inputs, never outputs. The already-resolved API key is a
 parameter; no result object holds it.
@@ -116,8 +117,8 @@ class ScreenResult:
     `notices` carries things a human should see that are not errors (a
     resolved name tie, for example); a caller with no human attached can
     ignore them. `stage_failures` is (stage name, reason) pairs for stages
-    that failed after retries; the case directory is written anyway and the
-    failure is recorded in the findings.
+    that failed after retries; on the default path the case directory is
+    written anyway and the failure is recorded in the findings.
     """
 
     status: ScreenStatus
@@ -311,6 +312,7 @@ def _registry_phase(
     now: Callable[[], datetime],
     arguments: ArgumentNames,
     refresh: bool = False,
+    no_write: bool = False,
 ) -> _Fetched | ScreenResult:
     """Resolution, registry pass, overwrite check, network expansion.
 
@@ -392,11 +394,13 @@ def _registry_phase(
             )
 
         # Overwrite protection, checked as soon as the canonical name and
-        # number are known and before the paid screening stages run.
+        # number are known and before the paid screening stages run. A
+        # no-write run never creates a case directory, so an existing one
+        # is not a conflict.
         case_dir = Path(settings.output_dir) / case_dir_name(
             registry.profile.company_name, chosen_number
         )
-        if case_dir.exists() and not overwrite:
+        if not no_write and case_dir.exists() and not overwrite:
             return ScreenResult(
                 status="failure",
                 message=(
@@ -467,22 +471,28 @@ def run_screen(
     site: str | None = None,
     overwrite: bool = False,
     refresh: bool = False,
+    no_write: bool = False,
     chooser: CandidateChooser | None = None,
     arguments: ArgumentNames = CLI_ARGUMENTS,
 ) -> ScreenResult:
-    """Screen one company and write the case directory.
+    """Screen one company and, by default, write the case directory.
 
     `api_key` and `prepared` are already resolved by the caller: no secret
     is ever read from a user-facing argument here. `company_number`, when
     given, is the company to screen and search is skipped; `query` is then
     used only in messages. `refresh` skips HTTP cache reads for this run
     and still writes successful 200 responses back into the cache.
+    `no_write` skips the case directory for this run only: `write_case` is
+    not called, an existing case directory is not a conflict, and
+    `case_dir` on the result is None. The HTTP cache still stores 200s.
+    `overwrite` with `no_write` is a no-op.
 
     Stage failure posture: a sanctions or media stage that fails after
-    retries does not abort the run. The case directory is written with
-    everything gathered, the failure is a distinct finding, synthesis
-    proceeds over what exists, and the failure comes back on an "ok"
-    result so the caller can report it and exit nonzero.
+    retries does not abort the run. On the default path the case directory
+    is written with everything gathered; on a no-write run the same
+    casefile and memo are still returned. The failure is a distinct
+    finding, synthesis proceeds over what exists, and the failure comes
+    back on an "ok" result so the caller can report it and exit nonzero.
     """
     if (deck is not None or site is not None) and prepared is None:
         return ScreenResult(
@@ -527,6 +537,7 @@ def run_screen(
         now=now,
         arguments=arguments,
         refresh=refresh,
+        no_write=no_write,
     )
     if isinstance(phase, ScreenResult):
         return phase
@@ -636,29 +647,32 @@ def run_screen(
     if phase.resolution.search_record is not None:
         records.insert(0, NamedRecord("search_companies", phase.resolution.search_record))
 
-    evidence_dir = case_dir / "evidence"
-    try:
-        if overwrite and evidence_dir.is_dir():
-            # Replacing a case: stale evidence files from the previous run
-            # must not linger next to the new index. Only the tool-owned
-            # evidence directory is cleared; anything else in the directory
-            # is left alone. A link in place of that directory is refused
-            # rather than followed, here and in write_case.
-            refuse_symlink(evidence_dir, "evidence directory")
-            shutil.rmtree(evidence_dir)
-        write_case(case_dir, casefile, records, memo)
-    except UnsafeCasePath as error:
-        return ScreenResult(status="failure", message=str(error), notices=phase.notices)
-    except OSError as error:
-        return ScreenResult(
-            status="failure",
-            message=_filesystem_failure(case_dir, "write the case directory", error),
-            notices=phase.notices,
-        )
+    written_dir: Path | None = None
+    if not no_write:
+        evidence_dir = case_dir / "evidence"
+        try:
+            if overwrite and evidence_dir.is_dir():
+                # Replacing a case: stale evidence files from the previous run
+                # must not linger next to the new index. Only the tool-owned
+                # evidence directory is cleared; anything else in the directory
+                # is left alone. A link in place of that directory is refused
+                # rather than followed, here and in write_case.
+                refuse_symlink(evidence_dir, "evidence directory")
+                shutil.rmtree(evidence_dir)
+            write_case(case_dir, casefile, records, memo)
+        except UnsafeCasePath as error:
+            return ScreenResult(status="failure", message=str(error), notices=phase.notices)
+        except OSError as error:
+            return ScreenResult(
+                status="failure",
+                message=_filesystem_failure(case_dir, "write the case directory", error),
+                notices=phase.notices,
+            )
+        written_dir = case_dir
     return ScreenResult(
         status="ok",
         notices=phase.notices,
-        case_dir=case_dir,
+        case_dir=written_dir,
         casefile=casefile,
         memo=memo,
         stage_failures=tuple(stage_failures),
