@@ -310,6 +310,7 @@ def _registry_phase(
     chooser: CandidateChooser | None,
     now: Callable[[], datetime],
     arguments: ArgumentNames,
+    refresh: bool = False,
 ) -> _Fetched | ScreenResult:
     """Resolution, registry pass, overwrite check, network expansion.
 
@@ -323,6 +324,7 @@ def _registry_phase(
         api_key,
         base_url=settings.base_url,
         cache=cache,
+        refresh=refresh,
         throttle=throttle,
         timeout_seconds=settings.timeout_seconds,
         now=now,
@@ -464,6 +466,7 @@ def run_screen(
     deck: Path | None = None,
     site: str | None = None,
     overwrite: bool = False,
+    refresh: bool = False,
     chooser: CandidateChooser | None = None,
     arguments: ArgumentNames = CLI_ARGUMENTS,
 ) -> ScreenResult:
@@ -472,7 +475,8 @@ def run_screen(
     `api_key` and `prepared` are already resolved by the caller: no secret
     is ever read from a user-facing argument here. `company_number`, when
     given, is the company to screen and search is skipped; `query` is then
-    used only in messages.
+    used only in messages. `refresh` skips HTTP cache reads for this run
+    and still writes successful 200 responses back into the cache.
 
     Stage failure posture: a sanctions or media stage that fails after
     retries does not abort the run. The case directory is written with
@@ -522,6 +526,7 @@ def run_screen(
         chooser=chooser,
         now=now,
         arguments=arguments,
+        refresh=refresh,
     )
     if isinstance(phase, ScreenResult):
         return phase

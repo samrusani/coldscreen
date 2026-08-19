@@ -133,6 +133,15 @@ If a later page adds no new items, the walk stops. Unique items are kept by `cha
 
 Live page-size maxima, whether the live endpoint honors those query fields, and live 429 headers remain UNVERIFIED. This sprint did not call the live API and did not try to trip the production rate limit. Offline tests cover Retry-After (recorded sleep, not a real wait) and backoff when the header is absent.
 
+### 2026-08-19: cache UX; refresh writes back; no MCP clear tool
+HTTP cache reads can now be skipped for one screen without disabling writes. `--refresh` on `coldscreen screen` (and `refresh=True` on `run_screen` / MCP `screen_company`) skips `cache.get` and still `cache.put`s successful HTTP 200 responses, so the next unflagged screen sees the fresh pages. `from_cache` stays False for a refreshed fetch. TTL, keying, and the "only 200 is stored" rule are unchanged. `coldscreen rerun` does not fetch and did not grow a `--refresh` flag.
+
+CLI cache commands (`coldscreen cache path`, `clear`, `stats`) need no API key. `path` prints `Settings.cache_path`. `clear` empties that configured sqlite file only; a missing file is success; a symbolic link at the sqlite name is refused so clear cannot follow a link to wipe another file. `stats` reports path, existence, entry count, size in bytes, and TTL in days, and never dumps URLs, params, or bodies. A corrupt file is reported unreadable; stats does not delete or recreate it.
+
+MCP gets the `refresh` flag on `screen_company` and does not get `cache_clear` or `cache_path` tools. A host-supplied clear would be a local delete primitive. The schema still has no key-shaped field names; `refresh` is not treated as one.
+
+No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Live honoring of cache TTL against the production API remains UNVERIFIED in the same sense as before: the cache is proven offline.
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.

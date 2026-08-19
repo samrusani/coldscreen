@@ -30,7 +30,6 @@ Ideas deferred from the weekend 3 build and review:
 
 Tooling ideas deferred from the weekend 1 build:
 
-- A --refresh flag to bypass the HTTP cache, plus cache clear and cache stats subcommands.
 - A --no-write mode for pure JSON pipeline use of screen.
 - A per-run fetch log file in the case directory, beyond the evidence index timestamps.
 - Extend the language check to casefile.json statements, not only rendered memos and templates.

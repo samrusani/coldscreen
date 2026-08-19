@@ -219,6 +219,7 @@ def build_server() -> MCPServer:
         site_url: str | None = None,
         model: str | None = None,
         overwrite: bool = False,
+        refresh: bool = False,
     ) -> dict[str, Any]:
         """Screen one UK company from public sources and write a case directory.
 
@@ -231,6 +232,8 @@ def build_server() -> MCPServer:
         ollama:qwen3-coder:30b. Without a model the screen is deterministic
         and the memo says so. deck_path and site_url need one.
         overwrite: replace an existing case directory for this company.
+        refresh: skip HTTP cache reads for this screen and still write
+        successful 200 responses back into the cache.
 
         Returns the company name and number, the enforced verdict level with
         its rubric trigger ids (or a "synthesis not run" note), the case
@@ -254,6 +257,7 @@ def build_server() -> MCPServer:
                 deck=deck,
                 site=site_url,
                 overwrite=overwrite,
+                refresh=refresh,
                 chooser=None,
                 arguments=MCP_ARGUMENTS,
             )

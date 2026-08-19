@@ -46,6 +46,157 @@ class CachedResponse:
     retrieved_at: datetime
 
 
+class CacheClearRefused(Exception):
+    """Clear will not proceed because the cache path is unsafe to wipe."""
+
+    def __init__(self, path: Path, reason: str) -> None:
+        self.path = path
+        super().__init__(reason)
+
+
+@dataclass(frozen=True)
+class CacheClearResult:
+    """Outcome of clearing the HTTP cache file at a configured path."""
+
+    path: Path
+    entries_removed: int
+    missing: bool
+    unreadable_removed: bool = False
+
+
+@dataclass(frozen=True)
+class CacheStats:
+    """Operator-facing cache facts. Never includes URLs, params, or bodies."""
+
+    path: Path
+    exists: bool
+    entry_count: int | None
+    size_bytes: int
+    ttl_days: float
+    unreadable: bool = False
+
+
+def _http_cache_table_exists(conn: sqlite3.Connection) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'http_cache'"
+    ).fetchone()
+    return row is not None
+
+
+def _entry_count(conn: sqlite3.Connection) -> int:
+    if not _http_cache_table_exists(conn):
+        return 0
+    row = conn.execute("SELECT COUNT(*) FROM http_cache").fetchone()
+    return int(row[0]) if row is not None else 0
+
+
+def _unlink_regular_file(path: Path) -> None:
+    """Unlink a regular file. Never follows a symlink to remove its target."""
+    if path.is_symlink() or not path.is_file():
+        return
+    path.unlink()
+
+
+def clear_http_cache(path: Path) -> CacheClearResult:
+    """Clear the configured cache file. Missing file is success.
+
+    Refuses if `path` itself is a symbolic link, so a link at the sqlite
+    name cannot be followed to wipe another file. Does not take a
+    caller-supplied path at the CLI; this function is the library half of
+    that rule. Does not delete the parent directory.
+    """
+    if path.is_symlink():
+        raise CacheClearRefused(
+            path,
+            f"{path} is a symbolic link. coldscreen will not follow a link at"
+            " the cache file to wipe another file. Remove the link, or set"
+            " COLDSCREEN_CACHE_DIR to a directory you control.",
+        )
+    if not path.exists():
+        return CacheClearResult(path=path, entries_removed=0, missing=True)
+    if not path.is_file():
+        raise CacheClearRefused(
+            path,
+            f"{path} is not a cache file. coldscreen will not delete it.",
+        )
+    try:
+        conn = sqlite3.connect(str(path))
+        try:
+            removed = _entry_count(conn)
+            if _http_cache_table_exists(conn):
+                conn.execute("DELETE FROM http_cache")
+                conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.DatabaseError:
+        _unlink_regular_file(path)
+        _unlink_regular_file(Path(str(path) + "-wal"))
+        _unlink_regular_file(Path(str(path) + "-shm"))
+        return CacheClearResult(
+            path=path, entries_removed=0, missing=False, unreadable_removed=True
+        )
+    return CacheClearResult(path=path, entries_removed=removed, missing=False)
+
+
+def http_cache_stats(path: Path, ttl_days: float) -> CacheStats:
+    """Read path, existence, entry count, size, and TTL. Never dumps payloads.
+
+    A corrupt file is reported as unreadable rather than raised, and is not
+    deleted or recreated: that would be a surprise from a stats command.
+    """
+    if not path.exists():
+        return CacheStats(
+            path=path,
+            exists=False,
+            entry_count=0,
+            size_bytes=0,
+            ttl_days=ttl_days,
+        )
+    try:
+        size_bytes = path.stat().st_size
+    except OSError:
+        return CacheStats(
+            path=path,
+            exists=True,
+            entry_count=None,
+            size_bytes=0,
+            ttl_days=ttl_days,
+            unreadable=True,
+        )
+    if not path.is_file() and not path.is_symlink():
+        return CacheStats(
+            path=path,
+            exists=True,
+            entry_count=None,
+            size_bytes=size_bytes,
+            ttl_days=ttl_days,
+            unreadable=True,
+        )
+    try:
+        conn = sqlite3.connect(str(path))
+        try:
+            conn.execute("SELECT 1").fetchone()
+            count = _entry_count(conn)
+        finally:
+            conn.close()
+    except sqlite3.DatabaseError:
+        return CacheStats(
+            path=path,
+            exists=True,
+            entry_count=None,
+            size_bytes=size_bytes,
+            ttl_days=ttl_days,
+            unreadable=True,
+        )
+    return CacheStats(
+        path=path,
+        exists=True,
+        entry_count=count,
+        size_bytes=size_bytes,
+        ttl_days=ttl_days,
+    )
+
+
 class HttpCache:
     """A small persistent cache for GET responses."""
 
@@ -159,6 +310,17 @@ class HttpCache:
             with contextlib.suppress(sqlite3.DatabaseError):
                 self._conn.execute(statement, row)
                 self._conn.commit()
+
+    def clear(self) -> int:
+        """Drop every cached entry. Returns how many rows were removed."""
+        try:
+            removed = _entry_count(self._conn)
+            self._conn.execute("DELETE FROM http_cache")
+            self._conn.commit()
+            return removed
+        except sqlite3.DatabaseError:
+            self._conn = self._recreate()
+            return 0
 
     def close(self) -> None:
         with contextlib.suppress(sqlite3.DatabaseError):

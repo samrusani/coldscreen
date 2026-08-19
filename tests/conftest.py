@@ -103,11 +103,13 @@ def make_client(
     cache: Any = None,
     throttle: Any = None,
     sleeper: Callable[[float], None] | None = None,
+    refresh: bool = False,
 ) -> CompaniesHouseClient:
     return CompaniesHouseClient(
         TEST_API_KEY,
         base_url=BASE_URL,
         cache=cache,
+        refresh=refresh,
         throttle=throttle,
         now=lambda: SCREENED_AT,
         sleeper=sleeper or (lambda _seconds: None),
