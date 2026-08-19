@@ -1,0 +1,15 @@
+{
+  "body": {
+    "kind": "site_text",
+    "status": 200,
+    "text": "About us\nFounded in 2018 by Mabel Meridian.\nWe advise fictional companies on entirely imaginary matters.",
+    "truncated": false,
+    "url": "https://placid-meridian.example/about"
+  },
+  "from_cache": false,
+  "name": "site_002",
+  "params": {},
+  "retrieved_at": "2026-08-18T12:00:00+00:00",
+  "status": 200,
+  "url": "https://placid-meridian.example/about"
+}

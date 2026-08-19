@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
-"""Rubric anchoring check: the same golden casefile through two local
-models must produce the SAME enforced verdict level.
+"""Rubric anchoring check: the same casefile through two local models must
+produce the SAME enforced verdict level.
 
-With enforcement in place the level is a pure function of the enforced
-trigger set, so a level mismatch means the enforcement or the prompt is
-broken, not the models. Trigger sets may differ on judgment triggers; the
-level must not.
+The check runs on the AMBER fixture casefile (claims-free) by default,
+because that is where the anchoring property is unconditional: every
+trigger that can move the level there is mechanical, so a level mismatch
+means the enforcement or the prompt is broken, not the models. Trigger sets
+may differ on judgment triggers; the level must not.
+
+The golden RED case is deliberately NOT the default: its level rides on
+R4, a judgment trigger the enforcement gates but does not force, so two
+models may legitimately land on different levels there (one cites the
+surviving contradiction as material, the other does not). Set
+FIRSTPASS_ANCHOR_CASE to another fixture directory to probe that behavior
+knowingly.
 
 Ollama settings are read the way the CLI reads them (firstpass.toml, then
 the environment), and the configured think value is the default for both
@@ -24,6 +32,7 @@ Example: python scripts/anchor_check.py qwen2.5-coder:7b qwen3:8b:think=false
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -43,8 +52,13 @@ from firstpass.providers import ProviderError  # noqa: E402
 from firstpass.providers.ollama_p import OllamaProvider  # noqa: E402
 from firstpass.synthesis import SynthesisError, SynthesisResult, synthesize  # noqa: E402
 
-GOLDEN_DIR = REPO_ROOT / "tests" / "fixtures" / "golden"
+DEFAULT_CASE_DIR = REPO_ROOT / "tests" / "fixtures" / "amber"
 THINK_PREFIX = "think="
+
+
+def case_dir() -> Path:
+    override = os.environ.get("FIRSTPASS_ANCHOR_CASE", "").strip()
+    return Path(override) if override else DEFAULT_CASE_DIR
 
 
 def parse_model_argument(argument: str, default_think: bool | None) -> tuple[str, bool | None]:
@@ -64,7 +78,7 @@ def parse_model_argument(argument: str, default_think: bool | None) -> tuple[str
 
 
 def run_one(model: str, think: bool | None, settings: Settings) -> SynthesisResult:
-    casefile = load_casefile(GOLDEN_DIR)
+    casefile = load_casefile(case_dir())
     provider = OllamaProvider(
         model=model,
         base_url=ollama_base_url_from_env(),
@@ -105,6 +119,7 @@ def main(argv: list[str]) -> int:
         print(f"bad model argument: {error}")
         return 2
     print(f"== anchor check: {model_a} vs {model_b} ==")
+    print(f"casefile: {case_dir()}")
     try:
         result_a = run_one(model_a, think_a, settings)
         result_b = run_one(model_b, think_b, settings)

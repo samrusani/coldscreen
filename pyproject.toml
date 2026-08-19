@@ -29,6 +29,10 @@ dependencies = [
     "tenacity>=8.3",
     "platformdirs>=4.2",
     "python-dotenv>=1.0",
+    # Deck text extraction. MIT with a permissive dependency chain; the
+    # licence verification is recorded in wiki/research/pdf-licensing.md and
+    # DECISIONS.md (2026-08-18).
+    "pdfplumber>=0.11",
 ]
 
 [project.optional-dependencies]

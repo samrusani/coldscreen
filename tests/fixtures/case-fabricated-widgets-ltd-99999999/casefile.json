@@ -483,10 +483,39 @@
           "excerpt": "kind=not_run"
         }
       ]
+    },
+    {
+      "id": "EXT-000",
+      "stage": "claims",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Claims extraction not performed: no deck or site was provided. What the company says about itself was not screened this run.",
+      "evidence": [
+        {
+          "source_url": "firstpass:not-run/claims",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "kind=not_run"
+        }
+      ]
     }
   ],
   "claims": [],
   "assessments": [],
+  "claims_extraction": {
+    "performed": false,
+    "provider": null,
+    "model": null,
+    "prompt_version": null,
+    "parse_retries": 0,
+    "deck_file": null,
+    "deck_sha256": null,
+    "deck_pages": null,
+    "site_url": null,
+    "sources": [],
+    "truncated": false,
+    "dropped_claims": 0,
+    "skipped_reason": "no deck or site provided"
+  },
   "sanctions": {
     "performed": false,
     "dataset": null,

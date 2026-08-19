@@ -1,0 +1,21 @@
+{
+  "body": {
+    "file_name": "deck_fabricated_widgets.pdf",
+    "kind": "deck_text",
+    "page_count": 3,
+    "pages": {
+      "1": "Fabricated Widgets Ltd\nInvestor overview\nAn entirely fictional company used as a test fixture.",
+      "2": "Operating since 2015 with a national footprint.\nThe company is debt free and self funded.\nOur platform eliminates fraud in widget procurement.",
+      "3": "A team of 40 widget engineers.\nThe most trusted name in widgets."
+    },
+    "pages_extracted": 3,
+    "sha256": "f6878a47d938d4238f4b06bf2522e9a172b610244397260a4e8cdad755c47d5f",
+    "truncated_pages": false
+  },
+  "from_cache": false,
+  "name": "deck_text",
+  "params": {},
+  "retrieved_at": "2026-08-18T12:00:00+00:00",
+  "status": 0,
+  "url": "firstpass:deck/deck_fabricated_widgets.pdf"
+}

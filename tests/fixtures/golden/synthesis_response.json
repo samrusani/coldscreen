@@ -1,17 +1,35 @@
 {
-  "narrative": "GILDED ANVIL HOLDINGS LTD is an active company incorporated on 2021-04-01 (REG-001, REG-002). Two registry signals stand out. First, the registry marks the next accounts as overdue (REG-003, confirmed). Second, three of five registered officers resigned in the twelve months before the screening date, against two currently active (REG-009, confirmed), which meets the wholesale-change threshold. One outstanding registered charge is on file (REG-006), with no insolvency history linked (REG-007). Sanctions screening ran against the configured dataset and produced no match at or above the 0.7 threshold for any subject; the nearest candidate, for the company name, scored 0.55 (SAN-001, an identity-similarity reading, not a match). Network expansion found no co-appointment overlap (NET-002) and no disqualification records for any current officer or PSC (NET-101, NET-102). The adverse media search surfaced three items connected to the company name in the misconduct, regulatory, and litigation query categories (MED-001, MED-003, MED-004); the coverage is recent but comes from sources whose standing is not established in this casefile, so it is treated as context rather than a confirmed-source trigger.",
+  "narrative": "FABRICATED WIDGETS LTD is an active company incorporated on 2019-05-14 (REG-001, REG-002). Five claims were extracted from its deck (EXT-001, EXT-006), and two of the checkable ones do not survive contact with the register. The deck's operating-since assertion (CLM-001) sits four years before the incorporation date on the registry profile (REG-002, confirmed), and the debt-free assertion (CLM-002) is contradicted by the charges register, which lists two charges with one still outstanding (REG-006, confirmed). The headcount assertion (CLM-004) has no public source in this casefile and stays unverified. Beyond the claims, the registry marks the next accounts as overdue (REG-003, confirmed), and two of five registered officers resigned in the twelve months before the screening date against three currently active, which meets the wholesale-change threshold (REG-009, confirmed). Network expansion found one co-appointment overlap among current officers (NET-002) and no disqualification records (NET-101, NET-102, NET-103). Sanctions screening and the adverse media search were not performed this run (SAN-000, MED-000), so those absences are open questions rather than clean results.",
   "verdict": {
-    "level": "amber",
-    "triggered": [
-      "A1",
-      "A2"
-    ],
-    "rationale": "A1 applies because the registry marks the next accounts overdue (REG-003). A2 applies because officer resignations in the last twelve months reached the wholesale-change threshold (REG-009). Both are confirmed registry facts. The sub-threshold sanctions score (SAN-001) and the unconfirmed media coverage (MED-001, MED-003, MED-004) are noted as context but do not meet their trigger definitions. Two AMBER triggers with no RED trigger give an AMBER verdict.",
+    "level": "red",
+    "triggered": ["R4", "A1", "A2", "A4"],
+    "rationale": "R4 applies because material claims are directly contradicted by the registry record: the operating-since claim (CLM-001) against the incorporation date (REG-002), and the debt-free claim (CLM-002) against the outstanding charge (REG-006). A1 applies because the registry marks the next accounts overdue (REG-003). A2 applies because officer resignations in the last twelve months met the wholesale-change threshold (REG-009). A4 applies because the team-size claim (CLM-004), central to the deck's capability story, is unverifiable from any source in this casefile. Any RED trigger forces a RED verdict.",
     "questions": [
-      "When will the overdue accounts for the period ending 2025-04-30 be filed, and what caused the delay?",
-      "What led three officers to resign between January and June 2026, and how have their responsibilities been reallocated?",
-      "What obligations does the outstanding charge registered in May 2024 secure, and what is its current balance?",
-      "Can you provide context for the recent coverage in the misconduct, regulatory, and litigation query categories listed in the media section?"
+      "Reconcile the deck's operating-since-2015 statement (CLM-001) with the 2019-05-14 incorporation date on the register: was there a predecessor entity, and if so which one?",
+      "Reconcile the deck's debt-free statement (CLM-002) with the outstanding charge registered in March 2024 (REG-006): what does that charge secure and what is its current balance?",
+      "What supports the team-of-40 figure (CLM-004): payroll headcount, contractors, or something else?",
+      "When will the overdue accounts for the period ending 2025-05-31 be filed, and what caused the delay (REG-003)?",
+      "What led two officers to resign within twelve months (REG-009), and how have their duties been reassigned?"
     ]
-  }
+  },
+  "assessments": [
+    {
+      "claim_id": "CLM-001",
+      "status": "contradicted",
+      "basis_finding_ids": ["REG-002"],
+      "record_note": "Incorporated on 2019-05-14 per the registry profile, four years after the claimed start."
+    },
+    {
+      "claim_id": "CLM-002",
+      "status": "contradicted",
+      "basis_finding_ids": ["REG-006"],
+      "record_note": "The charges register lists 2 charges, 1 outstanding."
+    },
+    {
+      "claim_id": "CLM-004",
+      "status": "unverified",
+      "basis_finding_ids": [],
+      "record_note": "No public source in this casefile states headcount."
+    }
+  ]
 }

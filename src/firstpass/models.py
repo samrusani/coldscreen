@@ -59,9 +59,14 @@ class Finding(BaseModel):
 
 
 class Claim(BaseModel):
-    """A discrete checkable statement a company makes about itself.
+    """A discrete statement a company makes about itself.
 
-    Populated from the claims extraction stage in a later milestone.
+    Populated by the claims extraction stage (stage 6). id is code-assigned
+    (CLM-001 style), text is the company's own words as extracted from the
+    deck or site, source names where they appeared ("deck p.4", "site
+    /about"). Unfalsifiable puffery is kept with checkable False, never
+    dropped. Because text is quoted data, it is the one kind of string the
+    language gate exempts (span-level, exact match); see firstpass.language.
     """
 
     id: str
@@ -72,11 +77,27 @@ class Claim(BaseModel):
 
 
 class ClaimAssessment(BaseModel):
-    """The outcome of testing one claim against the public record."""
+    """The outcome of testing one checkable claim against the public record.
+
+    basis carries Evidence copied by CODE from the casefile findings the
+    model cited; the model never mints an evidence object. record_note is
+    one short factual sentence for the memo table's public record column,
+    written by the model and fully language-gated like narrative.
+
+    model_assessed distinguishes assessments the model actually returned
+    (True, including ones enforcement downgraded to unverified) from the
+    unverified rows CODE back-fills for checkable claims the model skipped
+    (False). The A4 gate opens only on model-assessed unverified rows: a
+    model cannot manufacture "central claim unverifiable" support simply by
+    not answering. Defaults True so casefiles written before the field
+    existed load unchanged.
+    """
 
     claim_id: str
     status: Literal["supported", "contradicted", "unverified"]
     basis: list[Evidence]
+    record_note: str = ""
+    model_assessed: bool = True
 
 
 class Verdict(BaseModel):
@@ -350,6 +371,36 @@ class MediaScreening(BaseModel):
     skipped_reason: str | None = None
 
 
+class ClaimsExtraction(BaseModel):
+    """Stage 6 summary: what was ingested and how claims were produced.
+
+    Mirrors the screening summaries of stages 4 and 5: performed False with
+    a skipped_reason when there was nothing to extract (no deck and no
+    site), provenance fields when the model ran. sources lists the exact
+    source labels the model was allowed to cite ("deck p.1", "site /about"),
+    deck_sha256 ties the casefile to the exact deck bytes without ever
+    persisting the binary, and truncated records that the combined text hit
+    the max_claims_chars cap (the finding states the numbers).
+    """
+
+    performed: bool
+    provider: str | None = None
+    model: str | None = None
+    prompt_version: str | None = None
+    parse_retries: int = 0
+    deck_file: str | None = None
+    deck_sha256: str | None = None
+    deck_pages: int | None = None
+    site_url: str | None = None
+    sources: list[str] = Field(default_factory=list)
+    truncated: bool = False
+    # Model-returned claims whose text failed quotation verification against
+    # their declared source section and were therefore never stored. The
+    # count also appears as an explicit finding.
+    dropped_claims: int = 0
+    skipped_reason: str | None = None
+
+
 class SynthesisMetadata(BaseModel):
     """How the verdict and narrative were produced, for the audit pack."""
 
@@ -380,6 +431,7 @@ class CaseFile(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
     claims: list[Claim] = Field(default_factory=list)
     assessments: list[ClaimAssessment] = Field(default_factory=list)
+    claims_extraction: ClaimsExtraction | None = None
     sanctions: SanctionsScreening | None = None
     network: NetworkExpansion | None = None
     media: MediaScreening | None = None

@@ -12,6 +12,16 @@ Ideas that are out of scope for v0.1. The non-goals in ARCHITECTURE.md section 1
 - Financial statement parsing. Explicit non-goal for v0.1; filings are inventoried, not read.
 - People search beyond registered officers and PSCs. Explicit non-goal for v0.1.
 
+Ideas deferred from the weekend 3 build and review:
+
+- A mechanical R4 candidate detector for date-shaped contradictions ("operating since YYYY" against date_of_creation), restoring unconditional level anchoring for the most common contradiction class.
+- OCR fallback for image-only decks; the gap is currently recorded explicitly as a finding.
+- Fuzzy quotation matching for claim verification, with a strict-verbatim default; per-claim provenance offsets into the extracted text for a stronger audit trail.
+- Scope the whole-memo language backstop's exemptions to the rendered claims-table region, closing the hand-tampered-casefile residual on render-only reruns.
+- A minimum-substance rule for stored claims so single-word quotes cannot become exemption spans.
+- Sitemap-based about-page discovery and a configurable path token list for site extraction.
+- Label-aware claim re-verification in the language check script (mapping site evidence back to source labels).
+
 Tooling ideas deferred from the weekend 1 build:
 
 - A --refresh flag to bypass the HTTP cache, plus cache clear and cache stats subcommands.

@@ -23,6 +23,7 @@ from firstpass.models import (
 from firstpass.rubric import (
     TRIGGER_INDEX,
     TRIGGERS,
+    ClaimSignals,
     TriggerCandidate,
     compute_level,
     detect_candidates,
@@ -274,25 +275,117 @@ def test_model_cited_r2_and_r3_need_mechanical_support() -> None:
     assert supported.notes == []
 
 
-def test_r4_and_r5_are_rejected_unconditionally() -> None:
+def test_r4_and_r5_are_rejected_without_claim_signals() -> None:
+    """No claim_signals means every gate is locked: claims-free behavior."""
     result = enforce("red", ["R4", "R5"], QUESTIONS, [])
     assert result.level == "green"
     assert result.triggered == []
     assert (
-        "rejected trigger R4: requires the claims layer which is not part of this milestone"
+        "rejected trigger R4: no claim assessment survives as contradicted with resolved evidence"
         in result.notes
     )
     assert (
-        "rejected trigger R5: requires the claims layer which is not part of this milestone"
+        "rejected trigger R5: no co-appointment overlap is recorded in this casefile"
         in result.notes
     )
 
 
-def test_amber_judgment_triggers_remain_freely_citable() -> None:
-    result = enforce("amber", ["A3", "A6", "A4", "A5"], QUESTIONS, [])
+def test_a6_remains_freely_citable() -> None:
+    result = enforce("amber", ["A6"], QUESTIONS, [])
     assert result.level == "amber"
-    assert result.triggered == ["A3", "A6", "A4", "A5"]
+    assert result.triggered == ["A6"]
     assert result.notes == []
+
+
+# -- the weekend 3 gating matrix: R4, R5, A3, A4, A5 -----------------------------
+
+LOCKED = ClaimSignals()
+ALL_OPEN = ClaimSignals(
+    checkable_claims_present=True,
+    contradicted_with_basis=True,
+    unverified_present=True,
+    overlaps_present=True,
+)
+
+
+@pytest.mark.parametrize(
+    ("trigger_id", "open_signals", "rejection_fragment"),
+    [
+        (
+            "R4",
+            ClaimSignals(checkable_claims_present=True, contradicted_with_basis=True),
+            "no claim assessment survives as contradicted",
+        ),
+        (
+            "R5",
+            ClaimSignals(overlaps_present=True),
+            "no co-appointment overlap is recorded",
+        ),
+        (
+            "A3",
+            ClaimSignals(checkable_claims_present=True),
+            "rejected trigger A3: no checkable claims are recorded",
+        ),
+        (
+            "A4",
+            ClaimSignals(checkable_claims_present=True, unverified_present=True),
+            "no model-assessed checkable claim survives as unverified",
+        ),
+        (
+            "A5",
+            ClaimSignals(checkable_claims_present=True),
+            "rejected trigger A5: no checkable claims are recorded",
+        ),
+    ],
+)
+def test_gated_trigger_accepted_only_when_its_gate_is_open(
+    trigger_id: str, open_signals: ClaimSignals, rejection_fragment: str
+) -> None:
+    severity = TRIGGER_INDEX[trigger_id].severity
+    accepted = enforce(severity, [trigger_id], QUESTIONS, [], claim_signals=open_signals)
+    assert accepted.triggered == [trigger_id]
+    assert accepted.level == severity
+    assert accepted.notes == []
+
+    rejected = enforce(severity, [trigger_id], QUESTIONS, [], claim_signals=LOCKED)
+    assert rejected.triggered == []
+    assert rejected.level == "green"
+    assert any(rejection_fragment in note for note in rejected.notes)
+
+
+def test_r4_gate_needs_contradiction_not_just_claims() -> None:
+    """Claims existing is not enough for R4: the contradiction must survive."""
+    claims_only = ClaimSignals(checkable_claims_present=True, unverified_present=True)
+    result = enforce("red", ["R4"], QUESTIONS, [], claim_signals=claims_only)
+    assert result.triggered == []
+    assert result.level == "green"
+
+
+def test_a4_gate_needs_a_surviving_unverified_assessment() -> None:
+    all_supported = ClaimSignals(checkable_claims_present=True, contradicted_with_basis=False)
+    result = enforce("amber", ["A4"], QUESTIONS, [], claim_signals=all_supported)
+    assert result.triggered == []
+    assert any("rejected trigger A4" in note for note in result.notes)
+
+
+def test_open_gates_accept_the_full_judgment_set() -> None:
+    result = enforce(
+        "red", ["R4", "R5", "A3", "A4", "A5", "A6"], QUESTIONS, [], claim_signals=ALL_OPEN
+    )
+    assert result.triggered == ["R4", "R5", "A3", "A4", "A5", "A6"]
+    assert result.level == "red"
+    assert result.notes == []
+
+
+def test_gate_rejections_use_fixed_text_and_catalog_ids_only() -> None:
+    result = enforce("red", ["R4", "R5", "A3", "A4", "A5"], QUESTIONS, [], claim_signals=LOCKED)
+    assert result.triggered == []
+    assert len(result.notes) >= 5
+    # Fixed text only: every note starts with the rejection prefix and a
+    # catalog id; nothing model-controlled appears.
+    for note in result.notes[:5]:
+        assert note.startswith("rejected trigger ")
+        assert note.split()[2].rstrip(":") in TRIGGER_INDEX
 
 
 def test_trigger_ids_are_normalized_to_catalog_casing_on_intake() -> None:

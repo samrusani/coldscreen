@@ -60,6 +60,14 @@ class Settings:
     sanctions_limit: int = 5
     # Adverse media search.
     media_results_per_query: int = 5
+    # Claims extraction inputs (stage 6). max_deck_pages caps how many deck
+    # pages are read; max_claims_chars caps the combined deck-plus-site text
+    # handed to the model (an explicit truncation finding records any cut);
+    # max_site_response_bytes caps how much of any single site response is
+    # read off the wire.
+    max_deck_pages: int = 40
+    max_claims_chars: int = 60000
+    max_site_response_bytes: int = 2_000_000
     # Local model endpoint timeout: synthesis on large local models is slow.
     ollama_timeout_seconds: float = 600.0
     # Ollama context window (options.num_ctx). The daemon default (4096 on

@@ -13,15 +13,24 @@ Triggered:
 
 - None. A verdict citing no triggers is GREEN by rubric rule 3.
 
-No rubric trigger is met: filings are current, the officer record is stable, sanctions screening returned no candidates, the disqualification register shows no matches, and the media search returned nothing. A verdict citing no triggers is GREEN by rubric rule 3.
+No rubric trigger is met: the site's checkable claim is supported by the register (CLM-001, REG-002), filings are current, the officer record is stable, sanctions screening returned no candidates, the disqualification register shows no matches, and the media search returned nothing. A verdict citing no triggers is GREEN by rubric rule 3.
 
-Synthesis: provider fake, model canned-green, prompt version 1, rubric-enforced.
+Synthesis: provider ollama, model fake-model:1b, prompt version 3, rubric-enforced.
 
 This memo is a research aid generated from public sources at a point in time. It is not investment advice, not a credit reference, and not a consumer report. Do not use it for decisions regulated under the US Fair Credit Reporting Act (employment, credit, tenancy screening) or equivalent regimes. Officer and PSC data is personal data from public registers; you are responsible for processing it lawfully. Verify everything independently before acting on it.
 
+## Claims vs evidence
+
+What the company says about itself, against the public record. Claim text is quoted verbatim from the deck or site named in the source; the status column is the enforced assessment.
+
+| # | Claim (source) | Public record | Status |
+|---|---|---|---|
+| 1 | "Founded in 2018 by Mabel Meridian" (site /about) | Incorporated on 2018-06-15; the sole director was appointed at incorporation. | Supported |
+| 2 | "Calm, dependable advice for ambitious teams" (site /) |  | not checkable |
+
 ## Narrative
 
-PLACID MERIDIAN CONSULTING LTD is an active company incorporated on 2018-06-15 (REG-001, REG-002). The registry shows nothing overdue: accounts and the confirmation statement are current, no charges are registered (REG-006), and no insolvency history is linked (REG-007). The officer record is stable, with one active director and no resignations in the lookback window (REG-008, REG-009). Sanctions screening ran for the company and for its director, who is also the PSC, and returned no candidates at any score (SAN-001, SAN-002). Network expansion found no other current appointments, no co-appointment overlap (NET-001, NET-002), and no disqualification records (NET-101). The adverse media search returned no results in any query category (MED-006). Nothing in this casefile meets any rubric trigger.
+PLACID MERIDIAN CONSULTING LTD is an active company incorporated on 2018-06-15 (REG-001, REG-002). Two claims were extracted from its website (EXT-003, EXT-006). The founding claim (CLM-001) is supported by the register: incorporation on 2018-06-15 with the sole director appointed the same day (REG-002, REG-008). The registry shows nothing overdue: accounts and the confirmation statement are current, no charges are registered (REG-006), and no insolvency history is linked (REG-007). The officer record is stable, with one active director and no resignations in the lookback window (REG-008, REG-009). Sanctions screening ran for the company and for its director, who is also the PSC, and returned no candidates at any score (SAN-001, SAN-002). Network expansion found no other current appointments, no co-appointment overlap (NET-001, NET-002), and no disqualification records (NET-101). The adverse media search returned no results in any query category (MED-006).
 
 ## Clarification questions
 
@@ -81,6 +90,12 @@ None recorded.
   - Evidence: https://api.tavily.com/search (retrieved 2026-08-18)
   - Evidence: https://api.tavily.com/search (retrieved 2026-08-18)
   - Evidence: https://api.tavily.com/search (retrieved 2026-08-18)
+- **EXT-003** (confirmed) Site ingested: 2 page(s) with text retrieved from https://placid-meridian.example (/, /about).
+  - Evidence: https://placid-meridian.example (retrieved 2026-08-18)
+  - Evidence: https://placid-meridian.example/about (retrieved 2026-08-18)
+- **EXT-006** (confirmed) Claims extraction produced 2 claim(s) from 2 text section(s): 1 checkable, 1 not checkable (puffery is listed, never dropped).
+  - Evidence: https://placid-meridian.example (retrieved 2026-08-18)
+  - Evidence: https://placid-meridian.example/about (retrieved 2026-08-18)
 
 ## Officers
 

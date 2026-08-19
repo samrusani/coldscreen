@@ -89,6 +89,7 @@ def test_screen_writes_the_full_case_directory(
         "disqualified_search_sprocket-sybil",
         "sanctions_not_run",
         "media_not_run",
+        "claims_not_run",
     }
     evidence_dir = case_dir / "evidence"
     for name in expected_evidence:
@@ -109,8 +110,11 @@ def test_screen_writes_the_full_case_directory(
     assert casefile.sanctions is not None and casefile.sanctions.performed is False
     assert casefile.media is not None and casefile.media.performed is False
     assert casefile.network is not None and casefile.network.performed is True
+    assert casefile.claims_extraction is not None
+    assert casefile.claims_extraction.performed is False
+    assert casefile.claims_extraction.skipped_reason == "no deck or site provided"
     finding_ids = {f.id for f in casefile.findings}
-    assert {"SAN-000", "MED-000", "NET-001", "NET-002"} <= finding_ids
+    assert {"SAN-000", "MED-000", "NET-001", "NET-002", "EXT-000"} <= finding_ids
 
 
 def test_screen_memo_matches_the_snapshot(screen_env: Path, respx_mock: respx.MockRouter) -> None:
@@ -538,6 +542,172 @@ def test_rerun_synthesis_failure_leaves_files_untouched(
     assert "Synthesis failed" in all_output(result)
     assert (case_dir / "casefile.json").read_bytes() == before_casefile
     assert (case_dir / "memo.md").read_bytes() == before_memo
+
+
+# -- weekend 3: --deck and --site ----------------------------------------------
+
+DECK_PATH = FIXTURES_DIR / "deck_fabricated_widgets.pdf"
+
+
+def test_deck_without_model_is_a_clean_error_before_any_fetching(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    search_route = respx_mock.get("https://api.company-information.service.gov.uk/search/companies")
+    result = runner.invoke(app, ["screen", "99999999", "--deck", str(DECK_PATH)])
+    assert result.exit_code == 1
+    combined = all_output(result)
+    assert "needs a model" in combined
+    assert search_route.call_count == 0
+    assert not (screen_env / "cases").exists()
+
+
+def test_site_without_model_is_a_clean_error(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    result = runner.invoke(app, ["screen", "99999999", "--site", "https://widgets.example"])
+    assert result.exit_code == 1
+    assert "needs a model" in all_output(result)
+
+
+def test_missing_deck_path_is_a_usage_error(screen_env: Path, respx_mock: respx.MockRouter) -> None:
+    missing = screen_env / "no-such-deck.pdf"
+    result = runner.invoke(app, ["screen", "99999999", "--deck", str(missing)])
+    assert result.exit_code == 2
+    assert "Invalid value for '--deck'" in all_output(result)
+
+
+def test_non_pdf_deck_is_a_clean_error_before_any_fetching(
+    screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    not_a_pdf = screen_env / "notes.pdf"
+    not_a_pdf.write_text("this is plain text wearing a pdf extension", encoding="utf-8")
+    # No registry routes registered: reaching the network would fail loudly.
+    result = runner.invoke(app, ["screen", "99999999", "--deck", str(not_a_pdf)])
+    assert result.exit_code == 1
+    combined = all_output(result)
+    assert "not a readable PDF" in combined
+    assert "Traceback" not in combined
+    assert not (screen_env / "cases").exists()
+
+
+def test_encrypted_deck_is_a_clean_error(
+    screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    # A structurally valid PDF whose trailer declares an encryption
+    # dictionary: pdfminer treats it as encrypted and unreadable.
+    encrypted = screen_env / "locked.pdf"
+    encrypted.write_bytes(
+        DECK_PATH.read_bytes().replace(b"/Root 1 0 R", b"/Root 1 0 R /Encrypt 99 0 R")
+    )
+    result = runner.invoke(app, ["screen", "99999999", "--deck", str(encrypted)])
+    assert result.exit_code == 1
+    combined = all_output(result)
+    assert "encrypted" in combined
+    assert "Traceback" not in combined
+    assert not (screen_env / "cases").exists()
+
+
+def test_non_http_site_url_is_a_clean_error(
+    screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    result = runner.invoke(app, ["screen", "99999999", "--site", "ftp://widgets.example"])
+    assert result.exit_code == 1
+    combined = all_output(result)
+    assert "http or https" in combined
+    assert not (screen_env / "cases").exists()
+
+
+def test_claims_extraction_failure_keeps_the_audit_pack_and_skips_synthesis(
+    screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A model that never produces valid claims: the run exits 1, the deck
+    evidence is kept, no synthesis call is made, and nothing is fabricated."""
+    mock_company_routes(respx_mock)
+    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    route = respx_mock.post(OLLAMA_CHAT_URL).respond(200, json=ollama_reply("junk, not json"))
+    result = runner.invoke(app, ["screen", "99999999", "--deck", str(DECK_PATH)])
+    assert result.exit_code == 1
+    combined = all_output(result)
+    assert "claims extraction failed" in combined
+    assert "Traceback" not in combined
+    # Three attempts for claims extraction, zero for synthesis.
+    assert route.call_count == 3
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    assert (case_dir / "evidence" / "deck_text.json").is_file()
+    casefile = CaseFile.model_validate_json(
+        (case_dir / "casefile.json").read_text(encoding="utf-8")
+    )
+    assert casefile.claims == []
+    assert casefile.verdict is None
+    memo = (case_dir / "memo.md").read_text(encoding="utf-8")
+    assert "Synthesis was attempted and failed" in memo
+    assert "claims extraction failed" in memo
+
+
+def test_screen_with_deck_extracts_claims_and_assesses_them(
+    screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The full weekend 3 path over the CLI: extraction call, synthesis call,
+    claims stored with code-assigned ids, table rendered."""
+    mock_company_routes(respx_mock)
+    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    claims_reply = json.dumps(
+        {
+            "claims": [
+                {
+                    "text": "Operating since 2015 with a national footprint.",
+                    "source": "deck p.2",
+                    "category": "history",
+                    "checkable": True,
+                }
+            ]
+        }
+    )
+    synthesis_reply = synthesis_json(
+        "red",
+        ["R4", "A1", "A2"],
+        assessments=[
+            {
+                "claim_id": "CLM-001",
+                "status": "contradicted",
+                "basis_finding_ids": ["REG-002"],
+                "record_note": "Incorporated on 2019-05-14 per the registry profile.",
+            }
+        ],
+    )
+    route = respx_mock.post(OLLAMA_CHAT_URL).mock(
+        side_effect=[
+            httpx.Response(200, json=ollama_reply(claims_reply)),
+            httpx.Response(200, json=ollama_reply(synthesis_reply)),
+        ]
+    )
+    result = runner.invoke(app, ["screen", "99999999", "--deck", str(DECK_PATH)])
+    assert result.exit_code == 0, result.output
+    assert route.call_count == 2
+    # The first call carried the claims schema with the source enum; the
+    # second carried the synthesis schema with the claim id enum.
+    first = json.loads(route.calls[0].request.content.decode("utf-8"))
+    assert first["format"]["properties"]["claims"]["items"]["properties"]["source"]["enum"] == [
+        "deck p.1",
+        "deck p.2",
+        "deck p.3",
+    ]
+    second = json.loads(route.calls[1].request.content.decode("utf-8"))
+    assert second["format"]["properties"]["assessments"]["items"]["properties"]["claim_id"][
+        "enum"
+    ] == ["CLM-001"]
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    casefile = CaseFile.model_validate_json(
+        (case_dir / "casefile.json").read_text(encoding="utf-8")
+    )
+    assert [c.id for c in casefile.claims] == ["CLM-001"]
+    assert casefile.verdict is not None and casefile.verdict.level == "red"
+    memo = (case_dir / "memo.md").read_text(encoding="utf-8")
+    assert "## Claims vs evidence" in memo
+    assert "| Contradicted |" in memo
 
 
 # -- the whole-memo language backstop -----------------------------------------

@@ -7,19 +7,33 @@ cited triggers:
 - Floor: every mechanically detected candidate is forced into the final
   trigger set whether or not the model cited it.
 - Ceiling: a model-cited R1, R2, or R3 counts only when the same id is in
-  the mechanically detected candidate set; otherwise it is rejected. R4 and
-  R5 are rejected unconditionally this milestone because the claims layer
-  they depend on does not exist yet. The amber judgment triggers (A3, A6,
-  and the rest of the A set) remain the model's to cite.
+  the mechanically detected candidate set; otherwise it is rejected. The
+  claims-and-network judgment triggers are gated on what actually survives
+  in the casefile, via ClaimSignals:
+    - R4 is accepted only when at least one claim assessment SURVIVED
+      enforcement as contradicted with resolved evidence (the assessment
+      enforcement in firstpass.synthesis downgrades any contradicted or
+      supported assessment whose cited evidence does not resolve).
+    - R5 is accepted only when co-appointment overlap is recorded in the
+      casefile's network expansion.
+    - A4 is accepted only when at least one checkable claim's assessment
+      survived as unverified AND was authored by the model. The unverified
+      rows code back-fills for unassessed claims keep the memo table
+      complete but never open the gate: silence is not support.
+    - A3 and A5 are accepted only when at least one CHECKABLE claim exists.
+      A slogan-only deck (puffery, checkable false throughout) unlocks
+      nothing.
+  A6 remains freely citable model judgment over the media items.
 
 Verdict level is then a PURE FUNCTION of the enforced trigger set: any RED
 trigger forces red, otherwise any AMBER trigger forces amber, otherwise
-green. The model owns narrative, questions, and amber judgment additions;
+green. The model owns narrative, questions, and judgment trigger additions;
 it never does the level arithmetic, and it cannot introduce a red trigger
-the casefile does not support. Together the floor, the ceiling, and the
-pure level function make the anchoring property (same casefile, same level,
-any model) hold by construction against both omitted and fabricated
-triggers.
+the casefile does not support. The floor, the ceiling, and the pure level
+function keep the anchoring property for the mechanical tier (same
+casefile, same level, any model). R4 is judgment-tier by design: whether a
+surviving contradiction is cited is the model's call, but no model can
+manufacture an R4 the enforced assessments do not carry.
 
 Enforcement notes are rendered into memos, so they are built from fixed
 text and catalog-validated ids only, never from model-controlled strings.
@@ -74,10 +88,9 @@ TRIGGER_INDEX: dict[str, Trigger] = {t.id: t for t in TRIGGERS}
 _TRIGGER_ID_BY_LOWER: dict[str, str] = {t.id.lower(): t.id for t in TRIGGERS}
 
 # The ceiling. Red triggers with a mechanical detector: model citations are
-# accepted only when the detector fired on this casefile. Claims-dependent
-# red triggers: rejected unconditionally until the claims layer exists.
+# accepted only when the detector fired on this casefile. The judgment
+# triggers R4, R5, A3, A4, and A5 are gated on ClaimSignals below.
 MECHANICAL_RED_IDS = frozenset({"R1", "R2", "R3"})
-CLAIMS_DEPENDENT_RED_IDS = frozenset({"R4", "R5"})
 
 RUBRIC_RULES: tuple[str, ...] = (
     "Any RED trigger forces a RED verdict.",
@@ -190,6 +203,25 @@ def detect_candidates(casefile: CaseFile) -> list[TriggerCandidate]:
 
 
 @dataclass(frozen=True)
+class ClaimSignals:
+    """What the enforced casefile actually supports, for the trigger gates.
+
+    Built by the caller AFTER assessment enforcement, from the surviving
+    assessments and the casefile's network expansion, never from anything
+    the model asserted. checkable_claims_present requires at least one
+    CHECKABLE claim; unverified_present requires a MODEL-authored surviving
+    unverified assessment (code back-fill does not count). The default (all
+    False) locks every gated trigger, which is exactly the claims-free
+    behavior.
+    """
+
+    checkable_claims_present: bool = False
+    contradicted_with_basis: bool = False
+    unverified_present: bool = False
+    overlaps_present: bool = False
+
+
+@dataclass(frozen=True)
 class EnforcementResult:
     """The enforced verdict pieces plus every note the enforcement produced."""
 
@@ -207,6 +239,7 @@ def enforce(
     model_triggered: list[str],
     model_questions: list[str],
     candidates: list[TriggerCandidate],
+    claim_signals: ClaimSignals | None = None,
 ) -> EnforcementResult:
     """Apply the enforcement rules, in order.
 
@@ -215,9 +248,11 @@ def enforce(
        count only (unrecognized ids are model-controlled text and never
        appear in a note).
     2. The ceiling: cited R1/R2/R3 are rejected unless mechanically
-       detected on this casefile; R4/R5 are rejected unconditionally until
-       the claims layer exists. Every rejection is noted with fixed text
-       and the catalog-validated id.
+       detected on this casefile. Cited R4/R5/A3/A4/A5 are rejected unless
+       the claim_signals gate for that trigger is open (module docstring);
+       with no claim_signals every gate is locked, the claims-free
+       behavior. Every rejection is noted with fixed text and the
+       catalog-validated id.
     3. The floor: every mechanical candidate must be present; missing ones
        are added and noted.
     4. The level is computed from the final trigger set; the model's level
@@ -231,6 +266,7 @@ def enforce(
         assert candidate.id in TRIGGER_INDEX, (
             f"mechanically detected candidate {candidate.id!r} is not in the rubric catalog"
         )
+    signals = claim_signals or ClaimSignals()
 
     notes: list[str] = []
 
@@ -245,14 +281,41 @@ def enforce(
     if unrecognized:
         notes.append(f"dropped {unrecognized} unrecognized trigger id(s)")
 
+    # Fixed rejection texts for the gated judgment triggers. Catalog ids
+    # only; nothing model-controlled can reach a note.
+    gate_rejections = {
+        "R4": (
+            signals.contradicted_with_basis,
+            "rejected trigger R4: no claim assessment survives as contradicted"
+            " with resolved evidence",
+        ),
+        "R5": (
+            signals.overlaps_present,
+            "rejected trigger R5: no co-appointment overlap is recorded in this casefile",
+        ),
+        "A3": (
+            signals.checkable_claims_present,
+            "rejected trigger A3: no checkable claims are recorded in this casefile",
+        ),
+        "A4": (
+            signals.unverified_present,
+            "rejected trigger A4: no model-assessed checkable claim survives as unverified",
+        ),
+        "A5": (
+            signals.checkable_claims_present,
+            "rejected trigger A5: no checkable claims are recorded in this casefile",
+        ),
+    }
+
     candidate_ids = {c.id for c in candidates}
     triggered: list[str] = []
     for trigger_id in cited:
-        if trigger_id in CLAIMS_DEPENDENT_RED_IDS:
-            notes.append(
-                f"rejected trigger {trigger_id}: requires the claims layer which is"
-                " not part of this milestone"
-            )
+        if trigger_id in gate_rejections:
+            gate_open, rejection_note = gate_rejections[trigger_id]
+            if gate_open:
+                triggered.append(trigger_id)
+            else:
+                notes.append(rejection_note)
         elif trigger_id in MECHANICAL_RED_IDS and trigger_id not in candidate_ids:
             notes.append(f"rejected trigger {trigger_id}: not supported by the casefile evidence")
         else:

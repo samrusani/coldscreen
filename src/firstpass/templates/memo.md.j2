@@ -49,6 +49,24 @@ No verdict is assessed. The deterministic findings below stand on their own.
 {% endif %}
 {{ c.disclaimer }}
 
+## Claims vs evidence
+
+{% if claim_rows %}
+What the company says about itself, against the public record. Claim text is quoted verbatim from the deck or site named in the source; the status column is the enforced assessment.
+
+| # | Claim (source) | Public record | Status |
+|---|---|---|---|
+{% for r in claim_rows %}
+| {{ r.number }} | "{{ r.text }}" ({{ r.source }}) | {{ r.record }} | {{ r.status }} |
+{% endfor %}
+{% elif c.claims_extraction and not c.claims_extraction.performed %}
+Not performed: {{ c.claims_extraction.skipped_reason }}. See the EXT findings for the basis.
+{% elif c.claims_extraction %}
+Claims extraction ran but produced no discrete claims from the provided deck or site text. See finding EXT-006.
+{% else %}
+Claims extraction was not part of this casefile.
+{% endif %}
+
 {% if c.verdict %}
 ## Narrative
 

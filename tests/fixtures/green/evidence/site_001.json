@@ -1,0 +1,15 @@
+{
+  "body": {
+    "kind": "site_text",
+    "status": 200,
+    "text": "Placid Meridian Consulting\nCalm, dependable advice for ambitious teams.\nWe work with founders across the country on planning and governance.",
+    "truncated": false,
+    "url": "https://placid-meridian.example"
+  },
+  "from_cache": false,
+  "name": "site_001",
+  "params": {},
+  "retrieved_at": "2026-08-18T12:00:00+00:00",
+  "status": 200,
+  "url": "https://placid-meridian.example"
+}

@@ -11,6 +11,10 @@ No synthesis: no model configured. The findings in this memo are deterministic r
 
 This memo is a research aid generated from public sources at a point in time. It is not investment advice, not a credit reference, and not a consumer report. Do not use it for decisions regulated under the US Fair Credit Reporting Act (employment, credit, tenancy screening) or equivalent regimes. Officer and PSC data is personal data from public registers; you are responsible for processing it lawfully. Verify everything independently before acting on it.
 
+## Claims vs evidence
+
+Not performed: no deck or site provided. See the EXT findings for the basis.
+
 ## Findings
 
 ### Red
@@ -58,6 +62,8 @@ None recorded.
   - Evidence: firstpass:not-run/sanctions (retrieved 2026-08-18)
 - **MED-000** (confirmed) Adverse media search not performed: no search API key configured. Public web coverage was not screened this run.
   - Evidence: firstpass:not-run/media (retrieved 2026-08-18)
+- **EXT-000** (confirmed) Claims extraction not performed: no deck or site was provided. What the company says about itself was not screened this run.
+  - Evidence: firstpass:not-run/claims (retrieved 2026-08-18)
 
 ## Officers
 

@@ -22,6 +22,10 @@ def test_defaults_match_the_documented_values() -> None:
     assert settings.ollama_num_ctx == 16384
     # Unset, so the request never carries the field at all.
     assert settings.ollama_think is None
+    # Claims extraction caps, per the weekend 3 work order.
+    assert settings.max_deck_pages == 40
+    assert settings.max_claims_chars == 60000
+    assert settings.max_site_response_bytes == 2_000_000
 
 
 def test_ollama_num_ctx_follows_the_precedence_chain(tmp_path: Path) -> None:

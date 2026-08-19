@@ -1,0 +1,34 @@
+{
+  "claims": [
+    {
+      "text": "Operating since 2015 with a national footprint",
+      "source": "deck p.2",
+      "category": "history",
+      "checkable": true
+    },
+    {
+      "text": "The company is debt free and self funded",
+      "source": "deck p.2",
+      "category": "financials",
+      "checkable": true
+    },
+    {
+      "text": "Our platform eliminates fraud in widget procurement",
+      "source": "deck p.2",
+      "category": "other",
+      "checkable": false
+    },
+    {
+      "text": "A team of 40 widget engineers",
+      "source": "deck p.3",
+      "category": "team",
+      "checkable": true
+    },
+    {
+      "text": "The most trusted name in widgets",
+      "source": "deck p.3",
+      "category": "traction",
+      "checkable": false
+    }
+  ]
+}

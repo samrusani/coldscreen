@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Real synthesis smoke against local Ollama, using the golden casefile.
+"""Real synthesis smoke against local Ollama, on a fixture casefile.
 
-Loads tests/fixtures/golden/casefile.json, runs actual synthesis (localhost
-HTTP, no keys, no cost), and prints the enforced verdict, the trigger set,
-enforcement notes, retry counts, and wall time. This is manual verification,
-not CI: pytest stays fully offline.
+Loads a fixture casefile (default tests/fixtures/amber: the claims-free
+AMBER case), runs actual synthesis (localhost HTTP, no keys, no cost), and
+prints the enforced verdict, the trigger set, enforcement notes, retry
+counts, and wall time. This is manual verification, not CI: pytest stays
+fully offline.
+
+Set FIRSTPASS_SMOKE_CASE to another fixture directory to smoke a different
+case; tests/fixtures/golden (the RED case with stored claims) exercises the
+claim assessment path against a real model.
 
 Ollama settings are read the way the CLI reads them (firstpass.toml, then
 the environment), so the run here matches a real screen. That matters most
@@ -14,10 +19,12 @@ before it will produce usable schema-constrained output.
 Usage: python scripts/ollama_smoke.py <model> [more models ...]
 Example: python scripts/ollama_smoke.py qwen2.5:7b
 Example: FIRSTPASS_OLLAMA_THINK=false python scripts/ollama_smoke.py qwen3:8b
+Example: FIRSTPASS_SMOKE_CASE=tests/fixtures/golden python scripts/ollama_smoke.py qwen3:8b
 """
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -36,11 +43,16 @@ from firstpass.providers import ProviderError  # noqa: E402
 from firstpass.providers.ollama_p import OllamaProvider  # noqa: E402
 from firstpass.synthesis import SynthesisError, synthesize  # noqa: E402
 
-GOLDEN_DIR = REPO_ROOT / "tests" / "fixtures" / "golden"
+DEFAULT_CASE_DIR = REPO_ROOT / "tests" / "fixtures" / "amber"
+
+
+def case_dir() -> Path:
+    override = os.environ.get("FIRSTPASS_SMOKE_CASE", "").strip()
+    return Path(override) if override else DEFAULT_CASE_DIR
 
 
 def smoke(model: str, settings: Settings) -> int:
-    casefile = load_casefile(GOLDEN_DIR)
+    casefile = load_casefile(case_dir())
     provider = OllamaProvider(
         model=model,
         base_url=ollama_base_url_from_env(),
@@ -51,6 +63,7 @@ def smoke(model: str, settings: Settings) -> int:
     think = settings.ollama_think
     think_label = "unset, so the field is omitted" if think is None else str(think).lower()
     print(f"== ollama smoke: {model} ==")
+    print(f"casefile: {case_dir()}")
     print(f"num_ctx: {settings.ollama_num_ctx}, think: {think_label}")
     started = time.monotonic()
     try:

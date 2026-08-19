@@ -1,0 +1,16 @@
+{
+  "claims": [
+    {
+      "text": "Founded in 2018 by Mabel Meridian",
+      "source": "site /about",
+      "category": "history",
+      "checkable": true
+    },
+    {
+      "text": "Calm, dependable advice for ambitious teams",
+      "source": "site /",
+      "category": "other",
+      "checkable": false
+    }
+  ]
+}

@@ -8,6 +8,9 @@ from firstpass.models import (
     OGL_ATTRIBUTION,
     RESEARCH_AID_DISCLAIMER,
     CaseFile,
+    Claim,
+    ClaimAssessment,
+    ClaimsExtraction,
     CompanyProfile,
     DisqualificationCheck,
     Evidence,
@@ -227,3 +230,84 @@ def test_clock_override_note_appears_only_when_set() -> None:
     assert "FIRSTPASS_SCREENED_AT" not in plain
     overridden = render_memo(minimal_casefile().model_copy(update={"clock_override": True}))
     assert "overridden through FIRSTPASS_SCREENED_AT" in overridden
+
+
+# -- the claims-vs-evidence table -----------------------------------------------
+
+
+def _claims_casefile() -> CaseFile:
+    casefile = minimal_casefile()
+    claims = [
+        Claim(
+            id="CLM-001",
+            text="Operating since 2015",
+            source="deck p.2",
+            category="history",
+            checkable=True,
+        ),
+        Claim(
+            id="CLM-002",
+            text="The most trusted name in widgets",
+            source="deck p.3",
+            category="traction",
+            checkable=False,
+        ),
+        Claim(
+            id="CLM-003",
+            text="A team of 40 widget engineers",
+            source="deck p.3",
+            category="team",
+            checkable=True,
+        ),
+    ]
+    assessments = [
+        ClaimAssessment(
+            claim_id="CLM-001",
+            status="contradicted",
+            basis=[Evidence(source_url="https://example.invalid/p", retrieved_at=SCREENED_AT)],
+            record_note="Incorporated on 2019-05-14 per the registry profile.",
+        )
+    ]
+    return casefile.model_copy(update={"claims": claims, "assessments": assessments})
+
+
+def test_claims_table_renders_rows_in_readme_format() -> None:
+    memo = render_memo(_claims_casefile())
+    assert "## Claims vs evidence" in memo
+    assert "| # | Claim (source) | Public record | Status |" in memo
+    row_one = (
+        '| 1 | "Operating since 2015" (deck p.2) |'
+        " Incorporated on 2019-05-14 per the registry profile. | Contradicted |"
+    )
+    assert row_one in memo
+    # Puffery: no assessment, no record note, "not checkable".
+    assert '| 2 | "The most trusted name in widgets" (deck p.3) |  | not checkable |' in memo
+    # Checkable but no stored assessment (synthesis never ran): honest label.
+    assert '| 3 | "A team of 40 widget engineers" (deck p.3) |  | not assessed |' in memo
+
+
+def test_claims_section_states_the_skip_when_extraction_did_not_run() -> None:
+    casefile = minimal_casefile().model_copy(
+        update={
+            "claims_extraction": ClaimsExtraction(
+                performed=False, skipped_reason="no deck or site provided"
+            )
+        }
+    )
+    memo = render_memo(casefile)
+    assert "## Claims vs evidence" in memo
+    assert "Not performed: no deck or site provided." in memo
+    assert "| # |" not in memo
+
+
+def test_claims_section_states_zero_claims_when_extraction_ran_dry() -> None:
+    casefile = minimal_casefile().model_copy(
+        update={"claims_extraction": ClaimsExtraction(performed=True)}
+    )
+    memo = render_memo(casefile)
+    assert "produced no discrete claims" in memo
+
+
+def test_claims_section_absent_marker_for_legacy_casefiles() -> None:
+    memo = render_memo(minimal_casefile())
+    assert "Claims extraction was not part of this casefile." in memo

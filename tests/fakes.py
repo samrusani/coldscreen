@@ -1,4 +1,4 @@
-"""Fake model providers for offline synthesis tests."""
+"""Fake model providers for offline synthesis and claims extraction tests."""
 
 from __future__ import annotations
 
@@ -41,6 +41,7 @@ def synthesis_json(
     narrative: str = "The public record for this company is unremarkable.",
     rationale: str = "No rubric triggers are met by the findings.",
     questions: list[str] | None = None,
+    assessments: list[dict[str, Any]] | None = None,
 ) -> str:
     """A well-formed synthesis output document."""
     return json.dumps(
@@ -57,5 +58,36 @@ def synthesis_json(
                     "Who currently manages day-to-day operations?",
                 ],
             },
+            "assessments": assessments or [],
         }
     )
+
+
+def assessment_json(
+    claim_id: str,
+    status: str = "unverified",
+    basis_finding_ids: list[str] | None = None,
+    record_note: str = "No public source in this casefile speaks to this claim.",
+) -> dict[str, Any]:
+    """One assessment object for the synthesis output document."""
+    return {
+        "claim_id": claim_id,
+        "status": status,
+        "basis_finding_ids": basis_finding_ids or [],
+        "record_note": record_note,
+    }
+
+
+def claims_json(claims: list[dict[str, Any]] | None = None) -> str:
+    """A well-formed claims extraction output document."""
+    return json.dumps({"claims": claims or []})
+
+
+def claim_json(
+    text: str,
+    source: str,
+    category: str = "other",
+    checkable: bool = True,
+) -> dict[str, Any]:
+    """One raw claim object for the claims extraction output document."""
+    return {"text": text, "source": source, "category": category, "checkable": checkable}

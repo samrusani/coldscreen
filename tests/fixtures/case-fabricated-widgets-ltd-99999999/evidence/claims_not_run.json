@@ -1,0 +1,13 @@
+{
+  "body": {
+    "kind": "not_run",
+    "reason": "no deck or site provided; there is nothing to extract claims from",
+    "stage": "claims"
+  },
+  "from_cache": false,
+  "name": "claims_not_run",
+  "params": {},
+  "retrieved_at": "2026-08-18T12:00:00+00:00",
+  "status": 0,
+  "url": "firstpass:not-run/claims"
+}

@@ -84,6 +84,39 @@ def _disq_lines(casefile: CaseFile) -> list[str]:
     return lines
 
 
+def _claim_rows(casefile: CaseFile) -> list[dict[str, str]]:
+    """Claims-vs-evidence table rows, one per stored claim, in claim order.
+
+    The claim text is rendered VERBATIM (quoted data): the language gates
+    exempt exactly the stored claim strings, so any rewriting here would
+    break the span match and turn a legitimate quotation into a gate hit.
+    Puffery rows carry "not checkable"; a checkable claim with no stored
+    assessment (synthesis never ran, or failed after extraction) renders
+    honestly as "not assessed".
+    """
+    assessments = {a.claim_id: a for a in casefile.assessments}
+    rows: list[dict[str, str]] = []
+    for index, claim in enumerate(casefile.claims, start=1):
+        if not claim.checkable:
+            record, status = "", "not checkable"
+        else:
+            assessment = assessments.get(claim.id)
+            if assessment is None:
+                record, status = "", "not assessed"
+            else:
+                record, status = assessment.record_note, assessment.status.capitalize()
+        rows.append(
+            {
+                "number": str(index),
+                "text": claim.text,
+                "source": claim.source,
+                "record": record,
+                "status": status,
+            }
+        )
+    return rows
+
+
 def _trigger_lines(triggered: list[str]) -> list[dict[str, str]]:
     """Rubric line per cited trigger; unknown ids are labelled as such."""
     lines: list[dict[str, str]] = []
@@ -122,6 +155,7 @@ def render_memo(casefile: CaseFile, synthesis_failure: str | None = None) -> str
         "resigned_officers": resigned_officers,
         "no_synthesis_text": NO_SYNTHESIS_TEXT,
         "synthesis_failure": synthesis_failure,
+        "claim_rows": _claim_rows(casefile),
         "trigger_lines": _trigger_lines(casefile.verdict.triggered) if casefile.verdict else [],
         "disq_lines": _disq_lines(casefile),
         "ogl_attribution": OGL_ATTRIBUTION,

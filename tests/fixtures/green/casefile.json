@@ -371,10 +371,95 @@
           "excerpt": "zero results"
         }
       ]
+    },
+    {
+      "id": "EXT-003",
+      "stage": "claims",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Site ingested: 2 page(s) with text retrieved from https://placid-meridian.example (/, /about).",
+      "evidence": [
+        {
+          "source_url": "https://placid-meridian.example",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "site fetch"
+        },
+        {
+          "source_url": "https://placid-meridian.example/about",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "site fetch"
+        }
+      ]
+    },
+    {
+      "id": "EXT-006",
+      "stage": "claims",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Claims extraction produced 2 claim(s) from 2 text section(s): 1 checkable, 1 not checkable (puffery is listed, never dropped).",
+      "evidence": [
+        {
+          "source_url": "https://placid-meridian.example",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": null
+        },
+        {
+          "source_url": "https://placid-meridian.example/about",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": null
+        }
+      ]
     }
   ],
-  "claims": [],
-  "assessments": [],
+  "claims": [
+    {
+      "id": "CLM-001",
+      "text": "Founded in 2018 by Mabel Meridian",
+      "source": "site /about",
+      "category": "history",
+      "checkable": true
+    },
+    {
+      "id": "CLM-002",
+      "text": "Calm, dependable advice for ambitious teams",
+      "source": "site /",
+      "category": "other",
+      "checkable": false
+    }
+  ],
+  "assessments": [
+    {
+      "claim_id": "CLM-001",
+      "status": "supported",
+      "basis": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999902",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "date_of_creation=2018-06-15"
+        }
+      ],
+      "record_note": "Incorporated on 2018-06-15; the sole director was appointed at incorporation.",
+      "model_assessed": true
+    }
+  ],
+  "claims_extraction": {
+    "performed": true,
+    "provider": "ollama",
+    "model": "fake-model:1b",
+    "prompt_version": "2",
+    "parse_retries": 0,
+    "deck_file": null,
+    "deck_sha256": null,
+    "deck_pages": null,
+    "site_url": "https://placid-meridian.example",
+    "sources": [
+      "site /",
+      "site /about"
+    ],
+    "truncated": false,
+    "dropped_claims": 0,
+    "skipped_reason": null
+  },
   "sanctions": {
     "performed": true,
     "dataset": "default",
@@ -445,9 +530,26 @@
     "items": [],
     "skipped_reason": null
   },
-  "verdict": null,
-  "narrative": null,
-  "synthesis": null,
+  "verdict": {
+    "level": "green",
+    "triggered": [],
+    "rationale": "No rubric trigger is met: the site's checkable claim is supported by the register (CLM-001, REG-002), filings are current, the officer record is stable, sanctions screening returned no candidates, the disqualification register shows no matches, and the media search returned nothing. A verdict citing no triggers is GREEN by rubric rule 3.",
+    "questions": [
+      "Is the registered office at 12 Nonexistent Crescent the actual place of business?",
+      "Does the company have any borrowing or security arrangements that have not yet reached the register?",
+      "Are there other entities in which the director or PSC holds a controlling interest?"
+    ]
+  },
+  "narrative": "PLACID MERIDIAN CONSULTING LTD is an active company incorporated on 2018-06-15 (REG-001, REG-002). Two claims were extracted from its website (EXT-003, EXT-006). The founding claim (CLM-001) is supported by the register: incorporation on 2018-06-15 with the sole director appointed the same day (REG-002, REG-008). The registry shows nothing overdue: accounts and the confirmation statement are current, no charges are registered (REG-006), and no insolvency history is linked (REG-007). The officer record is stable, with one active director and no resignations in the lookback window (REG-008, REG-009). Sanctions screening ran for the company and for its director, who is also the PSC, and returned no candidates at any score (SAN-001, SAN-002). Network expansion found no other current appointments, no co-appointment overlap (NET-001, NET-002), and no disqualification records (NET-101). The adverse media search returned no results in any query category (MED-006).",
+  "synthesis": {
+    "provider": "ollama",
+    "model": "fake-model:1b",
+    "prompt_version": "3",
+    "parse_retries": 0,
+    "language_retries": 0,
+    "enforcement_notes": [],
+    "model_level": "green"
+  },
   "verdict_enforcement": null,
   "tool_version": "0.1.0.dev0",
   "screened_at": "2026-08-18T12:00:00Z",
