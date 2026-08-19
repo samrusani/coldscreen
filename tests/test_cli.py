@@ -7,6 +7,7 @@ test. The rerun tests register no routes at all: rerun must be offline.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import time
 from pathlib import Path
@@ -44,6 +45,9 @@ def neutral_synthesis_json(level: str = "green") -> str:
     return synthesis_json(level)
 
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
 def all_output(result: Result) -> str:
     """stdout plus stderr, tolerant of click versions that separate them."""
     text = result.output
@@ -52,6 +56,19 @@ def all_output(result: Result) -> str:
     except (ValueError, AttributeError):
         pass
     return text
+
+
+def flat_output(result: Result) -> str:
+    """all_output with ANSI styling and line wrapping removed.
+
+    Rich wraps its error panels to the terminal width, so a phrase like
+    "Invalid value for '--config'" is split across lines on a narrow CI
+    terminal but not on a wide developer one. Collapsing whitespace and
+    dropping escape sequences makes assertions about wording independent
+    of the width the tests happen to run at.
+    """
+    text = _ANSI_RE.sub("", all_output(result))
+    return " ".join(text.split())
 
 
 @pytest.fixture
@@ -520,10 +537,9 @@ def test_nonexistent_config_path_is_an_error(
 ) -> None:
     missing = screen_env / "no-such-coldscreen.toml"
     result = runner.invoke(app, ["screen", "Fabricated Widgets Ltd", "--config", str(missing)])
-    # typer reports option validation as a usage error, exit code 2. The
-    # rich error panel wraps long lines, so assert on the stable prefix.
+    # typer reports option validation as a usage error, exit code 2.
     assert result.exit_code == 2
-    assert "Invalid value for '--config'" in all_output(result)
+    assert "Invalid value for '--config'" in flat_output(result)
 
 
 def test_the_api_key_never_reaches_disk_or_output(
@@ -814,7 +830,7 @@ def test_missing_deck_path_is_a_usage_error(screen_env: Path, respx_mock: respx.
     missing = screen_env / "no-such-deck.pdf"
     result = runner.invoke(app, ["screen", "99999999", "--deck", str(missing)])
     assert result.exit_code == 2
-    assert "Invalid value for '--deck'" in all_output(result)
+    assert "Invalid value for '--deck'" in flat_output(result)
 
 
 def test_non_pdf_deck_is_a_clean_error_before_any_fetching(
