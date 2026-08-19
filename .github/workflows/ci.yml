@@ -46,12 +46,12 @@ jobs:
         # Two belts: pytest-socket disables sockets inside pytest (see
         # pyproject addopts), and dead proxies make any escape attempt from
         # a subprocess or an unguarded client fail fast at the transport.
+        # GitHub env keys are case insensitive, so only the lowercase forms
+        # are set here; httpx and requests both honor them. pytest-socket is
+        # the primary control, this proxy belt is defense in depth.
         env:
-          HTTP_PROXY: "http://127.0.0.1:9"
-          HTTPS_PROXY: "http://127.0.0.1:9"
           http_proxy: "http://127.0.0.1:9"
           https_proxy: "http://127.0.0.1:9"
-          NO_PROXY: ""
           no_proxy: ""
         run: uv run pytest
 
@@ -84,8 +84,6 @@ jobs:
 
       - name: Offline rerun demo from the installed package
         env:
-          HTTP_PROXY: "http://127.0.0.1:9"
-          HTTPS_PROXY: "http://127.0.0.1:9"
           http_proxy: "http://127.0.0.1:9"
           https_proxy: "http://127.0.0.1:9"
         run: |
