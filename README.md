@@ -164,7 +164,7 @@ Connecting this server to a hosted MCP host means memo content, including office
 
 ## Scope and non-goals (v0.1)
 
-- UK companies only. Sweden (Bolagsverket) and US (SEC EDGAR) adapters are planned; the adapter interface gets designed once a second registry forces the right abstraction (see `FUTURE.md`).
+- UK companies only. A 2026-08-19 official-docs pass found neither planned candidate is a second Companies House: Bolagsverket HVD is number-only identity lookup, and SEC EDGAR is a filings archive for SEC filers, not a register. The adapter interface stays open until a real second register forces it (see `FUTURE.md` and `DECISIONS.md`).
 - No financial statement analysis. Filings are inventoried, not parsed.
 - No people search beyond registered officers and PSCs.
 - No continuous monitoring. One screen, one memo.
@@ -182,14 +182,14 @@ Connecting this server to a hosted MCP host means memo content, including office
 
 ## Roadmap
 
-- Sweden and US registry adapters
+- Swedish number-only identity lookup (Bolagsverket HVD) and a US filings archive (SEC EDGAR), not a second Companies House. Adapter interface still open. See `FUTURE.md`.
 - A versioned JSON schema contract for pipelines (the `--json` flag exists today; the schema guarantee is the future work)
 - Streamable HTTP for MCP, and a hosted MCP deployment (the stdio server is built; see above)
 - Better deck parsing (tables, charts)
 
 ## Contributing
 
-Issues and PRs welcome. The highest-value contribution is a registry adapter for your jurisdiction; the interface is small and documented in `ARCHITECTURE.md`.
+Issues and PRs welcome. A new jurisdiction is valuable when it is a real company register that can force an adapter contract. That interface is not extracted yet; do not send a Protocol wrapper around the UK client. See `ARCHITECTURE.md` section 17 and `DECISIONS.md`.
 
 ## License
 

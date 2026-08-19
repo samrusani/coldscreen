@@ -2,7 +2,9 @@
 
 Ideas that are out of scope for v0.1. The non-goals in ARCHITECTURE.md section 13 are binding, so good ideas land here instead of in the codebase.
 
-- Registry adapters beyond the UK: Bolagsverket (Sweden), SEC EDGAR (US). Design the adapter interface after the UK pass works, not before.
+- Registry adapters beyond the UK. The UK pass is done. Official-docs verification on 2026-08-19 (DECISIONS.md) showed neither candidate is a second Companies House, so the adapter interface stays unforced and v0.1 stays UK-only. Do not extract a Protocol from the UK client alone.
+  - Sweden, if built in v0.2: Bolagsverket API for valuable datasets (HVD). Number-only identity lookup (POST `/organisationer` with JSON field `identitetsbeteckning`; official examples send a 10-digit organisationsnummer; official FAQ, updated 2026-05-06, says name search is a future improvement with no date). OAuth 2 client credentials after kundanmälan; no bundled credential. No officers, UBO, or charges on this API. SCB `verksamOrganisation` is F-skatt / VAT / employer activity, not Companies House `active`.
+  - United States: SEC EDGAR is a filings archive for SEC filers, not a company register. No documented analogue of company status, PSC, charges, or insolvency resources. Not the second registry. A later filings-source adapter remains possible.
 - Remote MCP: Streamable HTTP transport, an OAuth story, and a hosted deployment. The stdio server is built (`coldscreen mcp`, ARCHITECTURE.md section 18); everything past the local process boundary is future work and carries the same cost and abuse questions as the hosted demo below.
 - MCP resources for case directories, so a host can browse evidence files directly. Deliberately not built with the stdio server: exposing arbitrary files as resources is a much wider surface than two tools, and the memo already comes back in the tool result.
 - Hosted "screen one company in your browser" demo. Decide after launch signal, not before.
