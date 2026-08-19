@@ -1,8 +1,11 @@
 """Memo rendering with Jinja2.
 
-The memo is grouped by severity, carries the research-aid disclaimer and the
-Open Government Licence attribution, and states explicitly that no verdict
-is assessed in the deterministic milestone.
+The memo is grouped by severity, carries the research-aid disclaimer (in the
+footer AND adjacent to the verdict), the Open Government Licence
+attribution, and the verdict block when synthesis ran. Rendered memos never
+contain media headlines or snippets: the media section lists source domain,
+published date, query category, and URL only, so the mechanical language
+gate holds even when coverage is about exactly the things the gate bans.
 """
 
 from __future__ import annotations
@@ -13,9 +16,12 @@ from typing import Any
 from jinja2 import Environment, PackageLoader, select_autoescape
 
 from .models import OGL_ATTRIBUTION, CaseFile, Finding
+from .rubric import TRIGGER_INDEX
 
-VERDICT_NOT_ASSESSED = (
-    "Not assessed. Deterministic registry pass only; synthesis is not part of this milestone."
+NO_SYNTHESIS_TEXT = (
+    "No synthesis: no model configured. The findings in this memo are"
+    " deterministic results from the registry, network, sanctions, and media"
+    " stages; no verdict is assessed."
 )
 
 
@@ -53,8 +59,53 @@ def _environment() -> Environment:
     return env
 
 
-def render_memo(casefile: CaseFile) -> str:
-    """Render memo.md content from a CaseFile."""
+_DISQ_OUTCOME_TEXT = {
+    "strong_active": (
+        "ACTIVE disqualification record matched on identifying details. See the red findings."
+    ),
+    "strong_expired": "expired disqualification record matched on identifying details.",
+    "name_only": "possible record, name match only. Requires manual check.",
+    "mismatch": (
+        "name matched but identifying details differ; likely a different person or company."
+    ),
+    "none": "no record matched.",
+}
+
+
+def _disq_lines(casefile: CaseFile) -> list[str]:
+    if casefile.network is None:
+        return []
+    lines = []
+    for check in casefile.network.disqualification_checks:
+        text = _DISQ_OUTCOME_TEXT.get(check.outcome, check.outcome)
+        if check.outcome == "strong_expired" and check.detail:
+            text = text.rstrip(".") + f" ({check.detail})."
+        lines.append(f"{check.subject} ({check.role}): {text}")
+    return lines
+
+
+def _trigger_lines(triggered: list[str]) -> list[dict[str, str]]:
+    """Rubric line per cited trigger; unknown ids are labelled as such."""
+    lines: list[dict[str, str]] = []
+    for trigger_id in triggered:
+        trigger = TRIGGER_INDEX.get(trigger_id)
+        if trigger is None:
+            lines.append({"id": trigger_id, "severity": "?", "text": "not in the rubric catalog"})
+        else:
+            lines.append(
+                {"id": trigger.id, "severity": trigger.severity.upper(), "text": trigger.text}
+            )
+    return lines
+
+
+def render_memo(casefile: CaseFile, synthesis_failure: str | None = None) -> str:
+    """Render memo.md content from a CaseFile.
+
+    synthesis_failure is set by the CLI when synthesis was attempted and
+    failed cleanly this run: the memo then states the failure instead of
+    implying that no model was configured. It is run state, not casefile
+    state, so it is never persisted.
+    """
     by_severity: dict[str, list[Finding]] = {"red": [], "amber": [], "info": []}
     for finding in casefile.findings:
         by_severity[finding.severity].append(finding)
@@ -69,7 +120,10 @@ def render_memo(casefile: CaseFile) -> str:
         "findings_info": by_severity["info"],
         "current_officers": current_officers,
         "resigned_officers": resigned_officers,
-        "verdict_text": VERDICT_NOT_ASSESSED,
+        "no_synthesis_text": NO_SYNTHESIS_TEXT,
+        "synthesis_failure": synthesis_failure,
+        "trigger_lines": _trigger_lines(casefile.verdict.triggered) if casefile.verdict else [],
+        "disq_lines": _disq_lines(casefile),
         "ogl_attribution": OGL_ATTRIBUTION,
     }
     template = _environment().get_template("memo.md.j2")

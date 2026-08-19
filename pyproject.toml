@@ -32,11 +32,26 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Model provider SDKs are optional extras: the core tool works with none of
+# them (deterministic screen) or with Ollama alone (plain httpx, no SDK).
+anthropic = [
+    "anthropic>=0.122",
+]
+openai = [
+    # openai v3 depends on httpx2 (a separate distribution), which coexists
+    # with this project's httpx pin. Verified at install time 2026-08-18.
+    "openai>=3.2",
+]
+all = [
+    "firstpass-screen[anthropic,openai]",
+]
 dev = [
     "pytest>=8.2",
     "respx>=0.21",
     "ruff>=0.5",
     "mypy>=1.10",
+    # Both provider SDKs so CI exercises the optional import paths.
+    "firstpass-screen[anthropic,openai]",
 ]
 
 [project.scripts]

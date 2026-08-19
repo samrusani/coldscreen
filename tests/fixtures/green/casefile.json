@@ -1,0 +1,456 @@
+{
+  "subject": {
+    "company_name": "PLACID MERIDIAN CONSULTING LTD",
+    "company_number": "99999902",
+    "company_status": "active",
+    "company_status_detail": null,
+    "date_of_creation": "2018-06-15",
+    "date_of_cessation": null,
+    "company_type": "ltd",
+    "jurisdiction": "england-wales",
+    "sic_codes": [
+      "70229"
+    ],
+    "registered_office_address": {
+      "address_line_1": "12 Nonexistent Crescent",
+      "locality": "Faketown",
+      "postal_code": "ZZ97 7ZZ",
+      "country": "England"
+    },
+    "registered_office_is_in_dispute": null,
+    "undeliverable_registered_office_address": null,
+    "previous_company_names": [],
+    "accounts": {
+      "next_accounts": {
+        "overdue": false,
+        "due_on": "2027-03-31"
+      },
+      "last_accounts": {
+        "made_up_to": "2025-06-30",
+        "type": "small"
+      }
+    },
+    "confirmation_statement": {
+      "overdue": false,
+      "next_due": "2027-06-29"
+    },
+    "links": {
+      "self": "/company/99999902",
+      "officers": "/company/99999902/officers",
+      "filing_history": "/company/99999902/filing-history",
+      "persons_with_significant_control": "/company/99999902/persons-with-significant-control"
+    }
+  },
+  "officers": [
+    {
+      "name": "MERIDIAN, Mabel",
+      "officer_role": "director",
+      "appointed_on": "2018-06-15",
+      "resigned_on": null,
+      "nationality": "British",
+      "occupation": null,
+      "country_of_residence": null,
+      "date_of_birth": {
+        "month": 7,
+        "year": 1976
+      },
+      "identification": {},
+      "links": {
+        "officer": {
+          "appointments": "/officers/fictGreen001/appointments"
+        }
+      }
+    }
+  ],
+  "pscs": [
+    {
+      "name": "Ms Mabel Meridian",
+      "kind": "individual-person-with-significant-control",
+      "natures_of_control": [
+        "ownership-of-shares-75-to-100-percent"
+      ],
+      "notified_on": "2018-06-15",
+      "ceased_on": null,
+      "nationality": "British",
+      "date_of_birth": {
+        "month": 7,
+        "year": 1976
+      }
+    }
+  ],
+  "charges": [],
+  "filings": [
+    {
+      "transaction_id": "FICT0101",
+      "category": "accounts",
+      "filing_type": "AA",
+      "date": "2025-09-12",
+      "description": "accounts-with-accounts-type-small",
+      "action_date": null
+    },
+    {
+      "transaction_id": "FICT0102",
+      "category": "confirmation-statement",
+      "filing_type": "CS01",
+      "date": "2025-06-29",
+      "description": "confirmation-statement-with-no-updates",
+      "action_date": null
+    }
+  ],
+  "filings_total": 2,
+  "insolvency_cases": [],
+  "findings": [
+    {
+      "id": "REG-001",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Company status is active.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999902",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "company_status=active"
+        }
+      ]
+    },
+    {
+      "id": "REG-002",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Incorporated on 2018-06-15 (8 full years before the screening date).",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999902",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "date_of_creation=2018-06-15"
+        }
+      ]
+    },
+    {
+      "id": "REG-006",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No charges are registered. The company profile offers no charges link, so the charges register was not queried.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999902",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "links.charges absent"
+        }
+      ]
+    },
+    {
+      "id": "REG-007",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No insolvency history is registered. The company profile offers no insolvency link, so the insolvency resource was not queried.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999902",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "links.insolvency absent"
+        }
+      ]
+    },
+    {
+      "id": "REG-008",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "1 active officer(s) on the register.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999902/officers",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "active officers=1"
+        }
+      ]
+    },
+    {
+      "id": "REG-009",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "0 officer resignation(s) in the 12 months before the screening date.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999902/officers",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "resignations last 12 months=0"
+        }
+      ]
+    },
+    {
+      "id": "REG-011",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "1 PSC entry(ies) on the register, 1 not ceased. Natures of control: ownership-of-shares-75-to-100-percent.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999902/persons-with-significant-control",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "psc items=1"
+        }
+      ]
+    },
+    {
+      "id": "NET-001",
+      "stage": "network",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Network expansion covered 1 current officer(s): 0 current appointment(s) at other companies were found.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/officers/fictGreen001/appointments",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "officer appointments page"
+        }
+      ]
+    },
+    {
+      "id": "NET-002",
+      "stage": "network",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No co-appointment overlap: no other company was found where two or more current officers of the subject hold current appointments.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/officers/fictGreen001/appointments",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "officer appointments page"
+        }
+      ]
+    },
+    {
+      "id": "NET-101",
+      "stage": "network",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No disqualification record matches MERIDIAN, Mabel (officer and PSC) on the disqualified officers register.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/search/disqualified-officers",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "candidates=0 of 0 result(s)"
+        }
+      ]
+    },
+    {
+      "id": "SAN-001",
+      "stage": "sanctions",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No sanctions match at or above threshold 0.7 for PLACID MERIDIAN CONSULTING LTD (company): no candidates returned (dataset default, algorithm best).",
+      "evidence": [
+        {
+          "source_url": "https://api.opensanctions.org/match/default",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "query q001: dataset=default threshold=0.7 algorithm=best"
+        }
+      ]
+    },
+    {
+      "id": "SAN-002",
+      "stage": "sanctions",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No sanctions match at or above threshold 0.7 for MERIDIAN, Mabel (officer and psc): no candidates returned (dataset default, algorithm best).",
+      "evidence": [
+        {
+          "source_url": "https://api.opensanctions.org/match/default",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "query q002: dataset=default threshold=0.7 algorithm=best"
+        }
+      ]
+    },
+    {
+      "id": "MED-001",
+      "stage": "media",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Adverse media query category 'misconduct': 0 result(s) returned, 0 kept after deduplication across 1 query variant(s).",
+      "evidence": [
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=misconduct"
+        }
+      ]
+    },
+    {
+      "id": "MED-002",
+      "stage": "media",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Adverse media query category 'insolvency': 0 result(s) returned, 0 kept after deduplication across 1 query variant(s).",
+      "evidence": [
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=insolvency"
+        }
+      ]
+    },
+    {
+      "id": "MED-003",
+      "stage": "media",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Adverse media query category 'regulatory': 0 result(s) returned, 0 kept after deduplication across 1 query variant(s).",
+      "evidence": [
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=regulatory"
+        }
+      ]
+    },
+    {
+      "id": "MED-004",
+      "stage": "media",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Adverse media query category 'litigation': 0 result(s) returned, 0 kept after deduplication across 1 query variant(s).",
+      "evidence": [
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=litigation"
+        }
+      ]
+    },
+    {
+      "id": "MED-005",
+      "stage": "media",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Adverse media query category 'sanctions': 0 result(s) returned, 0 kept after deduplication across 1 query variant(s).",
+      "evidence": [
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=sanctions"
+        }
+      ]
+    },
+    {
+      "id": "MED-006",
+      "stage": "media",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Adverse media search returned no results in any query category for the company name or its previous names.",
+      "evidence": [
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "zero results"
+        },
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "zero results"
+        },
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "zero results"
+        },
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "zero results"
+        },
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "zero results"
+        }
+      ]
+    }
+  ],
+  "claims": [],
+  "assessments": [],
+  "sanctions": {
+    "performed": true,
+    "dataset": "default",
+    "threshold": 0.7,
+    "algorithm_requested": "best",
+    "algorithm_resolved": null,
+    "limit": 5,
+    "dataset_release": null,
+    "endpoint": "https://api.opensanctions.org",
+    "results": [
+      {
+        "subject": "PLACID MERIDIAN CONSULTING LTD",
+        "kind": "company",
+        "query_schema": "Company",
+        "matched": false,
+        "top_score": null,
+        "datasets": []
+      },
+      {
+        "subject": "MERIDIAN, Mabel",
+        "kind": "officer and psc",
+        "query_schema": "Person",
+        "matched": false,
+        "top_score": null,
+        "datasets": []
+      }
+    ],
+    "skipped_reason": null
+  },
+  "network": {
+    "performed": true,
+    "appointments": [
+      {
+        "officer_name": "MERIDIAN, Mabel",
+        "other_current_appointments": 0,
+        "companies": [],
+        "truncated": false
+      }
+    ],
+    "overlaps": [],
+    "disqualification_checks": [
+      {
+        "subject": "MERIDIAN, Mabel",
+        "role": "officer and psc",
+        "outcome": "none",
+        "detail": null
+      }
+    ]
+  },
+  "media": {
+    "performed": true,
+    "provider": "tavily",
+    "results_per_query": 5,
+    "category_counts": {
+      "misconduct": 0,
+      "insolvency": 0,
+      "regulatory": 0,
+      "litigation": 0,
+      "sanctions": 0
+    },
+    "category_counts_deduped": {
+      "misconduct": 0,
+      "insolvency": 0,
+      "regulatory": 0,
+      "litigation": 0,
+      "sanctions": 0
+    },
+    "items": [],
+    "skipped_reason": null
+  },
+  "verdict": null,
+  "narrative": null,
+  "synthesis": null,
+  "verdict_enforcement": null,
+  "tool_version": "0.1.0.dev0",
+  "screened_at": "2026-08-18T12:00:00Z",
+  "disclaimer": "This memo is a research aid generated from public sources at a point in time. It is not investment advice, not a credit reference, and not a consumer report. Do not use it for decisions regulated under the US Fair Credit Reporting Act (employment, credit, tenancy screening) or equivalent regimes. Officer and PSC data is personal data from public registers; you are responsible for processing it lawfully. Verify everything independently before acting on it.",
+  "clock_override": true
+}

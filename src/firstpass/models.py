@@ -162,6 +162,13 @@ class CompanyProfile(_RegistryModel):
         return ", ".join(str(p) for p in parts if p)
 
 
+class DateOfBirth(_RegistryModel):
+    """Partial date of birth as the officer and PSC registers expose it."""
+
+    month: int | None = None
+    year: int | None = None
+
+
 class Officer(_RegistryModel):
     """One officer list entry. resigned_on absent means currently serving."""
 
@@ -172,6 +179,11 @@ class Officer(_RegistryModel):
     nationality: str | None = None
     occupation: str | None = None
     country_of_residence: str | None = None
+    date_of_birth: DateOfBirth | None = None
+    # Corporate officers carry an identification block (registration_number
+    # among other keys). Kept loose and parsed defensively where used: the
+    # exact shape is not verified in the research notes.
+    identification: dict[str, Any] = Field(default_factory=dict)
     links: dict[str, Any] = Field(default_factory=dict)
 
     @property
@@ -187,6 +199,13 @@ class PSC(_RegistryModel):
     natures_of_control: list[str] = Field(default_factory=list)
     notified_on: date | None = None
     ceased_on: date | None = None
+    nationality: str | None = None
+    date_of_birth: DateOfBirth | None = None
+
+    @property
+    def is_individual(self) -> bool:
+        """True when the PSC kind marks a natural person."""
+        return bool(self.kind) and str(self.kind).startswith("individual")
 
 
 class Charge(_RegistryModel):
@@ -225,6 +244,124 @@ class FilingSummary(_RegistryModel):
     action_date: _datetime.date | None = None
 
 
+class SanctionsSubjectResult(BaseModel):
+    """Sanctions match outcome for one screened subject, compact.
+
+    score is identity confidence in 0..1 from the matching engine, not risk.
+    matched means at or above the configured threshold. kind "officer and
+    psc" marks a person who holds both roles and was screened once.
+    """
+
+    subject: str
+    kind: Literal["company", "officer", "psc", "officer and psc"]
+    query_schema: Literal["Person", "Company"]
+    matched: bool = False
+    top_score: float | None = None
+    datasets: list[str] = Field(default_factory=list)
+
+
+class SanctionsScreening(BaseModel):
+    """Stage 4 summary: what was screened, how, and what came back.
+
+    limit is the per-query candidate cap that was requested;
+    dataset_release is whatever dataset release or version marker the
+    response exposed, when it exposed one. Both make "no match above
+    threshold X" defensible later without opening the raw evidence.
+    """
+
+    performed: bool
+    dataset: str | None = None
+    threshold: float | None = None
+    algorithm_requested: str | None = None
+    algorithm_resolved: str | None = None
+    limit: int | None = None
+    dataset_release: str | None = None
+    endpoint: str | None = None
+    results: list[SanctionsSubjectResult] = Field(default_factory=list)
+    skipped_reason: str | None = None
+
+
+class AppointmentSummary(BaseModel):
+    """One current officer's other current appointments, first degree only."""
+
+    officer_name: str
+    other_current_appointments: int = 0
+    companies: list[str] = Field(default_factory=list)
+    truncated: bool = False
+
+
+class CoAppointmentOverlap(BaseModel):
+    """A company (other than the subject) shared by 2+ current officers."""
+
+    company_number: str
+    company_name: str | None = None
+    officer_names: list[str] = Field(default_factory=list)
+
+
+class DisqualificationCheck(BaseModel):
+    """Outcome of the disqualification search for one person.
+
+    role "officer and psc" marks a person who holds both roles and was
+    searched once. Outcome "mismatch" means the name matched but an
+    identifying detail (date of birth, or company number for corporate
+    officers) affirmatively differed: likely a different person or company.
+    """
+
+    subject: str
+    role: Literal["officer", "psc", "officer and psc"]
+    outcome: Literal["strong_active", "strong_expired", "name_only", "mismatch", "none"]
+    detail: str | None = None
+
+
+class NetworkExpansion(BaseModel):
+    """Stage 3 summary: appointments fan-out, overlaps, disqualifications."""
+
+    performed: bool = False
+    appointments: list[AppointmentSummary] = Field(default_factory=list)
+    overlaps: list[CoAppointmentOverlap] = Field(default_factory=list)
+    disqualification_checks: list[DisqualificationCheck] = Field(default_factory=list)
+
+
+class MediaItem(BaseModel):
+    """One deduplicated adverse media search result.
+
+    The title lives here for the synthesis input; rendered memos never show
+    it. Memos list source domain, published date, URL, and query category
+    only, so headline vocabulary cannot leak into the memo.
+    """
+
+    title: str
+    url: str
+    source_domain: str
+    published: str | None = None
+    query_category: str
+    snippet: str | None = None
+
+
+class MediaScreening(BaseModel):
+    """Stage 5 summary: query categories, counts, deduplicated items."""
+
+    performed: bool
+    provider: str | None = None
+    results_per_query: int | None = None
+    category_counts: dict[str, int] = Field(default_factory=dict)
+    category_counts_deduped: dict[str, int] = Field(default_factory=dict)
+    items: list[MediaItem] = Field(default_factory=list)
+    skipped_reason: str | None = None
+
+
+class SynthesisMetadata(BaseModel):
+    """How the verdict and narrative were produced, for the audit pack."""
+
+    provider: str
+    model: str
+    prompt_version: str
+    parse_retries: int = 0
+    language_retries: int = 0
+    enforcement_notes: list[str] = Field(default_factory=list)
+    model_level: Literal["red", "amber", "green"] | None = None
+
+
 class CaseFile(BaseModel):
     """Everything one screening run produced, serialized to casefile.json.
 
@@ -243,7 +380,16 @@ class CaseFile(BaseModel):
     findings: list[Finding] = Field(default_factory=list)
     claims: list[Claim] = Field(default_factory=list)
     assessments: list[ClaimAssessment] = Field(default_factory=list)
+    sanctions: SanctionsScreening | None = None
+    network: NetworkExpansion | None = None
+    media: MediaScreening | None = None
     verdict: Verdict | None = None
+    narrative: str | None = None
+    synthesis: SynthesisMetadata | None = None
+    # One-line note rendered in the memo when the enforced verdict level
+    # differs from the level the model proposed. Level is a pure function of
+    # the enforced trigger set; the model never does that arithmetic.
+    verdict_enforcement: str | None = None
     tool_version: str
     screened_at: datetime
     disclaimer: str = RESEARCH_AID_DISCLAIMER

@@ -1,0 +1,43 @@
+{
+  "total_results": 3,
+  "items_per_page": 100,
+  "start_index": 0,
+  "kind": "personal-appointment",
+  "name": "COGWHEEL, Cornelius",
+  "items": [
+    {
+      "name": "COGWHEEL, Cornelius",
+      "officer_role": "director",
+      "appointed_on": "2021-03-01",
+      "appointed_to": {
+        "company_name": "FABRICATED WIDGETS LTD",
+        "company_number": "99999999",
+        "company_status": "active"
+      },
+      "links": { "company": "/company/99999999" }
+    },
+    {
+      "name": "COGWHEEL, Cornelius",
+      "officer_role": "director",
+      "appointed_on": "2023-04-12",
+      "appointed_to": {
+        "company_name": "IMAGINARY COMPONENTS LTD",
+        "company_number": "99999801",
+        "company_status": "active"
+      },
+      "links": { "company": "/company/99999801" }
+    },
+    {
+      "name": "COGWHEEL, Cornelius",
+      "officer_role": "director",
+      "appointed_on": "2018-01-09",
+      "resigned_on": "2020-06-30",
+      "appointed_to": {
+        "company_name": "BYGONE GEARS LTD",
+        "company_number": "99999802",
+        "company_status": "dissolved"
+      },
+      "links": { "company": "/company/99999802" }
+    }
+  ]
+}

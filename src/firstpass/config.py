@@ -20,8 +20,14 @@ from dotenv import load_dotenv
 from platformdirs import user_cache_dir
 
 API_KEY_ENV = "COMPANIES_HOUSE_API_KEY"
+OPENSANCTIONS_KEY_ENV = "OPENSANCTIONS_API_KEY"
+OPENSANCTIONS_BASE_URL_ENV = "OPENSANCTIONS_BASE_URL"
+TAVILY_KEY_ENV = "TAVILY_API_KEY"
+OLLAMA_BASE_URL_ENV = "OLLAMA_BASE_URL"
 ENV_PREFIX = "FIRSTPASS_"
 DEFAULT_BASE_URL = "https://api.company-information.service.gov.uk"
+DEFAULT_OPENSANCTIONS_BASE_URL = "https://api.opensanctions.org"
+DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 
 
 @dataclass(frozen=True)
@@ -38,9 +44,29 @@ class Settings:
     max_pages_officers: int = 10
     max_pages_psc: int = 10
     max_pages_filing_history: int = 3
+    max_pages_appointments: int = 5
     officer_lookback_years: int = 5
     wholesale_change_min: int = 2
     timeout_seconds: float = 30.0
+    # Synthesis model as "provider:model". Empty string means no model: the
+    # screen completes deterministically and the memo says so.
+    model: str = ""
+    # Sanctions screening (OpenSanctions hosted API or self-hosted yente).
+    # The key comes from OPENSANCTIONS_API_KEY; a non-default endpoint from
+    # OPENSANCTIONS_BASE_URL. Neither is ever bundled, logged, or persisted.
+    sanctions_dataset: str = "default"
+    sanctions_threshold: float = 0.7
+    sanctions_algorithm: str = "best"
+    sanctions_limit: int = 5
+    # Adverse media search.
+    media_results_per_query: int = 5
+    # Local model endpoint timeout: synthesis on large local models is slow.
+    ollama_timeout_seconds: float = 600.0
+    # Ollama context window (options.num_ctx). The daemon default (4096 on
+    # most models) silently truncates the synthesis input; the default here
+    # covers the prompt plus a compact casefile with headroom. Raise it for
+    # unusually large casefiles, lower it for tight-memory machines.
+    ollama_num_ctx: int = 16384
 
     @property
     def cache_path(self) -> Path:
@@ -123,6 +149,32 @@ def api_key_from_env(environ: dict[str, str] | None = None) -> str | None:
     env = os.environ if environ is None else environ
     key = env.get(API_KEY_ENV, "").strip()
     return key or None
+
+
+def _env_value(name: str, environ: dict[str, str] | None = None) -> str | None:
+    env = os.environ if environ is None else environ
+    value = env.get(name, "").strip()
+    return value or None
+
+
+def opensanctions_key_from_env(environ: dict[str, str] | None = None) -> str | None:
+    """OpenSanctions API key. Users bring their own; never bundled or logged."""
+    return _env_value(OPENSANCTIONS_KEY_ENV, environ)
+
+
+def opensanctions_base_url_from_env(environ: dict[str, str] | None = None) -> str | None:
+    """Non-default OpenSanctions endpoint (self-hosted yente), when set."""
+    return _env_value(OPENSANCTIONS_BASE_URL_ENV, environ)
+
+
+def tavily_key_from_env(environ: dict[str, str] | None = None) -> str | None:
+    """Tavily search key for the adverse media stage."""
+    return _env_value(TAVILY_KEY_ENV, environ)
+
+
+def ollama_base_url_from_env(environ: dict[str, str] | None = None) -> str:
+    """Ollama endpoint, defaulting to the local daemon."""
+    return _env_value(OLLAMA_BASE_URL_ENV, environ) or DEFAULT_OLLAMA_BASE_URL
 
 
 def fixed_now(environ: dict[str, str] | None = None) -> datetime | None:

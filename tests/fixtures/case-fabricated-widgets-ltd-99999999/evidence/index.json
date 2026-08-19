@@ -40,5 +40,61 @@
     "url": "https://api.company-information.service.gov.uk/company/99999999/charges",
     "status": 200,
     "retrieved_at": "2026-08-18T12:00:00+00:00"
+  },
+  {
+    "name": "appointments_widgetsmith-wanda_p1",
+    "file": "evidence/appointments_widgetsmith-wanda_p1.json",
+    "url": "https://api.company-information.service.gov.uk/officers/fictOfficer001/appointments",
+    "status": 200,
+    "retrieved_at": "2026-08-18T12:00:00+00:00"
+  },
+  {
+    "name": "appointments_cogwheel-cornelius_p1",
+    "file": "evidence/appointments_cogwheel-cornelius_p1.json",
+    "url": "https://api.company-information.service.gov.uk/officers/fictOfficer002/appointments",
+    "status": 200,
+    "retrieved_at": "2026-08-18T12:00:00+00:00"
+  },
+  {
+    "name": "appointments_sprocket-sybil_p1",
+    "file": "evidence/appointments_sprocket-sybil_p1.json",
+    "url": "https://api.company-information.service.gov.uk/officers/fictOfficer003/appointments",
+    "status": 200,
+    "retrieved_at": "2026-08-18T12:00:00+00:00"
+  },
+  {
+    "name": "disqualified_search_widgetsmith-wanda",
+    "file": "evidence/disqualified_search_widgetsmith-wanda.json",
+    "url": "https://api.company-information.service.gov.uk/search/disqualified-officers",
+    "status": 200,
+    "retrieved_at": "2026-08-18T12:00:00+00:00"
+  },
+  {
+    "name": "disqualified_search_cogwheel-cornelius",
+    "file": "evidence/disqualified_search_cogwheel-cornelius.json",
+    "url": "https://api.company-information.service.gov.uk/search/disqualified-officers",
+    "status": 200,
+    "retrieved_at": "2026-08-18T12:00:00+00:00"
+  },
+  {
+    "name": "disqualified_search_sprocket-sybil",
+    "file": "evidence/disqualified_search_sprocket-sybil.json",
+    "url": "https://api.company-information.service.gov.uk/search/disqualified-officers",
+    "status": 200,
+    "retrieved_at": "2026-08-18T12:00:00+00:00"
+  },
+  {
+    "name": "sanctions_not_run",
+    "file": "evidence/sanctions_not_run.json",
+    "url": "firstpass:not-run/sanctions",
+    "status": 0,
+    "retrieved_at": "2026-08-18T12:00:00+00:00"
+  },
+  {
+    "name": "media_not_run",
+    "file": "evidence/media_not_run.json",
+    "url": "firstpass:not-run/media",
+    "status": 0,
+    "retrieved_at": "2026-08-18T12:00:00+00:00"
   }
 ]

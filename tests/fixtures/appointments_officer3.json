@@ -1,0 +1,20 @@
+{
+  "total_results": 1,
+  "items_per_page": 100,
+  "start_index": 0,
+  "kind": "personal-appointment",
+  "name": "SPROCKET, Sybil",
+  "items": [
+    {
+      "name": "SPROCKET, Sybil",
+      "officer_role": "secretary",
+      "appointed_on": "2019-05-14",
+      "appointed_to": {
+        "company_name": "FABRICATED WIDGETS LTD",
+        "company_number": "99999999",
+        "company_status": "active"
+      },
+      "links": { "company": "/company/99999999" }
+    }
+  ]
+}

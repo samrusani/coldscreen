@@ -3,8 +3,10 @@
 
 Memos state what the public record shows and with what confidence. They
 never state or imply intent. This script is the mechanical enforcement: it
-scans rendered memos and the memo templates for a banned word list and exits
-nonzero with file and line on any hit.
+scans rendered memos and the memo templates with the shared banned-terms
+helper and exits nonzero with file and line on any hit. The helper strips
+URLs before matching, so a source URL whose slug contains a banned word is
+not a hit; the memo's own prose remains fully gated.
 
 Default targets when no paths are given: every memo.md under cases/ and
 tests/fixtures/, plus everything under src/firstpass/templates/.
@@ -14,39 +16,14 @@ Usage: python scripts/check_language.py [path ...]
 
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
-BANNED_TERMS: tuple[str, ...] = (
-    "fraud",
-    "fraudulent",
-    "fraudster",
-    "lying",
-    "liar",
-    "lied",
-    "criminal",
-    "crime",
-    "scam",
-    "sham",
-    "dishonest",
-    "dishonesty",
-    "deceit",
-    "deceitful",
-    "crook",
-    "con artist",
-)
-
-
-def _term_pattern(term: str) -> str:
-    """One term as a regex: word-bounded, any whitespace inside multiword terms."""
-    return r"\s+".join(re.escape(part) for part in term.split())
-
-
-BANNED_PATTERN = re.compile(
-    r"\b(" + "|".join(_term_pattern(term) for term in BANNED_TERMS) + r")\b",
-    re.IGNORECASE,
-)
+try:
+    from firstpass.language import find_banned_terms
+except ImportError:  # running from a checkout without the package installed
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+    from firstpass.language import find_banned_terms
 
 
 def default_targets(root: Path) -> list[Path]:
@@ -65,8 +42,8 @@ def scan_file(path: Path) -> list[tuple[int, str]]:
     hits: list[tuple[int, str]] = []
     text = path.read_text(encoding="utf-8", errors="replace")
     for line_number, line in enumerate(text.splitlines(), start=1):
-        for match in BANNED_PATTERN.finditer(line):
-            hits.append((line_number, match.group(0)))
+        for term in find_banned_terms(line):
+            hits.append((line_number, term))
     return hits
 
 

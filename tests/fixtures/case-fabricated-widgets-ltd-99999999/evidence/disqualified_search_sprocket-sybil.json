@@ -1,0 +1,18 @@
+{
+  "body": {
+    "items": [],
+    "items_per_page": 20,
+    "kind": "search#disqualified-officers",
+    "start_index": 0,
+    "total_results": 0
+  },
+  "from_cache": false,
+  "name": "disqualified_search_sprocket-sybil",
+  "params": {
+    "items_per_page": "20",
+    "q": "SPROCKET, Sybil"
+  },
+  "retrieved_at": "2026-08-18T12:00:00+00:00",
+  "status": 200,
+  "url": "https://api.company-information.service.gov.uk/search/disqualified-officers"
+}

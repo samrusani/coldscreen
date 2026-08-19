@@ -1,0 +1,31 @@
+{
+  "total_results": 2,
+  "items_per_page": 100,
+  "start_index": 0,
+  "kind": "personal-appointment",
+  "name": "WIDGETSMITH, Wanda",
+  "items": [
+    {
+      "name": "WIDGETSMITH, Wanda",
+      "officer_role": "director",
+      "appointed_on": "2019-05-14",
+      "appointed_to": {
+        "company_name": "FABRICATED WIDGETS LTD",
+        "company_number": "99999999",
+        "company_status": "active"
+      },
+      "links": { "company": "/company/99999999" }
+    },
+    {
+      "name": "WIDGETSMITH, Wanda",
+      "officer_role": "director",
+      "appointed_on": "2022-02-01",
+      "appointed_to": {
+        "company_name": "IMAGINARY COMPONENTS LTD",
+        "company_number": "99999801",
+        "company_status": "active"
+      },
+      "links": { "company": "/company/99999801" }
+    }
+  ]
+}

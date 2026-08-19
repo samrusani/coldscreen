@@ -19,6 +19,17 @@ def test_defaults_match_the_documented_values() -> None:
     assert settings.max_pages_filing_history == 3
     assert settings.officer_lookback_years == 5
     assert settings.output_dir == "cases"
+    assert settings.ollama_num_ctx == 16384
+
+
+def test_ollama_num_ctx_follows_the_precedence_chain(tmp_path: Path) -> None:
+    config = tmp_path / "firstpass.toml"
+    config.write_text("ollama_num_ctx = 8192\n", encoding="utf-8")
+    from_toml = load_settings(config_file=config, environ={})
+    assert from_toml.ollama_num_ctx == 8192
+    from_env = load_settings(config_file=config, environ={"FIRSTPASS_OLLAMA_NUM_CTX": "32768"})
+    assert from_env.ollama_num_ctx == 32768
+    assert isinstance(from_env.ollama_num_ctx, int)
 
 
 def test_toml_overrides_defaults(tmp_path: Path) -> None:

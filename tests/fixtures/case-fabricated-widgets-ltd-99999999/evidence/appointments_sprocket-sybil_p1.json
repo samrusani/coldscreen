@@ -1,0 +1,33 @@
+{
+  "body": {
+    "items": [
+      {
+        "appointed_on": "2019-05-14",
+        "appointed_to": {
+          "company_name": "FABRICATED WIDGETS LTD",
+          "company_number": "99999999",
+          "company_status": "active"
+        },
+        "links": {
+          "company": "/company/99999999"
+        },
+        "name": "SPROCKET, Sybil",
+        "officer_role": "secretary"
+      }
+    ],
+    "items_per_page": 100,
+    "kind": "personal-appointment",
+    "name": "SPROCKET, Sybil",
+    "start_index": 0,
+    "total_results": 1
+  },
+  "from_cache": false,
+  "name": "appointments_sprocket-sybil_p1",
+  "params": {
+    "items_per_page": "100",
+    "start_index": "0"
+  },
+  "retrieved_at": "2026-08-18T12:00:00+00:00",
+  "status": 200,
+  "url": "https://api.company-information.service.gov.uk/officers/fictOfficer003/appointments"
+}

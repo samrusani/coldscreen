@@ -11,8 +11,56 @@ SIC codes: {{ c.subject.sic_codes|join(", ") }}
 
 ## Verdict
 
-{{ verdict_text }}
+{% if c.verdict %}
+**{{ c.verdict.level|upper }}**
 
+Triggered:
+
+{% for t in trigger_lines %}
+- **{{ t.id }}** ({{ t.severity }}): {{ t.text }}
+{% else %}
+- None. A verdict citing no triggers is GREEN by rubric rule 3.
+{% endfor %}
+
+{{ c.verdict.rationale }}
+
+{% if c.verdict_enforcement %}
+Note: {{ c.verdict_enforcement }}
+
+{% endif %}
+{% if c.synthesis %}
+Synthesis: provider {{ c.synthesis.provider }}, model {{ c.synthesis.model }}, prompt version {{ c.synthesis.prompt_version }}, rubric-enforced.
+{% for note in c.synthesis.enforcement_notes %}
+{% if loop.first %}
+Enforcement notes:
+{% endif %}
+- {{ note }}
+{% endfor %}
+
+{% endif %}
+{% elif synthesis_failure %}
+Synthesis was attempted and failed: {{ synthesis_failure }}
+
+No verdict is assessed. The deterministic findings below stand on their own.
+
+{% else %}
+{{ no_synthesis_text }}
+
+{% endif %}
+{{ c.disclaimer }}
+
+{% if c.verdict %}
+## Narrative
+
+{{ c.narrative or "No narrative was produced." }}
+
+## Clarification questions
+
+{% for q in c.verdict.questions %}
+{{ loop.index }}. {{ q }}
+{% endfor %}
+
+{% endif %}
 ## Findings
 
 ### Red
@@ -85,6 +133,77 @@ No resignations within the lookback window.
 {% else %}
 No PSC entries in this casefile. See the findings for whether that is an
 absence on the register or an unqueried resource.
+{% endif %}
+
+## Sanctions and PEP screening
+
+{% if c.sanctions and c.sanctions.performed %}
+Dataset {{ c.sanctions.dataset }}, threshold {{ c.sanctions.threshold }}, algorithm {{ c.sanctions.algorithm_requested }}{% if c.sanctions.algorithm_resolved %} (resolved: {{ c.sanctions.algorithm_resolved }}){% endif %}. Scores are identity-match confidence, not risk.
+
+| Subject | Kind | Top score | Result |
+|---|---|---|---|
+{% for r in c.sanctions.results %}
+| {{ r.subject }} | {{ r.kind }} | {{ "%.2f"|format(r.top_score) if r.top_score is not none else "no candidates" }} | {{ "match at or above threshold" if r.matched else "below threshold" }} |
+{% endfor %}
+{% elif c.sanctions %}
+Not performed: {{ c.sanctions.skipped_reason }}. Absence of screening is data, not a clean result. See finding SAN-000.
+{% else %}
+Sanctions screening was not part of this casefile.
+{% endif %}
+
+## Network expansion
+
+{% if c.network and c.network.performed %}
+{% if c.network.appointments %}
+Current officers' other current appointments (first degree):
+
+{% for a in c.network.appointments %}
+- {{ a.officer_name }}: {{ a.other_current_appointments }} current appointment(s) at other companies{{ ": " + a.companies|join("; ") if a.companies else "" }}{{ " (list truncated)" if a.truncated else "" }}
+{% endfor %}
+
+{% else %}
+No current officers to expand.
+
+{% endif %}
+{% if c.network.overlaps %}
+Co-appointment overlap (companies shared by two or more current officers):
+
+{% for o in c.network.overlaps %}
+- {{ o.company_name or "unnamed company" }} ({{ o.company_number }}): {{ o.officer_names|join(", ") }}
+{% endfor %}
+{% else %}
+No co-appointment overlap among current officers.
+{% endif %}
+
+Disqualification register checks:
+
+{% for line in disq_lines %}
+- {{ line }}
+{% else %}
+No people were checked against the disqualification register.
+{% endfor %}
+{% else %}
+Network expansion was not part of this casefile.
+{% endif %}
+
+## Adverse media
+
+{% if c.media and c.media.performed %}
+{% if c.media.items %}
+{{ c.media.items|length }} deduplicated result(s) across the query categories. Headlines and snippets stay in the evidence files by design; this memo lists sources only.
+
+| Source domain | Published | Query category | URL |
+|---|---|---|---|
+{% for m in c.media.items %}
+| {{ m.source_domain }} | {{ m.published or "undated" }} | {{ m.query_category }} | {{ m.url }} |
+{% endfor %}
+{% else %}
+The adverse media search returned no results in any query category.
+{% endif %}
+{% elif c.media %}
+Not performed: {{ c.media.skipped_reason }}. See finding MED-000.
+{% else %}
+Adverse media search was not part of this casefile.
 {% endif %}
 
 ## Filing history

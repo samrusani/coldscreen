@@ -7,7 +7,9 @@ SIC codes: 28990
 
 ## Verdict
 
-Not assessed. Deterministic registry pass only; synthesis is not part of this milestone.
+No synthesis: no model configured. The findings in this memo are deterministic results from the registry, network, sanctions, and media stages; no verdict is assessed.
+
+This memo is a research aid generated from public sources at a point in time. It is not investment advice, not a credit reference, and not a consumer report. Do not use it for decisions regulated under the US Fair Credit Reporting Act (employment, credit, tenancy screening) or equivalent regimes. Officer and PSC data is personal data from public registers; you are responsible for processing it lawfully. Verify everything independently before acting on it.
 
 ## Findings
 
@@ -38,6 +40,24 @@ None recorded.
   - Evidence: https://api.company-information.service.gov.uk/company/99999999 (retrieved 2026-08-18)
 - **REG-011** (confirmed) 1 PSC entry(ies) on the register, 1 not ceased. Natures of control: ownership-of-shares-75-to-100-percent, voting-rights-75-to-100-percent.
   - Evidence: https://api.company-information.service.gov.uk/company/99999999/persons-with-significant-control (retrieved 2026-08-18)
+- **NET-001** (confirmed) Network expansion covered 3 current officer(s): 2 current appointment(s) at other companies were found.
+  - Evidence: https://api.company-information.service.gov.uk/officers/fictOfficer001/appointments (retrieved 2026-08-18)
+  - Evidence: https://api.company-information.service.gov.uk/officers/fictOfficer002/appointments (retrieved 2026-08-18)
+  - Evidence: https://api.company-information.service.gov.uk/officers/fictOfficer003/appointments (retrieved 2026-08-18)
+- **NET-002** (confirmed) Co-appointment overlap: 1 other company(ies) where two or more current officers of the subject hold current appointments: IMAGINARY COMPONENTS LTD (99999801): COGWHEEL, Cornelius, WIDGETSMITH, Wanda.
+  - Evidence: https://api.company-information.service.gov.uk/officers/fictOfficer001/appointments (retrieved 2026-08-18)
+  - Evidence: https://api.company-information.service.gov.uk/officers/fictOfficer002/appointments (retrieved 2026-08-18)
+  - Evidence: https://api.company-information.service.gov.uk/officers/fictOfficer003/appointments (retrieved 2026-08-18)
+- **NET-101** (confirmed) No disqualification record matches WIDGETSMITH, Wanda (officer and PSC) on the disqualified officers register.
+  - Evidence: https://api.company-information.service.gov.uk/search/disqualified-officers (retrieved 2026-08-18)
+- **NET-102** (confirmed) No disqualification record matches COGWHEEL, Cornelius on the disqualified officers register.
+  - Evidence: https://api.company-information.service.gov.uk/search/disqualified-officers (retrieved 2026-08-18)
+- **NET-103** (confirmed) No disqualification record matches SPROCKET, Sybil on the disqualified officers register.
+  - Evidence: https://api.company-information.service.gov.uk/search/disqualified-officers (retrieved 2026-08-18)
+- **SAN-000** (confirmed) Sanctions screening not performed: no OpenSanctions key or endpoint configured. Subjects were not screened against any sanctions or PEP dataset this run.
+  - Evidence: firstpass:not-run/sanctions (retrieved 2026-08-18)
+- **MED-000** (confirmed) Adverse media search not performed: no search API key configured. Public web coverage was not screened this run.
+  - Evidence: firstpass:not-run/media (retrieved 2026-08-18)
 
 ## Officers
 
@@ -61,6 +81,32 @@ None recorded.
 | Name | Kind | Natures of control | Notified | Ceased |
 |---|---|---|---|---|
 | Ms Wanda Widgetsmith | individual-person-with-significant-control | ownership-of-shares-75-to-100-percent; voting-rights-75-to-100-percent | 2019-05-14 |  |
+
+## Sanctions and PEP screening
+
+Not performed: no OpenSanctions key or endpoint configured. Absence of screening is data, not a clean result. See finding SAN-000.
+
+## Network expansion
+
+Current officers' other current appointments (first degree):
+
+- WIDGETSMITH, Wanda: 1 current appointment(s) at other companies: IMAGINARY COMPONENTS LTD (99999801)
+- COGWHEEL, Cornelius: 1 current appointment(s) at other companies: IMAGINARY COMPONENTS LTD (99999801)
+- SPROCKET, Sybil: 0 current appointment(s) at other companies
+
+Co-appointment overlap (companies shared by two or more current officers):
+
+- IMAGINARY COMPONENTS LTD (99999801): COGWHEEL, Cornelius, WIDGETSMITH, Wanda
+
+Disqualification register checks:
+
+- WIDGETSMITH, Wanda (officer and psc): no record matched.
+- COGWHEEL, Cornelius (officer): no record matched.
+- SPROCKET, Sybil (officer): no record matched.
+
+## Adverse media
+
+Not performed: no search API key configured. See finding MED-000.
 
 ## Filing history
 

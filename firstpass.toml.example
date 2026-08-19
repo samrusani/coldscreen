@@ -27,6 +27,7 @@ items_per_page = 100
 max_pages_officers = 10
 max_pages_psc = 10
 max_pages_filing_history = 3
+max_pages_appointments = 5
 
 # Officers resigned within this many years are kept in the casefile.
 officer_lookback_years = 5
@@ -37,3 +38,38 @@ wholesale_change_min = 2
 
 # HTTP timeout in seconds.
 timeout_seconds = 30
+
+# Synthesis model as "provider:model" (split on the first colon, so Ollama
+# model names keep their own colon). Empty means no synthesis: the screen
+# completes deterministically and the memo says so. Overridden by
+# FIRSTPASS_MODEL and by --model.
+#   model = "anthropic:claude-opus-5"
+#   model = "openai:gpt-5.6-sol"
+#   model = "ollama:qwen2.5:7b"
+model = ""
+
+# Sanctions and PEP screening (OpenSanctions hosted API or self-hosted
+# yente). The API key comes from the OPENSANCTIONS_API_KEY environment
+# variable ONLY; a self-hosted endpoint from OPENSANCTIONS_BASE_URL. With
+# neither set the stage is skipped with an explicit finding. Scores are
+# identity-match confidence, not risk. The docs suggest 0.8 to 0.85 to cut
+# false positives; the default mirrors the API default.
+sanctions_dataset = "default"
+sanctions_threshold = 0.7
+sanctions_algorithm = "best"
+sanctions_limit = 5
+
+# Adverse media search results kept per query (key via TAVILY_API_KEY).
+media_results_per_query = 5
+
+# Local model calls can be slow on big models; this timeout applies to the
+# Ollama HTTP client only.
+ollama_timeout_seconds = 600
+
+# Ollama context window (options.num_ctx). The daemon default (4096 on most
+# models) silently truncates long prompts, and a model reasoning over a
+# truncated casefile is worse than no model at all. The default covers the
+# synthesis prompt plus a compact casefile with headroom; raise it for
+# unusually large casefiles, lower it on tight-memory machines. Also
+# settable via FIRSTPASS_OLLAMA_NUM_CTX.
+ollama_num_ctx = 16384

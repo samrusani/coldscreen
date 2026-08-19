@@ -9,10 +9,16 @@ from firstpass.models import (
     RESEARCH_AID_DISCLAIMER,
     CaseFile,
     CompanyProfile,
+    DisqualificationCheck,
     Evidence,
     Finding,
+    MediaItem,
+    MediaScreening,
+    NetworkExpansion,
+    SynthesisMetadata,
+    Verdict,
 )
-from firstpass.render import VERDICT_NOT_ASSESSED, render_memo
+from firstpass.render import NO_SYNTHESIS_TEXT, render_memo
 
 from .conftest import SCREENED_AT
 
@@ -58,10 +64,106 @@ def test_memo_contains_header_disclaimer_and_attribution() -> None:
     assert "Open Government Licence v3.0" in memo
 
 
-def test_memo_states_verdict_not_assessed() -> None:
+def test_memo_states_no_synthesis_when_no_verdict() -> None:
     memo = render_memo(minimal_casefile())
-    assert VERDICT_NOT_ASSESSED in memo
-    assert "Not assessed." in memo
+    assert NO_SYNTHESIS_TEXT in memo
+    assert "No synthesis: no model configured" in memo
+
+
+def test_memo_renders_the_verdict_block_with_rubric_lines() -> None:
+    casefile = minimal_casefile().model_copy(
+        update={
+            "verdict": Verdict(
+                level="amber",
+                triggered=["A1", "A2"],
+                rationale="Two amber triggers are met.",
+                questions=["Q one?", "Q two?", "Q three?"],
+            ),
+            "narrative": "A short narrative.",
+            "synthesis": SynthesisMetadata(provider="fake", model="canned", prompt_version="1"),
+        }
+    )
+    memo = render_memo(casefile)
+    assert "**AMBER**" in memo
+    assert "- **A1** (AMBER): Overdue or irregular filings" in memo
+    assert "- **A2** (AMBER): Wholesale officer changes within 12 months" in memo
+    assert "Two amber triggers are met." in memo
+    assert "## Narrative" in memo
+    assert "A short narrative." in memo
+    assert "1. Q one?" in memo
+    assert "3. Q three?" in memo
+    assert "provider fake, model canned, prompt version 1" in memo
+    # The disclaimer sits adjacent to the verdict AND in the footer.
+    assert memo.count(RESEARCH_AID_DISCLAIMER) == 2
+
+
+def test_memo_renders_the_enforcement_note() -> None:
+    casefile = minimal_casefile().model_copy(
+        update={
+            "verdict": Verdict(
+                level="red",
+                triggered=["R1"],
+                rationale="A red trigger is met.",
+                questions=["Q?", "Q?", "Q?"],
+            ),
+            "verdict_enforcement": "Verdict level enforced: the model proposed green.",
+        }
+    )
+    memo = render_memo(casefile)
+    assert "Note: Verdict level enforced" in memo
+
+
+def test_memo_states_synthesis_failure_when_told() -> None:
+    memo = render_memo(minimal_casefile(), synthesis_failure="the model never answered")
+    assert "Synthesis was attempted and failed: the model never answered" in memo
+    assert NO_SYNTHESIS_TEXT not in memo
+
+
+def test_media_section_lists_sources_but_never_titles() -> None:
+    item = MediaItem(
+        title="Totally fictional headline about misconduct",
+        url="https://fictional-gazette.example/a",
+        source_domain="fictional-gazette.example",
+        published="2026-05-14",
+        query_category="misconduct",
+        snippet="A snippet that stays out of the memo.",
+    )
+    casefile = minimal_casefile().model_copy(
+        update={
+            "media": MediaScreening(
+                performed=True, provider="tavily", results_per_query=5, items=[item]
+            )
+        }
+    )
+    memo = render_memo(casefile)
+    assert "fictional-gazette.example" in memo
+    assert "https://fictional-gazette.example/a" in memo
+    assert "misconduct" in memo
+    assert "Totally fictional headline" not in memo
+    assert "A snippet that stays out of the memo." not in memo
+
+
+def test_disqualification_lines_cover_every_outcome() -> None:
+    checks = [
+        DisqualificationCheck(
+            subject="GRINDSTONE, Gertrude", role="officer and psc", outcome="none"
+        ),
+        DisqualificationCheck(
+            subject="OPAQUE HOLDCO LTD",
+            role="officer",
+            outcome="mismatch",
+            detail="registered company number differs",
+        ),
+    ]
+    casefile = minimal_casefile().model_copy(
+        update={"network": NetworkExpansion(performed=True, disqualification_checks=checks)}
+    )
+    memo = render_memo(casefile)
+    assert "GRINDSTONE, Gertrude (officer and psc): no record matched." in memo
+    assert (
+        "OPAQUE HOLDCO LTD (officer): name matched but identifying details differ;"
+        " likely a different person or company." in memo
+    )
 
 
 def test_findings_are_grouped_by_severity() -> None:

@@ -1,0 +1,13 @@
+{
+  "body": {
+    "kind": "not_run",
+    "reason": "no OpenSanctions API key or custom endpoint configured; set OPENSANCTIONS_API_KEY or OPENSANCTIONS_BASE_URL",
+    "stage": "sanctions"
+  },
+  "from_cache": false,
+  "name": "sanctions_not_run",
+  "params": {},
+  "retrieved_at": "2026-08-18T12:00:00+00:00",
+  "status": 0,
+  "url": "firstpass:not-run/sanctions"
+}

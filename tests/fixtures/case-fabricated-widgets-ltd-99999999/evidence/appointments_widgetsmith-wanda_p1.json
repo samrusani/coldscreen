@@ -1,0 +1,46 @@
+{
+  "body": {
+    "items": [
+      {
+        "appointed_on": "2019-05-14",
+        "appointed_to": {
+          "company_name": "FABRICATED WIDGETS LTD",
+          "company_number": "99999999",
+          "company_status": "active"
+        },
+        "links": {
+          "company": "/company/99999999"
+        },
+        "name": "WIDGETSMITH, Wanda",
+        "officer_role": "director"
+      },
+      {
+        "appointed_on": "2022-02-01",
+        "appointed_to": {
+          "company_name": "IMAGINARY COMPONENTS LTD",
+          "company_number": "99999801",
+          "company_status": "active"
+        },
+        "links": {
+          "company": "/company/99999801"
+        },
+        "name": "WIDGETSMITH, Wanda",
+        "officer_role": "director"
+      }
+    ],
+    "items_per_page": 100,
+    "kind": "personal-appointment",
+    "name": "WIDGETSMITH, Wanda",
+    "start_index": 0,
+    "total_results": 2
+  },
+  "from_cache": false,
+  "name": "appointments_widgetsmith-wanda_p1",
+  "params": {
+    "items_per_page": "100",
+    "start_index": "0"
+  },
+  "retrieved_at": "2026-08-18T12:00:00+00:00",
+  "status": 200,
+  "url": "https://api.company-information.service.gov.uk/officers/fictOfficer001/appointments"
+}

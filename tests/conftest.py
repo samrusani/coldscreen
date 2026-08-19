@@ -27,6 +27,26 @@ def load_fixture(name: str) -> dict[str, Any]:
     return payload
 
 
+@pytest.fixture(autouse=True)
+def _scrub_ambient_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No ambient key, model, or clock override may leak into any test.
+
+    Tests that need one of these set it explicitly after this scrub runs.
+    """
+    for name in (
+        "COMPANIES_HOUSE_API_KEY",
+        "OPENSANCTIONS_API_KEY",
+        "OPENSANCTIONS_BASE_URL",
+        "TAVILY_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "OLLAMA_BASE_URL",
+        "FIRSTPASS_MODEL",
+        "FIRSTPASS_SCREENED_AT",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def fixtures_dir() -> Path:
     return FIXTURES_DIR
@@ -58,7 +78,13 @@ def make_client(
 
 
 def mock_company_routes(router: respx.MockRouter, ambiguous_search: bool = False) -> None:
-    """Register every fixture endpoint. No insolvency route: no link, no call."""
+    """Register every fixture endpoint. No insolvency route: no link, no call.
+
+    Covers the weekend 2 network expansion too: appointments for the three
+    current officers and an empty disqualified-officers search. Officers 4
+    and 5 are resigned, so any appointments call for them would be unmocked
+    and fail the test, which is exactly the property we want.
+    """
     search_fixture = "search_ambiguous.json" if ambiguous_search else "search_single.json"
     router.get(f"{BASE_URL}/search/companies").respond(200, json=load_fixture(search_fixture))
     router.get(f"{BASE_URL}/company/{COMPANY_NUMBER}").respond(
@@ -75,4 +101,16 @@ def mock_company_routes(router: respx.MockRouter, ambiguous_search: bool = False
     )
     router.get(f"{BASE_URL}/company/{COMPANY_NUMBER}/charges").respond(
         200, json=load_fixture("charges.json")
+    )
+    router.get(f"{BASE_URL}/officers/fictOfficer001/appointments").respond(
+        200, json=load_fixture("appointments_officer1.json")
+    )
+    router.get(f"{BASE_URL}/officers/fictOfficer002/appointments").respond(
+        200, json=load_fixture("appointments_officer2.json")
+    )
+    router.get(f"{BASE_URL}/officers/fictOfficer003/appointments").respond(
+        200, json=load_fixture("appointments_officer3.json")
+    )
+    router.get(f"{BASE_URL}/search/disqualified-officers").respond(
+        200, json=load_fixture("disqualified_search_empty.json")
     )

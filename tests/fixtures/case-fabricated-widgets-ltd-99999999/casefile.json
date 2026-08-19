@@ -59,6 +59,11 @@
       "nationality": "British",
       "occupation": "Engineer",
       "country_of_residence": "England",
+      "date_of_birth": {
+        "month": 1,
+        "year": 1980
+      },
+      "identification": {},
       "links": {
         "officer": {
           "appointments": "/officers/fictOfficer001/appointments"
@@ -73,6 +78,11 @@
       "nationality": "British",
       "occupation": "Sales Director",
       "country_of_residence": "Wales",
+      "date_of_birth": {
+        "month": 6,
+        "year": 1975
+      },
+      "identification": {},
       "links": {
         "officer": {
           "appointments": "/officers/fictOfficer002/appointments"
@@ -87,6 +97,8 @@
       "nationality": null,
       "occupation": null,
       "country_of_residence": null,
+      "date_of_birth": null,
+      "identification": {},
       "links": {
         "officer": {
           "appointments": "/officers/fictOfficer003/appointments"
@@ -101,6 +113,11 @@
       "nationality": "British",
       "occupation": "Operations Director",
       "country_of_residence": "England",
+      "date_of_birth": {
+        "month": 9,
+        "year": 1968
+      },
+      "identification": {},
       "links": {
         "officer": {
           "appointments": "/officers/fictOfficer004/appointments"
@@ -115,6 +132,11 @@
       "nationality": "British",
       "occupation": "Finance Director",
       "country_of_residence": "Scotland",
+      "date_of_birth": {
+        "month": 12,
+        "year": 1982
+      },
+      "identification": {},
       "links": {
         "officer": {
           "appointments": "/officers/fictOfficer005/appointments"
@@ -131,7 +153,12 @@
         "voting-rights-75-to-100-percent"
       ],
       "notified_on": "2019-05-14",
-      "ceased_on": null
+      "ceased_on": null,
+      "nationality": "British",
+      "date_of_birth": {
+        "month": 1,
+        "year": 1980
+      }
     }
   ],
   "charges": [
@@ -338,11 +365,210 @@
           "excerpt": "psc items=1"
         }
       ]
+    },
+    {
+      "id": "NET-001",
+      "stage": "network",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Network expansion covered 3 current officer(s): 2 current appointment(s) at other companies were found.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/officers/fictOfficer001/appointments",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "officer appointments page"
+        },
+        {
+          "source_url": "https://api.company-information.service.gov.uk/officers/fictOfficer002/appointments",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "officer appointments page"
+        },
+        {
+          "source_url": "https://api.company-information.service.gov.uk/officers/fictOfficer003/appointments",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "officer appointments page"
+        }
+      ]
+    },
+    {
+      "id": "NET-002",
+      "stage": "network",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Co-appointment overlap: 1 other company(ies) where two or more current officers of the subject hold current appointments: IMAGINARY COMPONENTS LTD (99999801): COGWHEEL, Cornelius, WIDGETSMITH, Wanda.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/officers/fictOfficer001/appointments",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "officer appointments page"
+        },
+        {
+          "source_url": "https://api.company-information.service.gov.uk/officers/fictOfficer002/appointments",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "officer appointments page"
+        },
+        {
+          "source_url": "https://api.company-information.service.gov.uk/officers/fictOfficer003/appointments",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "officer appointments page"
+        }
+      ]
+    },
+    {
+      "id": "NET-101",
+      "stage": "network",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No disqualification record matches WIDGETSMITH, Wanda (officer and PSC) on the disqualified officers register.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/search/disqualified-officers",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "candidates=0 of 0 result(s)"
+        }
+      ]
+    },
+    {
+      "id": "NET-102",
+      "stage": "network",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No disqualification record matches COGWHEEL, Cornelius on the disqualified officers register.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/search/disqualified-officers",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "candidates=0 of 0 result(s)"
+        }
+      ]
+    },
+    {
+      "id": "NET-103",
+      "stage": "network",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No disqualification record matches SPROCKET, Sybil on the disqualified officers register.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/search/disqualified-officers",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "candidates=0 of 0 result(s)"
+        }
+      ]
+    },
+    {
+      "id": "SAN-000",
+      "stage": "sanctions",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Sanctions screening not performed: no OpenSanctions key or endpoint configured. Subjects were not screened against any sanctions or PEP dataset this run.",
+      "evidence": [
+        {
+          "source_url": "firstpass:not-run/sanctions",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "kind=not_run"
+        }
+      ]
+    },
+    {
+      "id": "MED-000",
+      "stage": "media",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Adverse media search not performed: no search API key configured. Public web coverage was not screened this run.",
+      "evidence": [
+        {
+          "source_url": "firstpass:not-run/media",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "kind=not_run"
+        }
+      ]
     }
   ],
   "claims": [],
   "assessments": [],
+  "sanctions": {
+    "performed": false,
+    "dataset": null,
+    "threshold": null,
+    "algorithm_requested": null,
+    "algorithm_resolved": null,
+    "limit": null,
+    "dataset_release": null,
+    "endpoint": null,
+    "results": [],
+    "skipped_reason": "no OpenSanctions key or endpoint configured"
+  },
+  "network": {
+    "performed": true,
+    "appointments": [
+      {
+        "officer_name": "WIDGETSMITH, Wanda",
+        "other_current_appointments": 1,
+        "companies": [
+          "IMAGINARY COMPONENTS LTD (99999801)"
+        ],
+        "truncated": false
+      },
+      {
+        "officer_name": "COGWHEEL, Cornelius",
+        "other_current_appointments": 1,
+        "companies": [
+          "IMAGINARY COMPONENTS LTD (99999801)"
+        ],
+        "truncated": false
+      },
+      {
+        "officer_name": "SPROCKET, Sybil",
+        "other_current_appointments": 0,
+        "companies": [],
+        "truncated": false
+      }
+    ],
+    "overlaps": [
+      {
+        "company_number": "99999801",
+        "company_name": "IMAGINARY COMPONENTS LTD",
+        "officer_names": [
+          "COGWHEEL, Cornelius",
+          "WIDGETSMITH, Wanda"
+        ]
+      }
+    ],
+    "disqualification_checks": [
+      {
+        "subject": "WIDGETSMITH, Wanda",
+        "role": "officer and psc",
+        "outcome": "none",
+        "detail": null
+      },
+      {
+        "subject": "COGWHEEL, Cornelius",
+        "role": "officer",
+        "outcome": "none",
+        "detail": null
+      },
+      {
+        "subject": "SPROCKET, Sybil",
+        "role": "officer",
+        "outcome": "none",
+        "detail": null
+      }
+    ]
+  },
+  "media": {
+    "performed": false,
+    "provider": null,
+    "results_per_query": null,
+    "category_counts": {},
+    "category_counts_deduped": {},
+    "items": [],
+    "skipped_reason": "no search API key configured"
+  },
   "verdict": null,
+  "narrative": null,
+  "synthesis": null,
+  "verdict_enforcement": null,
   "tool_version": "0.1.0.dev0",
   "screened_at": "2026-08-18T12:00:00Z",
   "disclaimer": "This memo is a research aid generated from public sources at a point in time. It is not investment advice, not a credit reference, and not a consumer report. Do not use it for decisions regulated under the US Fair Credit Reporting Act (employment, credit, tenancy screening) or equivalent regimes. Officer and PSC data is personal data from public registers; you are responsible for processing it lawfully. Verify everything independently before acting on it.",

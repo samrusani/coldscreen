@@ -1,0 +1,671 @@
+{
+  "subject": {
+    "company_name": "GILDED ANVIL HOLDINGS LTD",
+    "company_number": "99999901",
+    "company_status": "active",
+    "company_status_detail": null,
+    "date_of_creation": "2021-04-01",
+    "date_of_cessation": null,
+    "company_type": "ltd",
+    "jurisdiction": "england-wales",
+    "sic_codes": [
+      "24540"
+    ],
+    "registered_office_address": {
+      "address_line_1": "7 Invented Foundry Row",
+      "locality": "Faketown",
+      "postal_code": "ZZ98 8ZZ",
+      "country": "England"
+    },
+    "registered_office_is_in_dispute": null,
+    "undeliverable_registered_office_address": null,
+    "previous_company_names": [
+      {
+        "name": "AURUM ANVIL LTD",
+        "effective_from": "2021-04-01",
+        "ceased_on": "2023-09-01"
+      }
+    ],
+    "accounts": {
+      "next_accounts": {
+        "overdue": true,
+        "due_on": "2026-01-31",
+        "period_end_on": "2025-04-30"
+      }
+    },
+    "confirmation_statement": {
+      "overdue": false,
+      "next_due": "2026-10-15"
+    },
+    "links": {
+      "self": "/company/99999901",
+      "officers": "/company/99999901/officers",
+      "filing_history": "/company/99999901/filing-history",
+      "persons_with_significant_control": "/company/99999901/persons-with-significant-control",
+      "charges": "/company/99999901/charges"
+    }
+  },
+  "officers": [
+    {
+      "name": "ANVIL, Arabella",
+      "officer_role": "director",
+      "appointed_on": "2021-04-01",
+      "resigned_on": null,
+      "nationality": "British",
+      "occupation": null,
+      "country_of_residence": null,
+      "date_of_birth": {
+        "month": 3,
+        "year": 1979
+      },
+      "identification": {},
+      "links": {
+        "officer": {
+          "appointments": "/officers/fictGold001/appointments"
+        }
+      }
+    },
+    {
+      "name": "FORGE, Fitzwilliam",
+      "officer_role": "director",
+      "appointed_on": "2021-04-01",
+      "resigned_on": null,
+      "nationality": "British",
+      "occupation": null,
+      "country_of_residence": null,
+      "date_of_birth": {
+        "month": 11,
+        "year": 1985
+      },
+      "identification": {},
+      "links": {
+        "officer": {
+          "appointments": "/officers/fictGold002/appointments"
+        }
+      }
+    },
+    {
+      "name": "TONGS, Tabitha",
+      "officer_role": "director",
+      "appointed_on": "2021-04-01",
+      "resigned_on": "2026-01-10",
+      "nationality": null,
+      "occupation": null,
+      "country_of_residence": null,
+      "date_of_birth": {
+        "month": 5,
+        "year": 1981
+      },
+      "identification": {},
+      "links": {
+        "officer": {
+          "appointments": "/officers/fictGold003/appointments"
+        }
+      }
+    },
+    {
+      "name": "BELLOWS, Barnaby",
+      "officer_role": "director",
+      "appointed_on": "2022-01-05",
+      "resigned_on": "2026-03-22",
+      "nationality": null,
+      "occupation": null,
+      "country_of_residence": null,
+      "date_of_birth": {
+        "month": 8,
+        "year": 1990
+      },
+      "identification": {},
+      "links": {
+        "officer": {
+          "appointments": "/officers/fictGold004/appointments"
+        }
+      }
+    },
+    {
+      "name": "CRUCIBLE, Cressida",
+      "officer_role": "secretary",
+      "appointed_on": "2021-04-01",
+      "resigned_on": "2026-06-30",
+      "nationality": null,
+      "occupation": null,
+      "country_of_residence": null,
+      "date_of_birth": null,
+      "identification": {},
+      "links": {
+        "officer": {
+          "appointments": "/officers/fictGold005/appointments"
+        }
+      }
+    }
+  ],
+  "pscs": [
+    {
+      "name": "Mrs Arabella Anvil",
+      "kind": "individual-person-with-significant-control",
+      "natures_of_control": [
+        "ownership-of-shares-75-to-100-percent"
+      ],
+      "notified_on": "2021-04-01",
+      "ceased_on": null,
+      "nationality": "British",
+      "date_of_birth": {
+        "month": 3,
+        "year": 1979
+      }
+    }
+  ],
+  "charges": [
+    {
+      "charge_code": "999999010001",
+      "status": "outstanding",
+      "created_on": "2024-05-01",
+      "delivered_on": "2024-05-03",
+      "satisfied_on": null,
+      "classification": {
+        "type": "charge-description",
+        "description": "A registered charge"
+      },
+      "particulars": {},
+      "persons_entitled": [
+        {
+          "name": "FICTIONAL CAPITAL PARTNERS LLP"
+        }
+      ]
+    }
+  ],
+  "filings": [
+    {
+      "transaction_id": "FICT0001",
+      "category": "accounts",
+      "filing_type": "AA",
+      "date": "2025-01-20",
+      "description": "accounts-with-accounts-type-micro-entity",
+      "action_date": null
+    },
+    {
+      "transaction_id": "FICT0002",
+      "category": "confirmation-statement",
+      "filing_type": "CS01",
+      "date": "2025-10-02",
+      "description": "confirmation-statement-with-no-updates",
+      "action_date": null
+    },
+    {
+      "transaction_id": "FICT0003",
+      "category": "mortgage",
+      "filing_type": "MR01",
+      "date": "2024-05-03",
+      "description": "mortgage-create-with-deed",
+      "action_date": null
+    },
+    {
+      "transaction_id": "FICT0004",
+      "category": "change-of-name",
+      "filing_type": "NM01",
+      "date": "2023-09-01",
+      "description": "change-of-name",
+      "action_date": null
+    }
+  ],
+  "filings_total": 4,
+  "insolvency_cases": [],
+  "findings": [
+    {
+      "id": "REG-001",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Company status is active.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999901",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "company_status=active"
+        }
+      ]
+    },
+    {
+      "id": "REG-002",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Incorporated on 2021-04-01 (5 full years before the screening date).",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999901",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "date_of_creation=2021-04-01"
+        }
+      ]
+    },
+    {
+      "id": "REG-003",
+      "stage": "registry",
+      "severity": "amber",
+      "confidence": "confirmed",
+      "statement": "The registry marks the next accounts as overdue.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999901",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "accounts.next_accounts.overdue=true"
+        }
+      ]
+    },
+    {
+      "id": "REG-006",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Charges register: 1 charge(s) listed (1 outstanding, 0 satisfied).",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999901/charges",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "items=1 outstanding=1"
+        }
+      ]
+    },
+    {
+      "id": "REG-007",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No insolvency history is registered. The company profile offers no insolvency link, so the insolvency resource was not queried.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999901",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "links.insolvency absent"
+        }
+      ]
+    },
+    {
+      "id": "REG-008",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "2 active officer(s) on the register.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999901/officers",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "active officers=2"
+        }
+      ]
+    },
+    {
+      "id": "REG-009",
+      "stage": "registry",
+      "severity": "amber",
+      "confidence": "confirmed",
+      "statement": "Wholesale officer changes: 3 officer(s) resigned in the 12 months before the screening date, against 2 currently active.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999901/officers",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "resignations last 12 months=3"
+        }
+      ]
+    },
+    {
+      "id": "REG-010",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "The company has 1 previous name(s) on the register: AURUM ANVIL LTD.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999901",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "previous_company_names=1"
+        }
+      ]
+    },
+    {
+      "id": "REG-011",
+      "stage": "registry",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "1 PSC entry(ies) on the register, 1 not ceased. Natures of control: ownership-of-shares-75-to-100-percent.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/company/99999901/persons-with-significant-control",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "psc items=1"
+        }
+      ]
+    },
+    {
+      "id": "NET-001",
+      "stage": "network",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Network expansion covered 2 current officer(s): 1 current appointment(s) at other companies were found.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/officers/fictGold001/appointments",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "officer appointments page"
+        },
+        {
+          "source_url": "https://api.company-information.service.gov.uk/officers/fictGold002/appointments",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "officer appointments page"
+        }
+      ]
+    },
+    {
+      "id": "NET-002",
+      "stage": "network",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No co-appointment overlap: no other company was found where two or more current officers of the subject hold current appointments.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/officers/fictGold001/appointments",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "officer appointments page"
+        },
+        {
+          "source_url": "https://api.company-information.service.gov.uk/officers/fictGold002/appointments",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "officer appointments page"
+        }
+      ]
+    },
+    {
+      "id": "NET-101",
+      "stage": "network",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No disqualification record matches ANVIL, Arabella (officer and PSC) on the disqualified officers register.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/search/disqualified-officers",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "candidates=0 of 0 result(s)"
+        }
+      ]
+    },
+    {
+      "id": "NET-102",
+      "stage": "network",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No disqualification record matches FORGE, Fitzwilliam on the disqualified officers register.",
+      "evidence": [
+        {
+          "source_url": "https://api.company-information.service.gov.uk/search/disqualified-officers",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "candidates=0 of 0 result(s)"
+        }
+      ]
+    },
+    {
+      "id": "SAN-001",
+      "stage": "sanctions",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No sanctions match at or above threshold 0.7 for GILDED ANVIL HOLDINGS LTD (company); nearest candidate scored 0.55 (dataset default, algorithm best).",
+      "evidence": [
+        {
+          "source_url": "https://api.opensanctions.org/match/default",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "query q001: dataset=default threshold=0.7 algorithm=best"
+        }
+      ]
+    },
+    {
+      "id": "SAN-002",
+      "stage": "sanctions",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No sanctions match at or above threshold 0.7 for ANVIL, Arabella (officer and psc): no candidates returned (dataset default, algorithm best).",
+      "evidence": [
+        {
+          "source_url": "https://api.opensanctions.org/match/default",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "query q002: dataset=default threshold=0.7 algorithm=best"
+        }
+      ]
+    },
+    {
+      "id": "SAN-003",
+      "stage": "sanctions",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "No sanctions match at or above threshold 0.7 for FORGE, Fitzwilliam (officer): no candidates returned (dataset default, algorithm best).",
+      "evidence": [
+        {
+          "source_url": "https://api.opensanctions.org/match/default",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "query q003: dataset=default threshold=0.7 algorithm=best"
+        }
+      ]
+    },
+    {
+      "id": "MED-001",
+      "stage": "media",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Adverse media query category 'misconduct': 1 result(s) returned, 1 kept after deduplication across 2 query variant(s).",
+      "evidence": [
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=misconduct"
+        },
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=misconduct"
+        }
+      ]
+    },
+    {
+      "id": "MED-002",
+      "stage": "media",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Adverse media query category 'insolvency': 0 result(s) returned, 0 kept after deduplication across 2 query variant(s).",
+      "evidence": [
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=insolvency"
+        },
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=insolvency"
+        }
+      ]
+    },
+    {
+      "id": "MED-003",
+      "stage": "media",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Adverse media query category 'regulatory': 1 result(s) returned, 1 kept after deduplication across 2 query variant(s).",
+      "evidence": [
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=regulatory"
+        },
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=regulatory"
+        }
+      ]
+    },
+    {
+      "id": "MED-004",
+      "stage": "media",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Adverse media query category 'litigation': 1 result(s) returned, 1 kept after deduplication across 2 query variant(s).",
+      "evidence": [
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=litigation"
+        },
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=litigation"
+        }
+      ]
+    },
+    {
+      "id": "MED-005",
+      "stage": "media",
+      "severity": "info",
+      "confidence": "confirmed",
+      "statement": "Adverse media query category 'sanctions': 0 result(s) returned, 0 kept after deduplication across 2 query variant(s).",
+      "evidence": [
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=sanctions"
+        },
+        {
+          "source_url": "https://api.tavily.com/search",
+          "retrieved_at": "2026-08-18T12:00:00Z",
+          "excerpt": "category=sanctions"
+        }
+      ]
+    }
+  ],
+  "claims": [],
+  "assessments": [],
+  "sanctions": {
+    "performed": true,
+    "dataset": "default",
+    "threshold": 0.7,
+    "algorithm_requested": "best",
+    "algorithm_resolved": null,
+    "limit": 5,
+    "dataset_release": null,
+    "endpoint": "https://api.opensanctions.org",
+    "results": [
+      {
+        "subject": "GILDED ANVIL HOLDINGS LTD",
+        "kind": "company",
+        "query_schema": "Company",
+        "matched": false,
+        "top_score": 0.55,
+        "datasets": []
+      },
+      {
+        "subject": "ANVIL, Arabella",
+        "kind": "officer and psc",
+        "query_schema": "Person",
+        "matched": false,
+        "top_score": null,
+        "datasets": []
+      },
+      {
+        "subject": "FORGE, Fitzwilliam",
+        "kind": "officer",
+        "query_schema": "Person",
+        "matched": false,
+        "top_score": null,
+        "datasets": []
+      }
+    ],
+    "skipped_reason": null
+  },
+  "network": {
+    "performed": true,
+    "appointments": [
+      {
+        "officer_name": "ANVIL, Arabella",
+        "other_current_appointments": 1,
+        "companies": [
+          "AURUM SMELTING LTD (99999803)"
+        ],
+        "truncated": false
+      },
+      {
+        "officer_name": "FORGE, Fitzwilliam",
+        "other_current_appointments": 0,
+        "companies": [],
+        "truncated": false
+      }
+    ],
+    "overlaps": [],
+    "disqualification_checks": [
+      {
+        "subject": "ANVIL, Arabella",
+        "role": "officer and psc",
+        "outcome": "none",
+        "detail": null
+      },
+      {
+        "subject": "FORGE, Fitzwilliam",
+        "role": "officer",
+        "outcome": "none",
+        "detail": null
+      }
+    ]
+  },
+  "media": {
+    "performed": true,
+    "provider": "tavily",
+    "results_per_query": 5,
+    "category_counts": {
+      "misconduct": 1,
+      "insolvency": 0,
+      "regulatory": 1,
+      "litigation": 1,
+      "sanctions": 0
+    },
+    "category_counts_deduped": {
+      "misconduct": 1,
+      "insolvency": 0,
+      "regulatory": 1,
+      "litigation": 1,
+      "sanctions": 0
+    },
+    "items": [
+      {
+        "title": "Gilded Anvil Holdings faces fraud inquiry by trade body",
+        "url": "https://fictional-gazette.example/business/gilded-anvil-inquiry",
+        "source_domain": "fictional-gazette.example",
+        "published": "2026-05-14",
+        "query_category": "misconduct",
+        "snippet": "A fictional trade body opened an inquiry into the company."
+      },
+      {
+        "title": "Regulator reviews late filings at Gilded Anvil",
+        "url": "https://made-up-times.example/markets/gilded-anvil-filings",
+        "source_domain": "made-up-times.example",
+        "published": "2026-07-21",
+        "query_category": "regulatory",
+        "snippet": "A fictional regulator asked about overdue accounts."
+      },
+      {
+        "title": "Supplier files claim against Gilded Anvil Holdings",
+        "url": "https://examiner-fictional.example/law/gilded-anvil-claim",
+        "source_domain": "examiner-fictional.example",
+        "published": "2026-06-02",
+        "query_category": "litigation",
+        "snippet": "A fictional supplier filed a claim over unpaid invoices."
+      }
+    ],
+    "skipped_reason": null
+  },
+  "verdict": null,
+  "narrative": null,
+  "synthesis": null,
+  "verdict_enforcement": null,
+  "tool_version": "0.1.0.dev0",
+  "screened_at": "2026-08-18T12:00:00Z",
+  "disclaimer": "This memo is a research aid generated from public sources at a point in time. It is not investment advice, not a credit reference, and not a consumer report. Do not use it for decisions regulated under the US Fair Credit Reporting Act (employment, credit, tenancy screening) or equivalent regimes. Officer and PSC data is personal data from public registers; you are responsible for processing it lawfully. Verify everything independently before acting on it.",
+  "clock_override": true
+}
