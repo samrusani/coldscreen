@@ -1,0 +1,91 @@
+# coldscreen: builder handoff
+
+For the team taking over development. Read ARCHITECTURE.md and rubric.md before writing anything, and read DECISIONS.md before questioning any design choice: it is a dated record of what was verified, what was decided, and why. If you believe a deviation is justified, raise it and log it in DECISIONS.md with a date. Do not silently redesign.
+
+The repository is at github.com/samrusani/coldscreen. Branch `main` is current and CI is green.
+
+## What this is
+
+A CLI that turns a UK company name into a first-pass screening memo built entirely from public sources, with every finding traceable to evidence. It is not due diligence. It is the screen that decides whether due diligence is worth anyone's time.
+
+Current state: 598 tests, 25 modules, roughly 8,600 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI.
+
+## The five non-negotiables
+
+Everything else is negotiable with a logged reason. These are not.
+
+**1. Deterministic collection, model synthesis.** Code fetches facts. The model reasons over fetched, structured facts and drafts prose. The model never supplies a registry fact, a sanctions result, or a media item from its own memory: if it was not fetched this run or loaded from cache, it does not exist. Anything that lets model output become a fact in the casefile is a bug, however convenient.
+
+**2. Evidence is enforced in the schema, not in prose.** `Finding.evidence` has minimum length 1, enforced by Pydantic. A finding without a source URL and retrieval timestamp cannot be constructed. Absence is recorded as findings ("no charges registered"), never dropped. Every raw API response is persisted to the case directory, which is an audit pack. There are tests that prove an evidence-free finding raises ValidationError; if you ever find yourself deleting one, stop.
+
+**3. The verdict is not the model's to move.** This is the heart of the tool and the part that took the most work to get right. Read `src/coldscreen/rubric.py` and the rubric table in rubric.md together. Two directions, both mechanical:
+
+- The floor: mechanically detected triggers cannot be dropped by the model. If the registry says the company is in liquidation, R2 fires whatever the narrative says.
+- The ceiling: triggers whose evidence conditions are not met cannot be added. Every trigger id has a published condition in rubric.md, and the code mirrors that table (a test parses the markdown and asserts the mirror, so the docs cannot drift from the code).
+
+The level is a pure function of the enforced trigger set. There is a property test asserting the level always lands between the candidate-only level and the candidates-plus-open-gates level, across tens of thousands of random model outputs. If you add a trigger, you add its evidence condition to rubric.md, mirror it in the catalog, gate it, and extend that matrix. A trigger without a gate is a hole.
+
+**4. The language control is a technical control, not a tone preference.** Memos say "contradicted by public record" with a confidence tag; they never state or imply fraud, dishonesty, or intent. Three layers: the prompt states the rules, a per-field gate scans model output with one corrective retry, and a whole-memo scan runs before any memo reaches disk. The banned-word scan strips URLs (source URLs legitimately contain words like fraud in slugs) and exempts provenance-verified quoted data.
+
+That exemption is the subtle part and it has already been attacked successfully once. Claim text is the company's own words, so a deck saying "we fight fraud" must render. But claim text comes from the model, so an unverified exemption is a laundering channel: an early design let a model smuggle arbitrary vocabulary into memos by inventing a "quotation". The fix, which you must not weaken: a claim is stored only if it verifies as a normalized verbatim substring of its declared source section, model prose gets zero exemptions ever, and the CI language script re-verifies exemptions against the committed evidence files. Four attack shapes are permanent regression tests in `tests/test_exemption_attacks.py`.
+
+**5. No key material anywhere it can leak.** Secrets come from environment variables only. The Companies House key travels in a basic auth header, never in URLs, cache keys, evidence params, or `__repr__`. There is a test that greps every written file for the key. The tool bundles no OpenSanctions key: their terms make rights non-transferable, so every user brings their own key under their own licence.
+
+## How the work has been done, and why it is worth continuing
+
+Every milestone followed the same loop, and it caught things that green test suites did not:
+
+1. **Verify before building.** No external API shape is coded from memory. Endpoints, auth, rate limits, licence terms, and library licences get verified against current official documentation, with the source URL and retrieval date recorded in DECISIONS.md. Anything unreachable is marked UNVERIFIED rather than guessed.
+2. **Write a work order** before building. The orders live in `wiki/work-orders/` in the original author's private notes; the shape is: scope, hard rules restated verbatim, deliverables, tests required, definition of done.
+3. **Build, then review adversarially with a fresh context.** The reviewer did not write the code, re-runs every gate itself rather than trusting the report, and tries to break the guarantees rather than confirm them.
+4. **Adjudicate the findings.** Reviewers produce false positives with confidence. Check each finding against the primary documents before acting. Roughly one in ten has been wrong.
+5. **Fix, then verify independently.** Run the gates yourself. For anything security-relevant, read the diff and the test rather than trusting a report.
+
+Findings this loop caught that the test suite did not: pagination that silently skipped records when a server clamped page size; the exemption laundering above; a judgment trigger that could fire when the stage feeding it never ran; and an SSRF where the site fetcher validated one DNS resolution while the HTTP client re-resolved at connect time.
+
+**Reviewer checklist, learned the hard way:**
+
+- Attack the gate table itself, not only the gates that exist. Ask of every trigger: under what state can model output make this appear or disappear.
+- For any check-then-act on an external resource, ask whether the act re-derives what the check validated. Time-of-check-to-time-of-use bugs are invisible to any test that mocks the transport, because check and connect collapse into one mocked call. The only test that catches them stands up a real socket with a resolver whose answer changes between calls.
+- Verify claims about CI against the CI file. A comment in a decisions log saying network isolation is enforced is not enforcement.
+- Run `actionlint` on workflow changes. GitHub rejects invalid workflows with no logs, no jobs, and no annotation, and local rehearsal cannot catch it. Env keys are case-insensitive there, so `HTTP_PROXY` and `http_proxy` together invalidate the file.
+
+## Working practices
+
+- Python 3.11 or later, typed throughout, ruff clean, mypy clean.
+- Tests never touch the network. This is enforced, not assumed: pytest-socket disables sockets in the pytest config, an autouse fixture refuses real DNS resolution, and CI additionally points proxies at a dead address. Every HTTP path is mocked with respx; fixtures are fictional companies with obviously fictional numbers.
+- Five gates must pass before anything ships: `pytest`, `ruff check`, `ruff format --check`, `mypy`, `python scripts/check_language.py`. CI adds a wheel-install smoke job and a blocking `pip-audit`.
+- Snapshot fixtures are regenerated through the real pipeline, never hand-edited. If a memo snapshot changes, understand why before accepting it.
+- Docs and prompts: plain language, no em dashes. Repository files carry no personal information beyond a GitHub handle, no secrets, and no machine-local paths.
+- Do not commit `cases/` (real screening output contains personal data) or `.env`.
+
+## Operational facts you will want
+
+**Live APIs.** Companies House allows 600 requests per five minutes, documents no Retry-After header, and does not document pagination maxima (the client uses a conservative client-side throttle, backoff with jitter, and configurable page caps; it advances by received count, never by requested page size). An insolvency 404 means either no insolvency record or no such company, so the client gates that call on the profile's links rather than interpreting the 404.
+
+**Local models.** Synthesis runs against Ollama with no cloud key. On the machine this was built on, `qwen3-coder:30b` and `qwen3.8:27b-mlx` both work and produce identical verdict levels. Reasoning-family models corrupt schema-constrained output when thinking is active: set `COLDSCREEN_OLLAMA_THINK=false` for those. `qwen2.5:7b` fails the language discipline (it writes accusatory vocabulary the gate then rejects), which is the gate working, not a bug to route around. `scripts/anchor_check.py` runs the cross-model anchoring test; `scripts/ollama_smoke.py` runs a single-model synthesis smoke.
+
+**Reruns are cheap.** `coldscreen rerun <case-dir> --model <provider:model>` re-synthesizes from cached evidence without refetching, which is how prompt iteration and model comparison are done without spending API calls.
+
+## What to build next
+
+FUTURE.md holds 26 items. My recommended ordering:
+
+1. **A mechanical R4 detector for date-shaped contradictions** ("operating since 2015" against an incorporation date of 2019). Today R4 has a ceiling but no floor, so a claims-bearing case anchors conditionally. This restores unconditional anchoring for the most common contradiction class and is the single highest-value correctness item.
+2. **MCP server mode.** The core is already a library; exposing it as an MCP server multiplies distribution through agent workflows. Cheap relative to its reach.
+3. **Charges pagination and the undocumented limits.** Charges are currently a single unpaginated GET. While you are there, probe the pagination maxima and 429 behavior empirically now that a key exists, and record the findings in DECISIONS.md.
+4. **Cache UX**: a `--refresh` flag, plus commands to print the cache path and clear it. Today a filing that lands is invisible for up to seven days and the cache path is undiscoverable from the CLI.
+5. **Extend the stage-honesty phrase set** from real model phrasing observed in live runs. The mechanical backstop that stops a memo describing a not-run stage as clean uses a deliberately narrow fixed phrase set.
+6. **A hermetic TLS test for SNI preservation** through the pinned network backend, and a plan for the httpx internals coupling in `site.py` (it fails closed if httpx changes shape, but it is coupled).
+7. Registry adapters for other jurisdictions. Design the adapter interface when a second registry forces it, not before.
+
+## Known open items that are not code
+
+- PyPI publication (the name is unclaimed and gets claimed at first publish).
+- Formal trademark clearance on "coldscreen" in the finance and compliance classes. Availability research was done; a real register search was not.
+- An email to OpenSanctions confirming the open-source-client licensing reading (users bring their own key). The current README states the conservative interpretation.
+- The domain decision.
+
+## The shortest version
+
+Fetch facts in code. Constrain the model. Enforce the verdict mechanically. Persist everything. Say only what the record supports. If a change makes any of those weaker, it is the wrong change however much it improves the demo.
