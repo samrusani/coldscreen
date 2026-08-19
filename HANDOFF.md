@@ -8,7 +8,7 @@ The repository is at github.com/samrusani/coldscreen. Branch `main` is current a
 
 A CLI that turns a UK company name into a first-pass screening memo built entirely from public sources, with every finding traceable to evidence. It is not due diligence. It is the screen that decides whether due diligence is worth anyone's time. The same pipeline is also an MCP stdio server, so the screen runs inside agent workflows without a second implementation of it.
 
-Current state: 744 tests, 28 modules, roughly 9,600 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI. Rubric 0.3 adds a mechanical R4 floor for origin-year contradictions ("operating since 2015" against incorporation in 2019), so that class of claims-bearing case now anchors unconditionally. Cache UX (`--refresh`, `coldscreen cache path|clear|stats`) landed after charges pagination. `--no-write` on `screen` skips the case directory for that run and still uses the HTTP cache; the default persist path is unchanged. The stage-honesty phrase set grew from observed not-run lies; the gate is still a substring check, still sanctions and media only, and still arms only when those stages are recorded not run or failed. SNI through the pinned backend is proven by a loopback HTTPS handshake; the httpx pool assignment stays fail-closed by choice.
+Current state: 759 tests, 28 modules, roughly 9,600 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI. Rubric 0.3 adds a mechanical R4 floor for origin-year contradictions ("operating since 2015" against incorporation in 2019), so that class of claims-bearing case now anchors unconditionally. Cache UX (`--refresh`, `coldscreen cache path|clear|stats`) landed after charges pagination. `--no-write` on `screen` skips the case directory for that run and still uses the HTTP cache; the default persist path is unchanged. The language check now covers tool-authored casefile statements as well as rendered memos and templates. The stage-honesty phrase set grew from observed not-run lies; the gate is still a substring check, still sanctions and media only, and still arms only when those stages are recorded not run or failed. SNI through the pinned backend is proven by a loopback HTTPS handshake; the httpx pool assignment stays fail-closed by choice.
 
 ## The five non-negotiables
 
@@ -82,7 +82,9 @@ Findings this loop caught that the test suite did not: pagination that silently 
 
 FUTURE.md holds remaining items. My recommended ordering:
 
-1. Extend the language check to casefile.json statements (FUTURE.md weekend-1 tooling).
+1. A per-run fetch log file in the case directory (FUTURE.md weekend-1 tooling).
+
+The language check now covers casefile statements: CI parses `casefile.json` and scans the tool-authored fields (finding statements, record notes, verdict rationale and questions, narrative, enforcement notes, skipped reasons). Media titles and claim texts are not scanned. Identity exemptions still require sibling registry evidence; claim-quote exemptions do not apply to those fields.
 
 `--no-write` for JSON-only `screen` is done: the case directory is skipped for that run, the HTTP cache still stores 200s, MCP `case_dir` is JSON null, and the default persist path is untouched. Registry adapters for other jurisdictions were verified on 2026-08-19 and recorded in DECISIONS.md: neither FUTURE candidate is a second Companies House, so no Protocol was extracted and no Swedish or EDGAR client was added. v0.1 stays UK-only. If a later sprint builds Swedish identity lookup, use Bolagsverket HVD (number-only, OAuth after kundanmälan, no officers / UBO / charges). EDGAR is a filings archive for SEC filers, not a register.
 

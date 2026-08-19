@@ -6,7 +6,8 @@ one place the banned list and the matching rules live. Every enforcement
 point imports find_banned_terms, so none of them can drift: the mechanical
 gate over model output (coldscreen.synthesis), the whole-memo backstop that
 runs before any memo reaches disk (coldscreen.cli), and the CI gate over
-rendered memos (scripts/check_language.py).
+rendered memos and the tool-authored fields of casefile.json
+(scripts/check_language.py).
 
 Three exemptions, all narrow and all span-level:
 
@@ -28,17 +29,20 @@ rationale, questions, record notes) get NO claim-quote exemption at the
 per-field gate in coldscreen.synthesis: the model references claims by id
 and never repeats their wording. That gate does apply the registry
 identity set, because prose has to be able to name the company and its
-people. Only the whole-memo backstop and the CI scan take claim texts,
-because the code-rendered claims table quotes the stored claim strings
-verbatim. Claim texts themselves are trustworthy only because the claims
-stage verifies each one is a real substring of its declared source section
-(after normalize_for_match on both sides) before storing it, and
+people. Only the whole-memo backstop and the CI memo scan take claim
+texts, because the code-rendered claims table quotes the stored claim
+strings verbatim. The CI casefile-field scan does not: those fields are
+tool prose, same polarity as the synthesis per-field gate. Claim texts
+themselves are trustworthy only because the claims stage verifies each
+one is a real substring of its declared source section (after
+normalize_for_match on both sides) before storing it, and
 scripts/check_language.py re-verifies stored claims against the sibling
-evidence files before honoring them; the script re-verifies identity names
-against the registry evidence files the same way. Occurrence discovery
-advances by the full match length, so overlapping occurrences of a
-self-similar quote can never union into coverage of text that was never
-quoted as a whole.
+evidence files before honoring them on a memo; the script re-verifies
+identity names against the registry evidence files the same way, and
+that identity set is the one exemption the casefile-field scan applies.
+Occurrence discovery advances by the full match length, so overlapping
+occurrences of a self-similar quote can never union into coverage of
+text that was never quoted as a whole.
 """
 
 from __future__ import annotations
