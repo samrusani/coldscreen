@@ -1,6 +1,9 @@
 # internal wiki, intentionally never published
 wiki/
 
+# marketing site: published separately, not part of the product
+website/
+
 # secrets and local configuration
 .env
 

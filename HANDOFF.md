@@ -59,8 +59,8 @@ Findings this loop caught that the test suite did not: pagination that silently 
 - Five gates must pass before anything ships: `pytest`, `ruff check`, `ruff format --check`, `mypy`, `python scripts/check_language.py`. CI adds a wheel-install smoke job and a blocking `pip-audit`.
 - Snapshot fixtures are regenerated through the real pipeline, never hand-edited. If a memo snapshot changes, understand why before accepting it.
 - Docs and prompts: plain language, no em dashes. Repository files carry no personal information beyond a GitHub handle, no secrets, and no machine-local paths.
-- Official documentation (README, ARCHITECTURE.md, rubric.md, the website rubric table, DECISIONS.md) and the internal wiki (gitignored: log, plan, launch, work-orders) both get updated when behavior changes. The wiki is easy to miss because it is not in the tree.
-- Do not commit `cases/` (real screening output contains personal data) or `.env`.
+- Official documentation (README, ARCHITECTURE.md, rubric.md, DECISIONS.md) and the internal wiki (gitignored: log, plan, launch, work-orders) both get updated when behavior changes. The wiki is easy to miss because it is not in the tree. The marketing site is not in the repository.
+- Do not commit `cases/` (real screening output contains personal data), `.env`, or `website/`.
 
 ## Operational facts you will want
 

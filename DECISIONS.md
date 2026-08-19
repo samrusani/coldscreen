@@ -4,6 +4,9 @@ Dated record of every deviation from the spec and every verified fact from the A
 
 ## Process decisions
 
+### 2026-08-19: marketing site stays out of the public tree
+The product is the CLI, the library, and the published methodology. The marketing site is a separate publication. `website/` is gitignored the same way `wiki/` is, so the open-source repository does not carry HTML, CSS, or deploy notes for a site that is not the product. Files already on `main` are removed from the tree in the same change. They remain in git history until a history rewrite, which this change does not do.
+
 ### 2026-08-18: local git only, no remote yet
 The repository is initialized locally on branch main. No GitHub repository, no package registration, no name reservation anywhere until the maintainer opens the project up.
 
