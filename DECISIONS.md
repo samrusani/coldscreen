@@ -154,6 +154,11 @@ The gate is unchanged: substring match after casefold and whitespace collapse, s
 
 The set stays deliberately narrow. Bare `no matches`, `clean results`, `not performed`, `returned no candidates` without a stage word, and `no evidence of sanctions` without the pep/match tail were not added, because they appear in honest gap sentences and in other stages. Unseen future phrasing remains a residual.
 
+### 2026-08-19: not-run markers on the stage-honesty gate
+The new clean-claim substrings (`no pep matches`, `no evidence of sanctions or pep`) are also used in honest gap sentences: "no PEP matches were available because screening was not performed". Because the gate retries once and then raises SynthesisError, that wording would block memo generation. Citing SAN-000 is not enough of an acknowledgement: the observed lie already did that.
+
+Fix: each rendered field is scored on its own. A fixed not-run marker in the same field (`not performed`, `did not run`, `was not run`, `not searched`, `not conducted`, and close variants) suppresses a clean-claim substring there. A marker in a different field does not. Finding statements and the whole memo are still not scanned. Residual: an honest gap sentence that uses a clean-claim substring and never uses a marker still fails closed, which is the original narrow-set tradeoff.
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.

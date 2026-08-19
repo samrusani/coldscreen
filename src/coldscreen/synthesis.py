@@ -513,7 +513,11 @@ def gate_signals(casefile: CaseFile, assessments: list[ClaimAssessment]) -> Gate
 # stage that RAN and found nothing may honestly say so.
 # Extended from observed not-run phrasing: PEP-first order, "no evidence
 # of sanctions or pep", and "ran and" between screening and returned.
-# Unseen future shapes remain a residual; the set stays narrow on purpose.
+# A clean-claim substring in the same field as a not-run marker is not a
+# clean result ("no PEP matches because screening was not performed").
+# Markers are per field, so an honest question cannot excuse a lying
+# narrative. Citing SAN-000 or MED-000 is not a marker: observed lies
+# already did that. Unseen future shapes remain a residual.
 SANCTIONS_CLEAN_PHRASES: tuple[str, ...] = (
     "no sanctions match",
     "no sanctions matches",
@@ -552,6 +556,32 @@ MEDIA_CLEAN_PHRASES: tuple[str, ...] = (
     "media screening returned no",
 )
 
+# Acknowledgements that the stage did not happen, stored casefolded.
+# "not performed" also covers "was not performed" and "were not performed".
+NOT_RUN_MARKERS: tuple[str, ...] = (
+    "not performed",
+    "did not run",
+    "does not run",
+    "was not run",
+    "were not run",
+    "not searched",
+    "not conducted",
+)
+
+
+def _normalized_prose(text: str) -> str:
+    return " ".join(text.split()).casefold()
+
+
+def _field_claims_clean(field: str, phrases: tuple[str, ...]) -> bool:
+    """True when this field asserts a clean result without a not-run marker."""
+    prose = _normalized_prose(field)
+    if not any(phrase in prose for phrase in phrases):
+        return False
+    if any(marker in prose for marker in NOT_RUN_MARKERS):
+        return False
+    return True
+
 
 def stage_honesty_violations(casefile: CaseFile, rendered_fields: list[str]) -> list[str]:
     """Stage names the model described as clean although they did not run.
@@ -559,20 +589,21 @@ def stage_honesty_violations(casefile: CaseFile, rendered_fields: list[str]) -> 
     The prompt already forbids this; here it is mechanical. Only the
     sanctions and media stages are covered (the stages the failure posture
     touches), only when the casefile records them as not run or failed, and
-    only via the fixed phrase sets above. Returns fixed stage-name strings,
-    never model text, so a failure message built from them is sanitized by
-    construction.
+    only via the fixed phrase sets above. Each rendered field is scored on
+    its own: a not-run marker in the same field suppresses a clean-claim
+    substring there, and a marker in a different field does not. Returns
+    fixed stage-name strings, never model text, so a failure message built
+    from them is sanitized by construction.
     """
-    prose = " ".join(" ".join(rendered_fields).split()).casefold()
     violations: list[str] = []
     sanctions = casefile.sanctions
     if (sanctions is None or not sanctions.performed) and any(
-        phrase in prose for phrase in SANCTIONS_CLEAN_PHRASES
+        _field_claims_clean(field, SANCTIONS_CLEAN_PHRASES) for field in rendered_fields
     ):
         violations.append("sanctions")
     media = casefile.media
     if (media is None or not media.performed) and any(
-        phrase in prose for phrase in MEDIA_CLEAN_PHRASES
+        _field_claims_clean(field, MEDIA_CLEAN_PHRASES) for field in rendered_fields
     ):
         violations.append("adverse media")
     return violations
