@@ -8,7 +8,7 @@ The repository is at github.com/samrusani/coldscreen. Branch `main` is current a
 
 A CLI that turns a UK company name into a first-pass screening memo built entirely from public sources, with every finding traceable to evidence. It is not due diligence. It is the screen that decides whether due diligence is worth anyone's time. The same pipeline is also an MCP stdio server, so the screen runs inside agent workflows without a second implementation of it.
 
-Current state: 734 tests, 28 modules, roughly 9,600 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI. Rubric 0.3 adds a mechanical R4 floor for origin-year contradictions ("operating since 2015" against incorporation in 2019), so that class of claims-bearing case now anchors unconditionally. Cache UX (`--refresh`, `coldscreen cache path|clear|stats`) landed after charges pagination. The stage-honesty phrase set grew from observed not-run lies; the gate is still a substring check, still sanctions and media only, and still arms only when those stages are recorded not run or failed.
+Current state: 736 tests, 28 modules, roughly 9,600 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI. Rubric 0.3 adds a mechanical R4 floor for origin-year contradictions ("operating since 2015" against incorporation in 2019), so that class of claims-bearing case now anchors unconditionally. Cache UX (`--refresh`, `coldscreen cache path|clear|stats`) landed after charges pagination. The stage-honesty phrase set grew from observed not-run lies; the gate is still a substring check, still sanctions and media only, and still arms only when those stages are recorded not run or failed. SNI through the pinned backend is proven by a loopback HTTPS handshake; the httpx pool assignment stays fail-closed by choice.
 
 ## The five non-negotiables
 
@@ -78,10 +78,9 @@ Findings this loop caught that the test suite did not: pagination that silently 
 
 FUTURE.md holds remaining items. My recommended ordering:
 
-1. **A hermetic TLS test for SNI preservation** through the pinned network backend, and a plan for the httpx internals coupling in `site.py` (it fails closed if httpx changes shape, but it is coupled).
-2. Registry adapters for other jurisdictions. Design the adapter interface when a second registry forces it, not before.
+1. Registry adapters for other jurisdictions. Design the adapter interface when a second registry forces it, not before.
 
-The stage-honesty phrase set grew from observed not-run lies (PEP-first order, evidence-of phrasing, and the `ran and returned no` leak). It is still a substring check, still sanctions and media only, and still arms only when those stages are recorded not run or failed. A clean-claim substring in the same field as a not-run marker (`not performed`, `did not run`) is not treated as a clean result; a marker in another field does not excuse a lying narrative; citing SAN-000 is not a marker. Unseen future phrasing remains a residual by design. The five non-negotiables above are untouched.
+The hermetic TLS SNI test now proves the pinned backend preserves server-observed SNI on a loopback HTTPS handshake, not only the Host header on plain HTTP. The httpx `_pool._network_backend` assignment stays fail-closed by choice until a public constructor hook exists; see the dated DECISIONS.md entry. The stage-honesty phrase set grew from observed not-run lies (PEP-first order, evidence-of phrasing, and the `ran and returned no` leak). It is still a substring check, still sanctions and media only, and still arms only when those stages are recorded not run or failed. A clean-claim substring in the same field as a not-run marker (`not performed`, `did not run`) is not treated as a clean result; a marker in another field does not excuse a lying narrative; citing SAN-000 is not a marker. Unseen future phrasing remains a residual by design. The five non-negotiables above are untouched.
 
 ## Known open items that are not code
 

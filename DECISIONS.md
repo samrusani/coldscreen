@@ -162,6 +162,19 @@ Fix: each rendered field is scored on its own. A fixed not-run marker in the sam
 ### 2026-08-19: screen --help assertions must ignore Rich markup
 CI `checks` on 3.11-3.13 went red from the cache UX PR (`test_screen_help_includes_refresh`) while ruff and mypy stayed green. Rich styles a long option as two bold spans (`-` then `-refresh`), so a raw `--refresh` substring is missing from colored help on the runner even though the flag is present. Local pytest without `color=True` did not insert those spans. The test now uses the existing `flat_output` helper, which already exists for width-independent CLI wording, and invokes help with color on so the CI shape is what the assertion sees.
 
+### 2026-08-19: hermetic TLS SNI pin; keep the httpx pool assignment fail-closed
+The site pin still installs a custom httpcore `NetworkBackend` by assigning `pool._network_backend` after construction. The steps are `pool = getattr(self, "_pool", None)`, `isinstance(pool, httpcore.ConnectionPool)`, then that assignment. That is a private coupling.
+
+Why it exists: installed `httpx.HTTPTransport.__init__` (httpx 0.28.1) has no `network_backend` parameter. Its parameters are `verify`, `cert`, `trust_env`, `http1`, `http2`, `limits`, `proxy`, `uds`, `local_address`, `retries`, and `socket_options`. It constructs `httpcore.ConnectionPool` internally and does not pass a backend in. Installed `httpcore.ConnectionPool.__init__` (httpcore 1.0.9) does accept `network_backend`, but that hook is not reachable through httpx's public constructor. Pinning has to live below Host and TLS SNI so those stay on the origin hostname (httpcore `start_tls` uses `server_hostname` from the origin host). pyproject lower bounds remain `httpx>=0.27` and `httpcore>=1.0`. There is no public hook in the installed httpx signature. This entry cites those signatures, not a GitHub issue.
+
+Fail-closed: if `_pool` is missing or is not a `ConnectionPool`, constructing `_PinnedTransport` raises `RuntimeError` and the site stage refuses to run rather than fetching unpinned.
+
+Chosen path: keep the private assignment, the isinstance guard, and the hermetic HTTP Host-header plus TLS SNI tests, until httpx grows a public hook. Then switch and delete the private assign.
+
+A loopback HTTPS handshake now proves server-observed SNI. The test binds `127.0.0.1` only, uses a fictional hostname, a runtime openssl cert with `SAN DNS:hostname`, and client `verify=` against that cert (never `verify=False`). `_PinnedTransport` forwards constructor kwargs to `HTTPTransport` so the test can pass `verify=`. Production `_SiteFetcher` still constructs `_PinnedTransport(pinner)` and keeps default verify-on against system CAs.
+
+Alternatives considered and rejected this sprint: dropping httpx for hand-rolled TLS (more surface), pinning an upper httpx bound with no public-API evidence (churn without a hook), adding a third-party TLS test extra (`cryptography` or `trustme`).
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.
