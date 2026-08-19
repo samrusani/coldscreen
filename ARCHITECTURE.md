@@ -236,7 +236,7 @@ This checklist was completed on 2026-08-18 and 2026-08-19, before any code was w
 
 ## 17. Open questions
 
-- Adapter interface shape for v0.2 registries (Bolagsverket for Sweden, SEC EDGAR for the US): design after, not before, the UK pass works.
+- Adapter interface shape for non-UK sources remains open. The UK pass works. Official-docs verification on 2026-08-19 (DECISIONS.md) found neither candidate is a second Companies House, so no Protocol is extracted from the UK client. Bolagsverket HVD, if used later, is number-only OAuth identity lookup after kundanmälan. SEC EDGAR is a filings archive for SEC filers, not a register.
 - Remote MCP: Streamable HTTP, an OAuth story, and a hosted deployment. The stdio server is shipped (section 18); everything past the local process boundary is still open, and it is the same question as the hosted demo below.
 - Hosted "screen one company in your browser" demo: raises virality, adds cost and abuse surface. Decide after launch signal, not before.
 
