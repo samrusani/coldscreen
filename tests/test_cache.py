@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from firstpass.http_cache import HttpCache, cache_key
+from coldscreen.http_cache import HttpCache, cache_key
 
 RETRIEVED = datetime(2026, 8, 18, 12, 0, 0, tzinfo=UTC)
 URL = "https://api.company-information.service.gov.uk/company/99999999"

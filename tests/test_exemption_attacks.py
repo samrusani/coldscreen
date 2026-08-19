@@ -26,9 +26,9 @@ import pytest
 import respx
 from typer.testing import CliRunner
 
-from firstpass.cli import app
-from firstpass.language import find_banned_terms
-from firstpass.models import CaseFile
+from coldscreen.cli import app
+from coldscreen.language import find_banned_terms
+from coldscreen.models import CaseFile
 
 from .conftest import FIXTURES_DIR, mock_company_routes
 from .fakes import assessment_json, claim_json, claims_json, synthesis_json
@@ -74,9 +74,9 @@ def load_check_language() -> ModuleType:
 def attack_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("COMPANIES_HOUSE_API_KEY", "fixture-key-0123456789-not-a-real-key")
-    monkeypatch.setenv("FIRSTPASS_SCREENED_AT", "2026-08-18T12:00:00+00:00")
-    monkeypatch.setenv("FIRSTPASS_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    monkeypatch.setenv("COLDSCREEN_SCREENED_AT", "2026-08-18T12:00:00+00:00")
+    monkeypatch.setenv("COLDSCREEN_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
     return tmp_path
 
 

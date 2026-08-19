@@ -44,7 +44,7 @@ from . import __version__
 from .ch_client import FetchRecord
 from .stages.registry import NamedRecord
 
-USER_AGENT_TOKEN = "firstpass-screen"
+USER_AGENT_TOKEN = "coldscreen"
 USER_AGENT = f"{USER_AGENT_TOKEN}/{__version__}"
 MAX_ATTEMPTS = 3
 ABOUT_PAGE_LIMIT = 2

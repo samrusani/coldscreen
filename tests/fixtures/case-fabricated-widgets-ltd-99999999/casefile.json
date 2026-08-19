@@ -464,7 +464,7 @@
       "statement": "Sanctions screening not performed: no OpenSanctions key or endpoint configured. Subjects were not screened against any sanctions or PEP dataset this run.",
       "evidence": [
         {
-          "source_url": "firstpass:not-run/sanctions",
+          "source_url": "coldscreen:not-run/sanctions",
           "retrieved_at": "2026-08-18T12:00:00Z",
           "excerpt": "kind=not_run"
         }
@@ -478,7 +478,7 @@
       "statement": "Adverse media search not performed: no search API key configured. Public web coverage was not screened this run.",
       "evidence": [
         {
-          "source_url": "firstpass:not-run/media",
+          "source_url": "coldscreen:not-run/media",
           "retrieved_at": "2026-08-18T12:00:00Z",
           "excerpt": "kind=not_run"
         }
@@ -492,7 +492,7 @@
       "statement": "Claims extraction not performed: no deck or site was provided. What the company says about itself was not screened this run.",
       "evidence": [
         {
-          "source_url": "firstpass:not-run/claims",
+          "source_url": "coldscreen:not-run/claims",
           "retrieved_at": "2026-08-18T12:00:00Z",
           "excerpt": "kind=not_run"
         }

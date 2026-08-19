@@ -30,13 +30,13 @@ import pytest
 import respx
 from typer.testing import CliRunner
 
-from firstpass.casedir import load_casefile
-from firstpass.cli import app
-from firstpass.language import find_banned_terms
-from firstpass.models import CaseFile
-from firstpass.render import render_memo
-from firstpass.rubric import detect_candidates
-from firstpass.synthesis import (
+from coldscreen.casedir import load_casefile
+from coldscreen.cli import app
+from coldscreen.language import find_banned_terms
+from coldscreen.models import CaseFile
+from coldscreen.render import render_memo
+from coldscreen.rubric import detect_candidates
+from coldscreen.synthesis import (
     SynthesisResult,
     apply_synthesis,
     build_synthesis_input,
@@ -469,8 +469,8 @@ def test_adversarial_trigger_ids_never_reach_the_memo() -> None:
 def replay_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("COMPANIES_HOUSE_API_KEY", "fixture-key-0123456789-not-a-real-key")
-    monkeypatch.setenv("FIRSTPASS_SCREENED_AT", "2026-08-18T12:00:00+00:00")
-    monkeypatch.setenv("FIRSTPASS_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("COLDSCREEN_SCREENED_AT", "2026-08-18T12:00:00+00:00")
+    monkeypatch.setenv("COLDSCREEN_CACHE_DIR", str(tmp_path / "cache"))
     return tmp_path
 
 
@@ -503,7 +503,7 @@ def test_golden_case_replays_byte_identically_with_deck_and_model(
     """The offline demo: fixture company plus fixture deck through the
     canned model produces the RED golden memo with the claims table,
     byte-stably. Exactly two model calls: claims extraction, synthesis."""
-    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
     mock_company_routes(respx_mock)
     route = respx_mock.post(OLLAMA_CHAT_URL).mock(
         side_effect=[
@@ -529,7 +529,7 @@ def test_golden_case_replays_byte_identically_with_deck_and_model(
 def test_green_case_replays_byte_identically_with_site_and_model(
     replay_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
     monkeypatch.setenv("OPENSANCTIONS_API_KEY", synthetic.SANCTIONS_TEST_KEY)
     monkeypatch.setenv("TAVILY_API_KEY", synthetic.TAVILY_TEST_KEY)
     synthetic.register_green_routes(respx_mock)

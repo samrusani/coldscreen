@@ -11,8 +11,8 @@ from typing import Any
 import pytest
 import respx
 
-from firstpass.ch_client import CompaniesHouseClient
-from firstpass.config import Settings
+from coldscreen.ch_client import CompaniesHouseClient
+from coldscreen.config import Settings
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 BASE_URL = "https://api.company-information.service.gov.uk"
@@ -41,8 +41,8 @@ def _scrub_ambient_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "ANTHROPIC_API_KEY",
         "OPENAI_API_KEY",
         "OLLAMA_BASE_URL",
-        "FIRSTPASS_MODEL",
-        "FIRSTPASS_SCREENED_AT",
+        "COLDSCREEN_MODEL",
+        "COLDSCREEN_SCREENED_AT",
     ):
         monkeypatch.delenv(name, raising=False)
 

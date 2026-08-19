@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from firstpass.casedir import (
+from coldscreen.casedir import (
     case_dir_name,
     sanitize_params,
     slugify,

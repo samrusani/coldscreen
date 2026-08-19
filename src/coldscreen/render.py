@@ -48,7 +48,7 @@ def _fmt_datetime(value: datetime | None) -> str:
 
 def _environment() -> Environment:
     env = Environment(
-        loader=PackageLoader("firstpass", "templates"),
+        loader=PackageLoader("coldscreen", "templates"),
         autoescape=select_autoescape(default_for_string=False, default=False),
         trim_blocks=True,
         lstrip_blocks=True,

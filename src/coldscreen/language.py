@@ -4,8 +4,8 @@ Memos state what the public record shows and with what confidence; they
 never state or imply intent, dishonesty, or criminality. This module is the
 one place the banned list and the matching rules live. Every enforcement
 point imports find_banned_terms, so none of them can drift: the mechanical
-gate over model output (firstpass.synthesis), the whole-memo backstop that
-runs before any memo reaches disk (firstpass.cli), and the CI gate over
+gate over model output (coldscreen.synthesis), the whole-memo backstop that
+runs before any memo reaches disk (coldscreen.cli), and the CI gate over
 rendered memos (scripts/check_language.py).
 
 Two exemptions, both narrow and both span-level:
@@ -21,7 +21,7 @@ Two exemptions, both narrow and both span-level:
 
 Exemption scope is deliberately narrow. Model prose fields (narrative,
 rationale, questions, record notes) are gated with ZERO exemptions at the
-per-field gate in firstpass.synthesis: the model references claims by id
+per-field gate in coldscreen.synthesis: the model references claims by id
 and never repeats their wording. Only the whole-memo backstop and the CI
 scan take exempt texts, because the code-rendered claims table quotes the
 stored claim strings verbatim. Claim texts themselves are trustworthy only

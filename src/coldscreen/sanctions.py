@@ -50,7 +50,7 @@ from .stages.registry import NamedRecord
 STAGE = "sanctions"
 MAX_QUERIES_PER_REQUEST = 100
 MAX_ATTEMPTS = 5
-NOT_RUN_URL = "firstpass:not-run/sanctions"
+NOT_RUN_URL = "coldscreen:not-run/sanctions"
 
 
 class SanctionsError(Exception):

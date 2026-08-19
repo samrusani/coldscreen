@@ -548,7 +548,7 @@
       "statement": "Claims extraction not performed: no deck or site was provided. What the company says about itself was not screened this run.",
       "evidence": [
         {
-          "source_url": "firstpass:not-run/claims",
+          "source_url": "coldscreen:not-run/claims",
           "retrieved_at": "2026-08-18T12:00:00Z",
           "excerpt": "kind=not_run"
         }

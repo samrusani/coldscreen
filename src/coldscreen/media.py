@@ -36,13 +36,13 @@ from .stages.registry import NamedRecord
 
 STAGE = "media"
 MAX_ATTEMPTS = 5
-NOT_RUN_URL = "firstpass:not-run/media"
+NOT_RUN_URL = "coldscreen:not-run/media"
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 SNIPPET_MAX_CHARS = 280
 
 # Category key (memo-safe label) -> query term appended to the quoted name.
 # The labels appear in rendered memos, so they must never collide with the
-# banned-word list in firstpass.language; the raw query terms only ever
+# banned-word list in coldscreen.language; the raw query terms only ever
 # appear in evidence files and the synthesis input.
 QUERY_CATEGORIES: tuple[tuple[str, str], ...] = (
     ("misconduct", "fraud"),
@@ -221,7 +221,7 @@ def _synthesize_record(
 ) -> FetchRecord:
     """Evidence record for providers that expose no raw HTTP response."""
     return FetchRecord(
-        url="firstpass:search-results",
+        url="coldscreen:search-results",
         params={"query": query},
         status=0,
         body={

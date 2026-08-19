@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 import respx
 
-from firstpass.stages.resolve import normalize_company_number, resolve
+from coldscreen.stages.resolve import normalize_company_number, resolve
 
 from .conftest import BASE_URL, load_fixture, make_client
 

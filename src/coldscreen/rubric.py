@@ -12,7 +12,7 @@ cited triggers:
   in the casefile, via ClaimSignals:
     - R4 is accepted only when at least one claim assessment SURVIVED
       enforcement as contradicted with resolved evidence (the assessment
-      enforcement in firstpass.synthesis downgrades any contradicted or
+      enforcement in coldscreen.synthesis downgrades any contradicted or
       supported assessment whose cited evidence does not resolve).
     - R5 is accepted only when co-appointment overlap is recorded in the
       casefile's network expansion.

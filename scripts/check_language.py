@@ -21,7 +21,7 @@ no exemption: a hand-tampered casefile cannot widen this scan. Prose
 outside the exact verified quoted strings stays fully gated everywhere.
 
 Default targets when no paths are given: every memo.md under cases/ and
-tests/fixtures/, plus everything under src/firstpass/templates/.
+tests/fixtures/, plus everything under src/coldscreen/templates/.
 
 Usage: python scripts/check_language.py [path ...]
 """
@@ -34,10 +34,10 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from firstpass.language import find_banned_terms, normalize_for_match
+    from coldscreen.language import find_banned_terms, normalize_for_match
 except ImportError:  # running from a checkout without the package installed
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-    from firstpass.language import find_banned_terms, normalize_for_match
+    from coldscreen.language import find_banned_terms, normalize_for_match
 
 
 def default_targets(root: Path) -> list[Path]:
@@ -45,7 +45,7 @@ def default_targets(root: Path) -> list[Path]:
     for base in (root / "cases", root / "tests" / "fixtures"):
         if base.is_dir():
             targets.extend(sorted(base.rglob("memo.md")))
-    templates = root / "src" / "firstpass" / "templates"
+    templates = root / "src" / "coldscreen" / "templates"
     if templates.is_dir():
         targets.extend(sorted(p for p in templates.rglob("*") if p.is_file()))
     return targets

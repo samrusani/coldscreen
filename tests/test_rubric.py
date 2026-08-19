@@ -13,14 +13,14 @@ from typing import Literal
 
 import pytest
 
-from firstpass.models import (
+from coldscreen.models import (
     CaseFile,
     CompanyProfile,
     Evidence,
     Finding,
     InsolvencyCase,
 )
-from firstpass.rubric import (
+from coldscreen.rubric import (
     TRIGGER_INDEX,
     TRIGGERS,
     ClaimSignals,

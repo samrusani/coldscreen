@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "firstpass-screen"
+name = "coldscreen"
 version = "0.1.0.dev0"
 description = "First-pass screening memos for UK companies, built from public registry data."
 readme = "README.md"
@@ -47,7 +47,7 @@ openai = [
     "openai>=3.2",
 ]
 all = [
-    "firstpass-screen[anthropic,openai]",
+    "coldscreen[anthropic,openai]",
 ]
 dev = [
     "pytest>=8.2",
@@ -55,14 +55,14 @@ dev = [
     "ruff>=0.5",
     "mypy>=1.10",
     # Both provider SDKs so CI exercises the optional import paths.
-    "firstpass-screen[anthropic,openai]",
+    "coldscreen[anthropic,openai]",
 ]
 
 [project.scripts]
-firstpass = "firstpass.cli:main"
+coldscreen = "coldscreen.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/firstpass"]
+packages = ["src/coldscreen"]
 
 [tool.ruff]
 line-length = 100

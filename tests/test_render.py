@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from firstpass.models import (
+from coldscreen.models import (
     OGL_ATTRIBUTION,
     RESEARCH_AID_DISCLAIMER,
     CaseFile,
@@ -21,7 +21,7 @@ from firstpass.models import (
     SynthesisMetadata,
     Verdict,
 )
-from firstpass.render import NO_SYNTHESIS_TEXT, render_memo
+from coldscreen.render import NO_SYNTHESIS_TEXT, render_memo
 
 from .conftest import SCREENED_AT
 
@@ -227,9 +227,9 @@ def test_naive_screened_at_is_treated_as_utc() -> None:
 
 def test_clock_override_note_appears_only_when_set() -> None:
     plain = render_memo(minimal_casefile())
-    assert "FIRSTPASS_SCREENED_AT" not in plain
+    assert "COLDSCREEN_SCREENED_AT" not in plain
     overridden = render_memo(minimal_casefile().model_copy(update={"clock_override": True}))
-    assert "overridden through FIRSTPASS_SCREENED_AT" in overridden
+    assert "overridden through COLDSCREEN_SCREENED_AT" in overridden
 
 
 # -- the claims-vs-evidence table -----------------------------------------------

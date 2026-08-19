@@ -12,10 +12,10 @@ The golden RED case is deliberately NOT the default: its level rides on
 R4, a judgment trigger the enforcement gates but does not force, so two
 models may legitimately land on different levels there (one cites the
 surviving contradiction as material, the other does not). Set
-FIRSTPASS_ANCHOR_CASE to another fixture directory to probe that behavior
+COLDSCREEN_ANCHOR_CASE to another fixture directory to probe that behavior
 knowingly.
 
-Ollama settings are read the way the CLI reads them (firstpass.toml, then
+Ollama settings are read the way the CLI reads them (coldscreen.toml, then
 the environment), and the configured think value is the default for both
 models. Thinking, though, is per model: the two compared need not agree about
 it, because a non-thinking model can reject the field outright while a
@@ -40,24 +40,24 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from firstpass.casedir import load_casefile  # noqa: E402
-from firstpass.config import (  # noqa: E402
+from coldscreen.casedir import load_casefile  # noqa: E402
+from coldscreen.config import (  # noqa: E402
     Settings,
     coerce_bool,
     load_dotenv_if_present,
     load_settings,
     ollama_base_url_from_env,
 )
-from firstpass.providers import ProviderError  # noqa: E402
-from firstpass.providers.ollama_p import OllamaProvider  # noqa: E402
-from firstpass.synthesis import SynthesisError, SynthesisResult, synthesize  # noqa: E402
+from coldscreen.providers import ProviderError  # noqa: E402
+from coldscreen.providers.ollama_p import OllamaProvider  # noqa: E402
+from coldscreen.synthesis import SynthesisError, SynthesisResult, synthesize  # noqa: E402
 
 DEFAULT_CASE_DIR = REPO_ROOT / "tests" / "fixtures" / "amber"
 THINK_PREFIX = "think="
 
 
 def case_dir() -> Path:
-    override = os.environ.get("FIRSTPASS_ANCHOR_CASE", "").strip()
+    override = os.environ.get("COLDSCREEN_ANCHOR_CASE", "").strip()
     return Path(override) if override else DEFAULT_CASE_DIR
 
 

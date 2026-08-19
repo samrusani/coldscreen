@@ -7,11 +7,11 @@ from datetime import UTC, datetime
 
 import pytest
 
-from firstpass.casedir import load_casefile
-from firstpass.language import find_banned_terms
-from firstpass.models import CaseFile, Claim, CompanyProfile, Evidence, Finding
-from firstpass.rubric import detect_candidates
-from firstpass.synthesis import (
+from coldscreen.casedir import load_casefile
+from coldscreen.language import find_banned_terms
+from coldscreen.models import CaseFile, Claim, CompanyProfile, Evidence, Finding
+from coldscreen.rubric import detect_candidates
+from coldscreen.synthesis import (
     MISSING_ASSESSMENT_NOTE,
     SYNTHESIS_SCHEMA,
     SynthesisError,
@@ -193,7 +193,7 @@ def test_happy_path_records_metadata_and_uses_the_schema() -> None:
     # No checkable claims: the schema pins the assessments array empty.
     assert call.json_schema is not None
     assert call.json_schema["properties"]["assessments"]["maxItems"] == 0
-    assert "firstpass synthesis prompt" in call.system
+    assert "coldscreen synthesis prompt" in call.system
     assert call.messages[0].role == "user"
     json.loads(call.messages[0].content)  # the input document is valid JSON
 

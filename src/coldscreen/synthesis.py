@@ -4,7 +4,7 @@ The model receives ONE thing: a deterministic JSON document assembled from
 the CaseFile (plus the versioned system prompt). It never fetches, never
 remembers, never supplies a fact. Its output is parsed against a strict
 schema, re-prompted on parse failures, passed through the mechanical
-banned-word gate, and then ENFORCED per firstpass.rubric: unrecognized
+banned-word gate, and then ENFORCED per coldscreen.rubric: unrecognized
 triggers dropped, unsupported red triggers rejected, mechanical candidates
 added, and the verdict level recomputed as a pure function of the final
 trigger set. The model owns narrative, questions, and judgment trigger
@@ -48,7 +48,7 @@ from .rubric import ClaimSignals, TriggerCandidate, detect_candidates, enforce, 
 MAX_PARSE_RETRIES = 2
 MAX_LANGUAGE_RETRIES = 1
 
-_PROMPT_VERSION_RE = re.compile(r"firstpass synthesis prompt, version ([0-9A-Za-z][0-9A-Za-z.]*)")
+_PROMPT_VERSION_RE = re.compile(r"coldscreen synthesis prompt, version ([0-9A-Za-z][0-9A-Za-z.]*)")
 
 # One plain JSON schema; each provider translates it to its own dialect.
 # additionalProperties false and full required lists everywhere so the same
@@ -148,7 +148,7 @@ class SynthesisOutput(BaseModel):
 
 
 def load_prompt() -> str:
-    return (resources.files("firstpass") / "prompts" / "synthesis.md").read_text(encoding="utf-8")
+    return (resources.files("coldscreen") / "prompts" / "synthesis.md").read_text(encoding="utf-8")
 
 
 def prompt_version(prompt_text: str) -> str:

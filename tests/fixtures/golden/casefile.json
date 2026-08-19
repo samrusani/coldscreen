@@ -464,7 +464,7 @@
       "statement": "Sanctions screening not performed: no OpenSanctions key or endpoint configured. Subjects were not screened against any sanctions or PEP dataset this run.",
       "evidence": [
         {
-          "source_url": "firstpass:not-run/sanctions",
+          "source_url": "coldscreen:not-run/sanctions",
           "retrieved_at": "2026-08-18T12:00:00Z",
           "excerpt": "kind=not_run"
         }
@@ -478,7 +478,7 @@
       "statement": "Adverse media search not performed: no search API key configured. Public web coverage was not screened this run.",
       "evidence": [
         {
-          "source_url": "firstpass:not-run/media",
+          "source_url": "coldscreen:not-run/media",
           "retrieved_at": "2026-08-18T12:00:00Z",
           "excerpt": "kind=not_run"
         }
@@ -492,7 +492,7 @@
       "statement": "Deck ingested: deck_fabricated_widgets.pdf, 3 page(s), text extracted from 3 page(s) (sha256 f6878a47d938d4238f4b06bf2522e9a172b610244397260a4e8cdad755c47d5f).",
       "evidence": [
         {
-          "source_url": "firstpass:deck/deck_fabricated_widgets.pdf",
+          "source_url": "coldscreen:deck/deck_fabricated_widgets.pdf",
           "retrieved_at": "2026-08-18T12:00:00Z",
           "excerpt": "sha256=f6878a47d938d4238f4b06bf2522e9a172b610244397260a4e8cdad755c47d5f"
         }
@@ -506,7 +506,7 @@
       "statement": "Claims extraction produced 5 claim(s) from 3 text section(s): 3 checkable, 2 not checkable (puffery is listed, never dropped).",
       "evidence": [
         {
-          "source_url": "firstpass:deck/deck_fabricated_widgets.pdf",
+          "source_url": "coldscreen:deck/deck_fabricated_widgets.pdf",
           "retrieved_at": "2026-08-18T12:00:00Z",
           "excerpt": "deck text"
         }

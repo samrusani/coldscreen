@@ -6,8 +6,8 @@ from typing import Any
 
 import respx
 
-from firstpass.config import Settings
-from firstpass.stages.registry import run_registry_pass
+from coldscreen.config import Settings
+from coldscreen.stages.registry import run_registry_pass
 
 from .conftest import BASE_URL, COMPANY_NUMBER, load_fixture, make_client
 

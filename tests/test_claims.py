@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from firstpass.claims import (
+from coldscreen.claims import (
     ClaimsExtractionError,
     ClaimsStageResult,
     Section,
@@ -18,10 +18,10 @@ from firstpass.claims import (
     prompt_version,
     run_claims_stage,
 )
-from firstpass.config import Settings
-from firstpass.deck import DeckExtraction, extract_deck
-from firstpass.models import CompanyProfile
-from firstpass.site import SiteFetchResult, SitePage
+from coldscreen.config import Settings
+from coldscreen.deck import DeckExtraction, extract_deck
+from coldscreen.models import CompanyProfile
+from coldscreen.site import SiteFetchResult, SitePage
 
 from .conftest import FIXTURES_DIR
 from .fakes import FakeModelProvider, claim_json, claims_json
@@ -177,7 +177,7 @@ def test_extraction_assigns_ids_in_order_and_keeps_puffery() -> None:
     assert "1 not checkable" in ids["EXT-006"].statement
     # The provider was called with the claims prompt and the enum schema.
     call = provider.calls[0]
-    assert "firstpass claims prompt" in call.system
+    assert "coldscreen claims prompt" in call.system
     assert call.json_schema is not None
     source_enum = call.json_schema["properties"]["claims"]["items"]["properties"]["source"]["enum"]
     assert source_enum == ["deck p.1", "deck p.2", "deck p.3"]

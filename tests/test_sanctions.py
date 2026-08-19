@@ -10,9 +10,9 @@ import httpx
 import pytest
 import respx
 
-from firstpass.config import Settings
-from firstpass.models import PSC, CompanyProfile, Officer
-from firstpass.sanctions import (
+from coldscreen.config import Settings
+from coldscreen.models import PSC, CompanyProfile, Officer
+from coldscreen.sanctions import (
     OpenSanctionsClient,
     SanctionsError,
     build_subjects,

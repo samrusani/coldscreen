@@ -14,14 +14,14 @@ reasoning over a truncated casefile violates the core rule that it sees the
 whole document or nothing. Verified locally 2026-08-19: gemma4:26b returned
 empty content against the default window and behaves once num_ctx covers
 the input. The window is configuration (settings key ollama_num_ctx, env
-FIRSTPASS_OLLAMA_NUM_CTX, firstpass.toml), wired through the constructor.
+COLDSCREEN_OLLAMA_NUM_CTX, coldscreen.toml), wired through the constructor.
 
 The top-level "think" field is not in that wiki note; it comes from local
 observation 2026-08-19: reasoning-family models (qwen3 and relatives)
 returned corrupted or empty content under schema-constrained generation
 while thinking was active, and behaved once "think": false was sent. Models
 with no thinking support can reject the field outright, so it is tri-state
-(settings key ollama_think, env FIRSTPASS_OLLAMA_THINK, firstpass.toml):
+(settings key ollama_think, env COLDSCREEN_OLLAMA_THINK, coldscreen.toml):
 None omits it from the body entirely and is the default.
 
 Local models keep the tool self-hostable end to end, so this provider must

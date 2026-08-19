@@ -12,7 +12,7 @@ import httpx
 import pytest
 import respx
 
-from firstpass.ch_client import (
+from coldscreen.ch_client import (
     ApiClientError,
     AuthError,
     InvalidResponseError,
@@ -21,7 +21,7 @@ from firstpass.ch_client import (
     Throttle,
     TransportFailure,
 )
-from firstpass.http_cache import HttpCache
+from coldscreen.http_cache import HttpCache
 
 from .conftest import BASE_URL, COMPANY_NUMBER, TEST_API_KEY, load_fixture, make_client
 

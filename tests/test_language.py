@@ -13,10 +13,10 @@ import json
 from pathlib import Path
 from types import ModuleType
 
-from firstpass.casedir import load_casefile
-from firstpass.language import find_banned_terms, normalize_for_match
-from firstpass.models import MediaItem, MediaScreening
-from firstpass.render import render_memo
+from coldscreen.casedir import load_casefile
+from coldscreen.language import find_banned_terms, normalize_for_match
+from coldscreen.models import MediaItem, MediaScreening
+from coldscreen.render import render_memo
 
 from .conftest import FIXTURES_DIR
 
@@ -44,7 +44,7 @@ def test_freshly_rendered_fixture_memo_is_clean() -> None:
 
 def test_check_language_passes_on_fixture_memo_and_templates() -> None:
     module = load_script()
-    template_dir = REPO_ROOT / "src" / "firstpass" / "templates"
+    template_dir = REPO_ROOT / "src" / "coldscreen" / "templates"
     targets = [str(FIXTURE_CASE_DIR / "memo.md")]
     targets.extend(str(p) for p in sorted(template_dir.rglob("*")) if p.is_file())
     assert module.main(targets) == 0
@@ -170,7 +170,7 @@ def _write_evidence(case_dir: Path, deck_pages: dict[str, str]) -> None:
         json.dumps(
             {
                 "name": "deck_text",
-                "url": "firstpass:deck/fixture.pdf",
+                "url": "coldscreen:deck/fixture.pdf",
                 "body": {"kind": "deck_text", "pages": deck_pages},
             }
         ),

@@ -1,10 +1,10 @@
-<!-- Draft launch README. Working name "firstpass" is a placeholder. Complete the verify-before-build checklist in ARCHITECTURE.md section 16 before publishing. -->
+<!-- Launch README for coldscreen. Remaining pre-publish steps live in the maintainer's launch checklist. -->
 
-# firstpass
+# coldscreen
 
 First-pass deal screening from public sources. One command in, one screening memo out.
 
-`firstpass` takes a company name, pulls the public record, and produces the memo a corporate finance analyst would write before anyone agrees to a meeting: registry profile, officer and ownership network, sanctions and PEP exposure, adverse media, and a claims-vs-evidence table showing what the company says about itself against what the public record actually supports.
+`coldscreen` takes a company name, pulls the public record, and produces the memo a corporate finance analyst would write before anyone agrees to a meeting: registry profile, officer and ownership network, sanctions and PEP exposure, adverse media, and a claims-vs-evidence table showing what the company says about itself against what the public record actually supports.
 
 It is not due diligence. It is the screen that decides whether due diligence is worth anyone's time.
 
@@ -29,17 +29,17 @@ This repository is that screen, generalized and automated. A methodology like th
 ## Quickstart
 
 ```bash
-pip install firstpass-screen
+pip install coldscreen
 export ANTHROPIC_API_KEY=...        # or OPENAI_API_KEY, or point at local Ollama
 export COMPANIES_HOUSE_API_KEY=...  # free key from the Companies House developer hub
 
-firstpass screen "Acme Holdings Ltd"
+coldscreen screen "Acme Holdings Ltd"
 ```
 
 With a deck and a website:
 
 ```bash
-firstpass screen 01234567 --deck pitch.pdf --site https://example.com
+coldscreen screen 01234567 --deck pitch.pdf --site https://example.com
 ```
 
 Output lands in `cases/acme-holdings-01234567/`: the memo, plus every piece of raw evidence as JSON with source URLs and retrieval timestamps.
@@ -99,7 +99,7 @@ A verdict is an opinion generated from public sources at a point in time. It is 
 
 Works with hosted models (Anthropic, OpenAI) or local models via Ollama. The deterministic collection layer is identical regardless of model; only synthesis quality varies. Run it fully local if your deal flow should never touch a third-party API.
 
-The verdict level cannot be moved by the model in either direction: mechanically detected rubric triggers cannot be dropped, and red triggers the evidence does not support cannot be added. In cross-model testing, a 30B coder model and a 27B generalist produced identical verdict levels on the same live companies. One practical note for local models: reasoning-family models (qwen3 non-coder variants and similar) need `FIRSTPASS_OLLAMA_THINK=false` for reliable structured output.
+The verdict level cannot be moved by the model in either direction: mechanically detected rubric triggers cannot be dropped, and red triggers the evidence does not support cannot be added. In cross-model testing, a 30B coder model and a 27B generalist produced identical verdict levels on the same live companies. One practical note for local models: reasoning-family models (qwen3 non-coder variants and similar) need `COLDSCREEN_OLLAMA_THINK=false` for reliable structured output.
 
 ## Scope and non-goals (v0.1)
 
@@ -117,7 +117,7 @@ The verdict level cannot be moved by the model in either direction: mechanically
 
 ## Disclaimer
 
-`firstpass` is a research aid. It is not investment advice, not a credit reference, and not a consumer report. Do not use it for decisions regulated under the US Fair Credit Reporting Act (employment, credit, tenancy screening) or equivalent regimes. Officer data is personal data sourced from public registers; you are responsible for processing it lawfully in your jurisdiction. Verify everything independently before acting on it. Memos describe what the public record shows and with what confidence; they do not make accusations.
+`coldscreen` is a research aid. It is not investment advice, not a credit reference, and not a consumer report. Do not use it for decisions regulated under the US Fair Credit Reporting Act (employment, credit, tenancy screening) or equivalent regimes. Officer data is personal data sourced from public registers; you are responsible for processing it lawfully in your jurisdiction. Verify everything independently before acting on it. Memos describe what the public record shows and with what confidence; they do not make accusations.
 
 ## Roadmap
 

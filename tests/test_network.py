@@ -8,10 +8,10 @@ from typing import Any
 
 import respx
 
-from firstpass.ch_client import FetchRecord
-from firstpass.config import Settings
-from firstpass.models import PSC, Officer
-from firstpass.stages.network import (
+from coldscreen.ch_client import FetchRecord
+from coldscreen.config import Settings
+from coldscreen.models import PSC, Officer
+from coldscreen.stages.network import (
     normalize_person_name,
     officer_id_from_links,
     run_network_expansion,

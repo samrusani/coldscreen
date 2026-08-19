@@ -1,4 +1,4 @@
-"""OpenAI provider. Optional extra: pip install "firstpass-screen[openai]".
+"""OpenAI provider. Optional extra: pip install "coldscreen[openai]".
 
 Coded from wiki/research/model-providers.md, not from memory:
 - Responses API: client.responses.create(model, instructions, input, ...)
@@ -21,11 +21,10 @@ from typing import Any
 from . import Message, ProviderError, ProviderNotInstalledError, ProviderResponseError
 
 API_KEY_ENV = "OPENAI_API_KEY"
-SCHEMA_NAME = "firstpass_synthesis"
+SCHEMA_NAME = "coldscreen_synthesis"
 
 INSTALL_HINT = (
-    "the openai SDK is not installed. Install the optional extra:"
-    ' pip install "firstpass-screen[openai]"'
+    'the openai SDK is not installed. Install the optional extra: pip install "coldscreen[openai]"'
 )
 
 

@@ -1,6 +1,6 @@
-# firstpass: architecture and build spec
+# coldscreen: architecture and build spec
 
-Status: v0.1 draft, pre-code. "firstpass" is a working name; complete section 16 before publishing anything.
+Status: v0.1. The project was named "coldscreen" on 2026-08-19 after the section 16 availability checks; DECISIONS.md carries the dated build and verification record.
 
 ## 1. Purpose
 
@@ -17,9 +17,9 @@ Turn a company name into a first-pass screening memo built entirely from public 
 
 ## 3. Related work and positioning
 
-- **zoharbabin/due-diligence-agents**: open-source, multi-agent M&A due diligence over an uploaded data room. Different funnel stage; firstpass runs before any documents change hands, from public sources only.
-- **Commercial screeners** (Scoreplex, Diligent, and similar): hosted SaaS, book-a-demo distribution. firstpass is self-hostable with a published, versioned methodology.
-- **Open plumbing**: Companies House API and existing MCP servers around it, OpenSanctions data and their yente matching server. firstpass builds on these rather than competing with them.
+- **zoharbabin/due-diligence-agents**: open-source, multi-agent M&A due diligence over an uploaded data room. Different funnel stage; coldscreen runs before any documents change hands, from public sources only.
+- **Commercial screeners** (Scoreplex, Diligent, and similar): hosted SaaS, book-a-demo distribution. coldscreen is self-hostable with a published, versioned methodology.
+- **Open plumbing**: Companies House API and existing MCP servers around it, OpenSanctions data and their yente matching server. coldscreen builds on these rather than competing with them.
 
 The differentiation is the methodology (rubric, claims-vs-evidence discipline, memo shape) and its provenance, not the plumbing.
 
@@ -85,7 +85,7 @@ cases/acme-holdings-01234567/
     ...
 ```
 
-`firstpass rerun <case-dir>` re-runs synthesis from cached evidence without refetching, so prompt iteration is cheap.
+`coldscreen rerun <case-dir>` re-runs synthesis from cached evidence without refetching, so prompt iteration is cheap.
 
 ## 6. Data model (Pydantic v2 sketch)
 
@@ -168,13 +168,13 @@ Rules: any RED trigger forces a RED verdict. Two or more AMBER triggers cap the 
 ## 9. CLI surface
 
 ```
-firstpass screen "Acme Holdings Ltd"
-firstpass screen 01234567 --deck pitch.pdf --site https://example.com
-firstpass screen 01234567 --model <provider:model> --json
-firstpass rerun cases/acme-holdings-01234567
+coldscreen screen "Acme Holdings Ltd"
+coldscreen screen 01234567 --deck pitch.pdf --site https://example.com
+coldscreen screen 01234567 --model <provider:model> --json
+coldscreen rerun cases/acme-holdings-01234567
 ```
 
-Keys via environment variables. Optional `firstpass.toml` for defaults (model, output dir, officer lookback years, media result count).
+Keys via environment variables. Optional `coldscreen.toml` for defaults (model, output dir, officer lookback years, media result count).
 
 ## 10. Caching, rate limits, audit trail
 

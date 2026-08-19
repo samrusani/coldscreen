@@ -1,6 +1,6 @@
 """Configuration loading.
 
-Precedence, highest first: CLI flag, environment variable, firstpass.toml,
+Precedence, highest first: CLI flag, environment variable, coldscreen.toml,
 built-in default. Secrets come from the environment only. A .env file in the
 working directory is loaded as a convenience when present; it never overrides
 variables already set in the environment.
@@ -24,7 +24,7 @@ OPENSANCTIONS_KEY_ENV = "OPENSANCTIONS_API_KEY"
 OPENSANCTIONS_BASE_URL_ENV = "OPENSANCTIONS_BASE_URL"
 TAVILY_KEY_ENV = "TAVILY_API_KEY"
 OLLAMA_BASE_URL_ENV = "OLLAMA_BASE_URL"
-ENV_PREFIX = "FIRSTPASS_"
+ENV_PREFIX = "COLDSCREEN_"
 DEFAULT_BASE_URL = "https://api.company-information.service.gov.uk"
 DEFAULT_OPENSANCTIONS_BASE_URL = "https://api.opensanctions.org"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
@@ -83,7 +83,7 @@ class Settings:
 
     @property
     def cache_path(self) -> Path:
-        base = Path(self.cache_dir) if self.cache_dir else Path(user_cache_dir("firstpass"))
+        base = Path(self.cache_dir) if self.cache_dir else Path(user_cache_dir("coldscreen"))
         return base / "http_cache.sqlite3"
 
     @property
@@ -159,14 +159,14 @@ def load_settings(
     cli_overrides: dict[str, Any] | None = None,
     environ: dict[str, str] | None = None,
 ) -> Settings:
-    """Build Settings from defaults, firstpass.toml, environment, CLI flags.
+    """Build Settings from defaults, coldscreen.toml, environment, CLI flags.
 
     An explicitly passed config_file must exist; the caller is expected to
     have validated that. Unknown keys in the file produce a warning on
     stderr rather than being silently ignored.
     """
     env = os.environ if environ is None else environ
-    toml_path = config_file or Path("firstpass.toml")
+    toml_path = config_file or Path("coldscreen.toml")
     toml_data = _read_toml(toml_path)
 
     known_names = {field.name for field in fields(Settings)}
@@ -228,7 +228,7 @@ def ollama_base_url_from_env(environ: dict[str, str] | None = None) -> str:
 
 
 def fixed_now(environ: dict[str, str] | None = None) -> datetime | None:
-    """Optional frozen clock for reproducible runs, from FIRSTPASS_SCREENED_AT.
+    """Optional frozen clock for reproducible runs, from COLDSCREEN_SCREENED_AT.
 
     Used by the test suite and the fixture generator to make memo output
     byte-stable. The value is an ISO 8601 timestamp: aware input is

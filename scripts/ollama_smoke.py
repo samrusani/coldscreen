@@ -7,19 +7,19 @@ prints the enforced verdict, the trigger set, enforcement notes, retry
 counts, and wall time. This is manual verification, not CI: pytest stays
 fully offline.
 
-Set FIRSTPASS_SMOKE_CASE to another fixture directory to smoke a different
+Set COLDSCREEN_SMOKE_CASE to another fixture directory to smoke a different
 case; tests/fixtures/golden (the RED case with stored claims) exercises the
 claim assessment path against a real model.
 
-Ollama settings are read the way the CLI reads them (firstpass.toml, then
+Ollama settings are read the way the CLI reads them (coldscreen.toml, then
 the environment), so the run here matches a real screen. That matters most
-for FIRSTPASS_OLLAMA_THINK: a reasoning-family model needs it set to false
+for COLDSCREEN_OLLAMA_THINK: a reasoning-family model needs it set to false
 before it will produce usable schema-constrained output.
 
 Usage: python scripts/ollama_smoke.py <model> [more models ...]
 Example: python scripts/ollama_smoke.py qwen2.5:7b
-Example: FIRSTPASS_OLLAMA_THINK=false python scripts/ollama_smoke.py qwen3:8b
-Example: FIRSTPASS_SMOKE_CASE=tests/fixtures/golden python scripts/ollama_smoke.py qwen3:8b
+Example: COLDSCREEN_OLLAMA_THINK=false python scripts/ollama_smoke.py qwen3:8b
+Example: COLDSCREEN_SMOKE_CASE=tests/fixtures/golden python scripts/ollama_smoke.py qwen3:8b
 """
 
 from __future__ import annotations
@@ -32,22 +32,22 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from firstpass.casedir import load_casefile  # noqa: E402
-from firstpass.config import (  # noqa: E402
+from coldscreen.casedir import load_casefile  # noqa: E402
+from coldscreen.config import (  # noqa: E402
     Settings,
     load_dotenv_if_present,
     load_settings,
     ollama_base_url_from_env,
 )
-from firstpass.providers import ProviderError  # noqa: E402
-from firstpass.providers.ollama_p import OllamaProvider  # noqa: E402
-from firstpass.synthesis import SynthesisError, synthesize  # noqa: E402
+from coldscreen.providers import ProviderError  # noqa: E402
+from coldscreen.providers.ollama_p import OllamaProvider  # noqa: E402
+from coldscreen.synthesis import SynthesisError, synthesize  # noqa: E402
 
 DEFAULT_CASE_DIR = REPO_ROOT / "tests" / "fixtures" / "amber"
 
 
 def case_dir() -> Path:
-    override = os.environ.get("FIRSTPASS_SMOKE_CASE", "").strip()
+    override = os.environ.get("COLDSCREEN_SMOKE_CASE", "").strip()
     return Path(override) if override else DEFAULT_CASE_DIR
 
 

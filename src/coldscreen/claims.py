@@ -51,10 +51,10 @@ from .synthesis import MAX_PARSE_RETRIES
 ClockFn = Callable[[], datetime]
 
 STAGE = "claims"
-NOT_RUN_URL = "firstpass:not-run/claims"
+NOT_RUN_URL = "coldscreen:not-run/claims"
 MAX_CLAIMS = 25
 
-_PROMPT_VERSION_RE = re.compile(r"firstpass claims prompt, version ([0-9A-Za-z][0-9A-Za-z.]*)")
+_PROMPT_VERSION_RE = re.compile(r"coldscreen claims prompt, version ([0-9A-Za-z][0-9A-Za-z.]*)")
 
 CATEGORIES = ("history", "financials", "team", "traction", "regulatory", "other")
 
@@ -84,7 +84,7 @@ class ClaimsOutput(BaseModel):
 
 
 def load_prompt() -> str:
-    return (resources.files("firstpass") / "prompts" / "claims.md").read_text(encoding="utf-8")
+    return (resources.files("coldscreen") / "prompts" / "claims.md").read_text(encoding="utf-8")
 
 
 def prompt_version(prompt_text: str) -> str:

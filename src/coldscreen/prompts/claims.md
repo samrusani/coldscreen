@@ -1,4 +1,4 @@
-<!-- firstpass claims prompt, version 2 -->
+<!-- coldscreen claims prompt, version 2 -->
 
 You extract the discrete claims a company makes about itself from its own pitch deck and website text, for a first-pass screening memo. The text was collected deterministically and is handed to you as one JSON document with labeled sections. You extract; you do not judge, verify, or editorialize.
 

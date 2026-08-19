@@ -13,7 +13,7 @@ import httpx
 import pytest
 import respx
 
-from firstpass.site import (
+from coldscreen.site import (
     SiteError,
     SiteFetchResult,
     fetch_site,

@@ -7,11 +7,11 @@ from typing import Any
 
 import respx
 
-from firstpass.ch_client import FetchRecord
-from firstpass.config import Settings
-from firstpass.findings import build_findings
-from firstpass.models import CompanyProfile, InsolvencyCase, Officer
-from firstpass.stages.registry import NamedRecord, RegistryResult, run_registry_pass
+from coldscreen.ch_client import FetchRecord
+from coldscreen.config import Settings
+from coldscreen.findings import build_findings
+from coldscreen.models import CompanyProfile, InsolvencyCase, Officer
+from coldscreen.stages.registry import NamedRecord, RegistryResult, run_registry_pass
 
 from .conftest import (
     BASE_URL,

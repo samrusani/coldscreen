@@ -1,4 +1,4 @@
-"""Anthropic provider. Optional extra: pip install "firstpass-screen[anthropic]".
+"""Anthropic provider. Optional extra: pip install "coldscreen[anthropic]".
 
 Coded from wiki/research/model-providers.md, not from memory:
 - client.messages.create(model, max_tokens, system, messages)
@@ -23,7 +23,7 @@ DEFAULT_MAX_TOKENS = 16000
 
 INSTALL_HINT = (
     "the anthropic SDK is not installed. Install the optional extra:"
-    ' pip install "firstpass-screen[anthropic]"'
+    ' pip install "coldscreen[anthropic]"'
 )
 
 

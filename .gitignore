@@ -6,7 +6,7 @@ wiki/
 
 # screening output and local http cache
 cases/
-.firstpass_cache/
+.coldscreen_cache/
 
 # python
 uv.lock

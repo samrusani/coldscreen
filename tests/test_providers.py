@@ -23,8 +23,8 @@ from typing import Any
 import pytest
 import respx
 
-from firstpass.config import Settings
-from firstpass.providers import (
+from coldscreen.config import Settings
+from coldscreen.providers import (
     Message,
     ModelSpecError,
     ProviderError,
@@ -33,11 +33,11 @@ from firstpass.providers import (
     get_provider,
     parse_model_spec,
 )
-from firstpass.providers.anthropic_p import AnthropicProvider, extract_text
-from firstpass.providers.anthropic_p import build_request_kwargs as anthropic_kwargs
-from firstpass.providers.ollama_p import OllamaProvider
-from firstpass.providers.openai_p import OpenAIProvider
-from firstpass.providers.openai_p import build_request_kwargs as openai_kwargs
+from coldscreen.providers.anthropic_p import AnthropicProvider, extract_text
+from coldscreen.providers.anthropic_p import build_request_kwargs as anthropic_kwargs
+from coldscreen.providers.ollama_p import OllamaProvider
+from coldscreen.providers.openai_p import OpenAIProvider
+from coldscreen.providers.openai_p import build_request_kwargs as openai_kwargs
 
 SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -184,7 +184,7 @@ def test_anthropic_missing_key_is_a_clear_error(monkeypatch: pytest.MonkeyPatch)
 
 def test_anthropic_missing_sdk_names_the_extra(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "anthropic", None)
-    with pytest.raises(ProviderNotInstalledError, match=r"firstpass-screen\[anthropic\]"):
+    with pytest.raises(ProviderNotInstalledError, match=r"coldscreen\[anthropic\]"):
         AnthropicProvider(model="claude-opus-5")
 
 
@@ -204,7 +204,7 @@ def test_openai_request_shape_with_schema() -> None:
         "text": {
             "format": {
                 "type": "json_schema",
-                "name": "firstpass_synthesis",
+                "name": "coldscreen_synthesis",
                 "schema": SCHEMA,
                 "strict": True,
             }
@@ -247,7 +247,7 @@ def test_openai_provider_sends_text_format_and_reads_output_text() -> None:
     sent = client.responses.calls[0]
     assert sent["text"]["format"]["type"] == "json_schema"
     assert sent["text"]["format"]["strict"] is True
-    assert sent["text"]["format"]["name"] == "firstpass_synthesis"
+    assert sent["text"]["format"]["name"] == "coldscreen_synthesis"
     assert sent["instructions"] == "SYSTEM"
 
 
@@ -266,7 +266,7 @@ def test_openai_missing_key_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_openai_missing_sdk_names_the_extra(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "openai", None)
-    with pytest.raises(ProviderNotInstalledError, match=r"firstpass-screen\[openai\]"):
+    with pytest.raises(ProviderNotInstalledError, match=r"coldscreen\[openai\]"):
         OpenAIProvider(model="gpt-5.6-sol")
 
 

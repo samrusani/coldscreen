@@ -66,7 +66,7 @@ class Claim(BaseModel):
     deck or site, source names where they appeared ("deck p.4", "site
     /about"). Unfalsifiable puffery is kept with checkable False, never
     dropped. Because text is quoted data, it is the one kind of string the
-    language gate exempts (span-level, exact match); see firstpass.language.
+    language gate exempts (span-level, exact match); see coldscreen.language.
     """
 
     id: str
@@ -417,7 +417,7 @@ class CaseFile(BaseModel):
     """Everything one screening run produced, serialized to casefile.json.
 
     Extends the ARCHITECTURE.md section 6 sketch with the registry lists the
-    memo needs so that `firstpass rerun` can re-render fully offline from
+    memo needs so that `coldscreen rerun` can re-render fully offline from
     this file alone.
     """
 
@@ -445,6 +445,6 @@ class CaseFile(BaseModel):
     tool_version: str
     screened_at: datetime
     disclaimer: str = RESEARCH_AID_DISCLAIMER
-    # True when FIRSTPASS_SCREENED_AT overrode the clock for this run. The
+    # True when COLDSCREEN_SCREENED_AT overrode the clock for this run. The
     # memo footer states it, so audit packs cannot be silently backdated.
     clock_override: bool = False

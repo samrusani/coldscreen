@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from firstpass.models import (
+from coldscreen.models import (
     RESEARCH_AID_DISCLAIMER,
     CaseFile,
     CompanyProfile,

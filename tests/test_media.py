@@ -9,7 +9,7 @@ import httpx
 import pytest
 import respx
 
-from firstpass.media import (
+from coldscreen.media import (
     QUERY_CATEGORIES,
     TAVILY_SEARCH_URL,
     MediaSearchError,
@@ -20,10 +20,10 @@ from firstpass.media import (
     run_media,
     source_domain,
 )
-from firstpass.models import CaseFile, CompanyProfile
-from firstpass.render import render_memo
-from firstpass.rubric import detect_candidates
-from firstpass.synthesis import build_synthesis_input, serialize_input
+from coldscreen.models import CaseFile, CompanyProfile
+from coldscreen.render import render_memo
+from coldscreen.rubric import detect_candidates
+from coldscreen.synthesis import build_synthesis_input, serialize_input
 
 NOW = datetime(2026, 8, 18, 12, 0, 0, tzinfo=UTC)
 TAVILY_KEY = "tvly-fixture-key-not-real"
@@ -66,7 +66,7 @@ def test_query_templates_cover_all_categories_and_previous_names() -> None:
 
 
 def test_category_labels_are_memo_safe() -> None:
-    from firstpass.language import find_banned_terms
+    from coldscreen.language import find_banned_terms
 
     for category, _term in QUERY_CATEGORIES:
         assert find_banned_terms(category) == []

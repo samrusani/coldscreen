@@ -1,4 +1,4 @@
-"""Typer CLI: `firstpass screen` and `firstpass rerun`.
+"""Typer CLI: `coldscreen screen` and `coldscreen rerun`.
 
 screen resolves the input to one company, runs the deterministic stages
 (registry, network expansion, sanctions, adverse media), extracts claims
@@ -67,7 +67,7 @@ from .stages.resolve import Resolution, resolve
 from .synthesis import SynthesisError, apply_synthesis, synthesize
 
 app = typer.Typer(
-    name="firstpass",
+    name="coldscreen",
     help=(
         "First-pass screening memos for UK companies from public registry"
         " data. Exit codes: 0 success, 1 error, 3 ambiguous company match."
@@ -81,7 +81,7 @@ AMBIGUOUS_EXIT_CODE = 3
 MODEL_OPTION_HELP = (
     'Synthesis model as "provider:model", for example anthropic:claude-opus-5,'
     " openai:gpt-5.6-sol, or ollama:qwen2.5:7b (the split is on the first"
-    " colon). Overrides FIRSTPASS_MODEL and firstpass.toml."
+    " colon). Overrides COLDSCREEN_MODEL and coldscreen.toml."
 )
 
 
@@ -112,7 +112,7 @@ def _pick_candidate(resolution: Resolution) -> str:
             typer.echo(f"  {line}", err=True)
         typer.echo(
             "Not a terminal, so nothing was picked. Rerun with the company"
-            " number, for example: firstpass screen <number>",
+            " number, for example: coldscreen screen <number>",
             err=True,
         )
         raise typer.Exit(code=AMBIGUOUS_EXIT_CODE)
@@ -287,7 +287,7 @@ def screen(
             exists=True,
             file_okay=True,
             dir_okay=False,
-            help="Path to a firstpass.toml configuration file. Must exist.",
+            help="Path to a coldscreen.toml configuration file. Must exist.",
         ),
     ] = None,
 ) -> None:
@@ -316,8 +316,8 @@ def screen(
         typer.echo(
             "Claims extraction needs a model: --deck and --site turn deck and"
             " site text into discrete claims, and that conversion is model"
-            " work. Configure one via --model, FIRSTPASS_MODEL, or"
-            " firstpass.toml, or drop the --deck/--site flags.",
+            " work. Configure one via --model, COLDSCREEN_MODEL, or"
+            " coldscreen.toml, or drop the --deck/--site flags.",
             err=True,
         )
         raise typer.Exit(code=1)
@@ -527,7 +527,7 @@ def screen(
         typer.echo(
             f"Synthesis failed: {synthesis_failure}\n"
             "The deterministic memo and evidence were kept. Fix the model"
-            " configuration and run: firstpass rerun " + str(case_dir),
+            " configuration and run: coldscreen rerun " + str(case_dir),
             err=True,
         )
     if json_output:
@@ -565,7 +565,7 @@ def rerun(
             exists=True,
             file_okay=True,
             dir_okay=False,
-            help="Path to a firstpass.toml configuration file. Must exist.",
+            help="Path to a coldscreen.toml configuration file. Must exist.",
         ),
     ] = None,
 ) -> None:
@@ -601,7 +601,7 @@ def rerun(
             raise typer.Exit(code=1) from None
         if prepared is None:
             typer.echo(
-                "No model configured (FIRSTPASS_MODEL, firstpass.toml, or"
+                "No model configured (COLDSCREEN_MODEL, coldscreen.toml, or"
                 " --model), so only the memo was re-rendered.",
                 err=True,
             )

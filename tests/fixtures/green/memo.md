@@ -162,6 +162,6 @@ No insolvency cases in this casefile. See the findings for the basis.
 
 This memo is a research aid generated from public sources at a point in time. It is not investment advice, not a credit reference, and not a consumer report. Do not use it for decisions regulated under the US Fair Credit Reporting Act (employment, credit, tenancy screening) or equivalent regimes. Officer and PSC data is personal data from public registers; you are responsible for processing it lawfully. Verify everything independently before acting on it.
 
-Note: the clock for this run was overridden through FIRSTPASS_SCREENED_AT, so the screening and retrieval timestamps above were injected, not observed. This is a reproducibility feature for tests and demos.
+Note: the clock for this run was overridden through COLDSCREEN_SCREENED_AT, so the screening and retrieval timestamps above were injected, not observed. This is a reproducibility feature for tests and demos.
 
 Contains public sector information licensed under the Open Government Licence v3.0. Source: Companies House.

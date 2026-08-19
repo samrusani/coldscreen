@@ -36,7 +36,7 @@ from pdfplumber.utils.exceptions import PdfminerException
 
 from .ch_client import FetchRecord
 
-DECK_URL_PREFIX = "firstpass:deck/"
+DECK_URL_PREFIX = "coldscreen:deck/"
 
 
 class DeckError(Exception):

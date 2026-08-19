@@ -1,6 +1,6 @@
-# Optional configuration for firstpass. Copy to firstpass.toml in the
+# Optional configuration for coldscreen. Copy to coldscreen.toml in the
 # directory you run the tool from. Precedence: CLI flag, then environment
-# variable (FIRSTPASS_<NAME> upper case, for example FIRSTPASS_OUTPUT_DIR),
+# variable (COLDSCREEN_<NAME> upper case, for example COLDSCREEN_OUTPUT_DIR),
 # then this file, then built-in defaults.
 #
 # Secrets never live here. The Companies House key comes from the
@@ -10,7 +10,7 @@
 output_dir = "cases"
 
 # HTTP cache location. Empty string means the platform user cache directory.
-# Set to ".firstpass_cache" to keep the cache next to your project.
+# Set to ".coldscreen_cache" to keep the cache next to your project.
 cache_dir = ""
 
 # Cache time to live in days.
@@ -42,7 +42,7 @@ timeout_seconds = 30
 # Synthesis model as "provider:model" (split on the first colon, so Ollama
 # model names keep their own colon). Empty means no synthesis: the screen
 # completes deterministically and the memo says so. Overridden by
-# FIRSTPASS_MODEL and by --model.
+# COLDSCREEN_MODEL and by --model.
 #   model = "anthropic:claude-opus-5"
 #   model = "openai:gpt-5.6-sol"
 #   model = "ollama:qwen2.5:7b"
@@ -71,7 +71,7 @@ ollama_timeout_seconds = 600
 # truncated casefile is worse than no model at all. The default covers the
 # synthesis prompt plus a compact casefile with headroom; raise it for
 # unusually large casefiles, lower it on tight-memory machines. Also
-# settable via FIRSTPASS_OLLAMA_NUM_CTX.
+# settable via COLDSCREEN_OLLAMA_NUM_CTX.
 ollama_num_ctx = 16384
 
 # Ollama thinking mode (the top-level "think" request field). Reasoning-family
@@ -80,5 +80,5 @@ ollama_num_ctx = 16384
 # thinking active they return corrupted or empty content. Leave this unset
 # for models that do not support thinking, which can reject the field
 # outright. Unset means the field is never sent. Also settable via
-# FIRSTPASS_OLLAMA_THINK (true/false, or 1/0).
+# COLDSCREEN_OLLAMA_THINK (true/false, or 1/0).
 #   ollama_think = false

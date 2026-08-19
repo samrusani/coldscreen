@@ -16,10 +16,10 @@ import pytest
 import respx
 from typer.testing import CliRunner, Result
 
-import firstpass.cli
-from firstpass.cli import app
-from firstpass.language import find_banned_terms
-from firstpass.models import CaseFile
+import coldscreen.cli
+from coldscreen.cli import app
+from coldscreen.language import find_banned_terms
+from coldscreen.models import CaseFile
 
 from .conftest import FIXTURES_DIR, load_fixture, mock_company_routes
 from .fakes import synthesis_json
@@ -52,8 +52,8 @@ def screen_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """Isolated working directory with a frozen clock and a fixture key."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("COMPANIES_HOUSE_API_KEY", SECRET)
-    monkeypatch.setenv("FIRSTPASS_SCREENED_AT", "2026-08-18T12:00:00+00:00")
-    monkeypatch.setenv("FIRSTPASS_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("COLDSCREEN_SCREENED_AT", "2026-08-18T12:00:00+00:00")
+    monkeypatch.setenv("COLDSCREEN_CACHE_DIR", str(tmp_path / "cache"))
     return tmp_path
 
 
@@ -168,7 +168,7 @@ def test_screen_records_the_clock_override(screen_env: Path, respx_mock: respx.M
     )
     assert casefile.clock_override is True
     memo = (case_dir / "memo.md").read_text(encoding="utf-8")
-    assert "overridden through FIRSTPASS_SCREENED_AT" in memo
+    assert "overridden through COLDSCREEN_SCREENED_AT" in memo
 
 
 def test_ambiguous_search_exits_3_with_the_candidate_table(
@@ -182,7 +182,7 @@ def test_ambiguous_search_exits_3_with_the_candidate_table(
     combined = all_output(result)
     assert "99999999" in combined
     assert "99999998" in combined
-    assert "firstpass screen" in combined
+    assert "coldscreen screen" in combined
 
 
 def test_exact_title_match_is_announced(screen_env: Path, respx_mock: respx.MockRouter) -> None:
@@ -200,7 +200,7 @@ def test_interactive_picker_selects_a_candidate(
     screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     mock_company_routes(respx_mock, ambiguous_search=True)
-    monkeypatch.setattr(firstpass.cli, "_is_interactive", lambda: True)
+    monkeypatch.setattr(coldscreen.cli, "_is_interactive", lambda: True)
     result = runner.invoke(app, ["screen", "Fabricated Widgets"], input="1\n")
     assert result.exit_code == 0, result.output
     assert (screen_env / "cases" / "fabricated-widgets-ltd-99999999").is_dir()
@@ -212,7 +212,7 @@ def test_interactive_picker_zero_aborts(
     respx_mock.get("https://api.company-information.service.gov.uk/search/companies").respond(
         200, json=load_fixture("search_ambiguous.json")
     )
-    monkeypatch.setattr(firstpass.cli, "_is_interactive", lambda: True)
+    monkeypatch.setattr(coldscreen.cli, "_is_interactive", lambda: True)
     result = runner.invoke(app, ["screen", "Fabricated Widgets"], input="0\n")
     assert result.exit_code == 3
 
@@ -277,7 +277,7 @@ def test_malicious_company_number_from_search_is_rejected(
 def test_nonexistent_config_path_is_an_error(
     screen_env: Path, respx_mock: respx.MockRouter
 ) -> None:
-    missing = screen_env / "no-such-firstpass.toml"
+    missing = screen_env / "no-such-coldscreen.toml"
     result = runner.invoke(app, ["screen", "Fabricated Widgets Ltd", "--config", str(missing)])
     # typer reports option validation as a usage error, exit code 2. The
     # rich error panel wraps long lines, so assert on the stable prefix.
@@ -381,7 +381,7 @@ def test_screen_with_ollama_model_synthesizes_and_enforces(
     so enforcement must add both candidates and recompute the level.
     """
     mock_company_routes(respx_mock)
-    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
     route = respx_mock.post(OLLAMA_CHAT_URL).respond(
         200, json=ollama_reply(load_synthesis_json("green"))
     )
@@ -424,8 +424,8 @@ def test_ollama_think_setting_reaches_the_request_body(
     under a schema, so the setting has to survive every hop.
     """
     mock_company_routes(respx_mock)
-    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
-    monkeypatch.setenv("FIRSTPASS_OLLAMA_THINK", "false")
+    monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
+    monkeypatch.setenv("COLDSCREEN_OLLAMA_THINK", "false")
     route = respx_mock.post(OLLAMA_CHAT_URL).respond(
         200, json=ollama_reply(load_synthesis_json("green"))
     )
@@ -460,7 +460,7 @@ def test_synthesis_failure_keeps_the_audit_pack_and_exits_1(
     screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     mock_company_routes(respx_mock)
-    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
     respx_mock.post(OLLAMA_CHAT_URL).respond(200, json=ollama_reply("this is not json"))
     result = runner.invoke(app, ["screen", "Fabricated Widgets Ltd"])
     assert result.exit_code == 1
@@ -579,7 +579,7 @@ def test_missing_deck_path_is_a_usage_error(screen_env: Path, respx_mock: respx.
 def test_non_pdf_deck_is_a_clean_error_before_any_fetching(
     screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
     not_a_pdf = screen_env / "notes.pdf"
     not_a_pdf.write_text("this is plain text wearing a pdf extension", encoding="utf-8")
     # No registry routes registered: reaching the network would fail loudly.
@@ -594,7 +594,7 @@ def test_non_pdf_deck_is_a_clean_error_before_any_fetching(
 def test_encrypted_deck_is_a_clean_error(
     screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
     # A structurally valid PDF whose trailer declares an encryption
     # dictionary: pdfminer treats it as encrypted and unreadable.
     encrypted = screen_env / "locked.pdf"
@@ -612,7 +612,7 @@ def test_encrypted_deck_is_a_clean_error(
 def test_non_http_site_url_is_a_clean_error(
     screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
     result = runner.invoke(app, ["screen", "99999999", "--site", "ftp://widgets.example"])
     assert result.exit_code == 1
     combined = all_output(result)
@@ -626,7 +626,7 @@ def test_claims_extraction_failure_keeps_the_audit_pack_and_skips_synthesis(
     """A model that never produces valid claims: the run exits 1, the deck
     evidence is kept, no synthesis call is made, and nothing is fabricated."""
     mock_company_routes(respx_mock)
-    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
     route = respx_mock.post(OLLAMA_CHAT_URL).respond(200, json=ollama_reply("junk, not json"))
     result = runner.invoke(app, ["screen", "99999999", "--deck", str(DECK_PATH)])
     assert result.exit_code == 1
@@ -653,7 +653,7 @@ def test_screen_with_deck_extracts_claims_and_assesses_them(
     """The full weekend 3 path over the CLI: extraction call, synthesis call,
     claims stored with code-assigned ids, table rendered."""
     mock_company_routes(respx_mock)
-    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
     claims_reply = json.dumps(
         {
             "claims": [
@@ -805,7 +805,7 @@ def test_language_gate_exhaustion_memo_survives_the_backstop(
     the vocabulary: the backstop passes the memo and the run keeps its audit
     pack instead of losing everything to a second gate hit."""
     mock_company_routes(respx_mock)
-    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
     dirty = synthesis_json("green", narrative="The filing pattern reads like a scam.")
     route = respx_mock.post(OLLAMA_CHAT_URL).respond(200, json=ollama_reply(dirty))
     result = runner.invoke(app, ["screen", "Fabricated Widgets Ltd"])

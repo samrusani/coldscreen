@@ -12,7 +12,7 @@ from types import ModuleType
 
 import pytest
 
-from firstpass.deck import DeckError, deck_record, extract_deck
+from coldscreen.deck import DeckError, deck_record, extract_deck
 
 from .conftest import FIXTURES_DIR
 
@@ -113,7 +113,7 @@ def test_zero_extractable_text_is_not_an_error(tmp_path: Path) -> None:
 def test_deck_record_carries_text_and_provenance_never_the_binary() -> None:
     extraction = extract_deck(DECK_PATH, max_pages=40)
     record = deck_record(extraction, lambda: NOW)
-    assert record.url == "firstpass:deck/deck_fabricated_widgets.pdf"
+    assert record.url == "coldscreen:deck/deck_fabricated_widgets.pdf"
     assert record.status == 0
     assert record.retrieved_at == NOW
     body = record.body
