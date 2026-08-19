@@ -511,6 +511,9 @@ def gate_signals(casefile: CaseFile, assessments: list[ClaimAssessment]) -> Gate
 # clean results" is the canonical honest sentence about a skipped stage).
 # The gate only arms for a stage that is recorded not run or failed, so a
 # stage that RAN and found nothing may honestly say so.
+# Extended from observed not-run phrasing: PEP-first order, "no evidence
+# of sanctions or pep", and "ran and" between screening and returned.
+# Unseen future shapes remain a residual; the set stays narrow on purpose.
 SANCTIONS_CLEAN_PHRASES: tuple[str, ...] = (
     "no sanctions match",
     "no sanctions matches",
@@ -524,6 +527,13 @@ SANCTIONS_CLEAN_PHRASES: tuple[str, ...] = (
     "sanctions screening returned no",
     "clear of sanctions",
     "cleared sanctions screening",
+    "no pep or sanctions match",
+    "no pep or sanctions matches",
+    "no pep matches",
+    "no evidence of sanctions or pep",
+    "sanctions returned no",
+    "sanctions screening ran and returned no",
+    "found no pep or sanctions",
 )
 MEDIA_CLEAN_PHRASES: tuple[str, ...] = (
     "no adverse media",
@@ -537,6 +547,9 @@ MEDIA_CLEAN_PHRASES: tuple[str, ...] = (
     "media search came back clean",
     "media search returned no",
     "clear of adverse media",
+    "no adverse media items",
+    "media screening was clean",
+    "media screening returned no",
 )
 
 

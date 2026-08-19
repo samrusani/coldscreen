@@ -33,6 +33,7 @@ from coldscreen.synthesis import (
     load_prompt,
     prompt_version,
     serialize_input,
+    stage_honesty_violations,
     synthesize,
 )
 
@@ -616,6 +617,127 @@ def test_both_stages_are_named_when_both_are_misdescribed() -> None:
     provider = FakeModelProvider([dishonest, dishonest])
     with pytest.raises(SynthesisError, match="sanctions and adverse media stage"):
         synthesize(minimal_casefile(), provider, provider_name="fake", model="canned")
+
+
+REQUIRED_SANCTIONS_PHRASES = (
+    "no pep or sanctions match",
+    "no pep or sanctions matches",
+    "no pep matches",
+    "no evidence of sanctions or pep",
+    "sanctions returned no",
+    "sanctions screening ran and returned no",
+    "found no pep or sanctions",
+)
+
+REQUIRED_MEDIA_PHRASES = (
+    "no adverse media items",
+    "media screening was clean",
+    "media screening returned no",
+)
+
+HONEST_NOT_RUN_SENTENCES = (
+    "Sanctions screening was not performed due to lack of configuration",
+    "adverse media coverage was not searched",
+    "Sanctions and adverse media screening were not performed",
+    (
+        "The lack of sanctions or adverse media screening does not contribute"
+        " because those checks were not performed"
+    ),
+    "Why were sanctions and adverse media screenings not conducted for this company?",
+)
+
+
+@pytest.mark.parametrize("phrase", REQUIRED_SANCTIONS_PHRASES)
+def test_new_sanctions_phrases_fail_closed_on_not_run(phrase: str) -> None:
+    """Each added sanctions phrase is a lie against a stage that never ran.
+    Persistent dishonest output fails closed with stage names only."""
+    dishonest = synthesis_json("green", narrative=f"The record shows {phrase} for the subject.")
+    provider = FakeModelProvider([dishonest, dishonest])
+    with pytest.raises(SynthesisError) as caught:
+        synthesize(minimal_casefile(), provider, provider_name="fake", model="canned")
+    message = str(caught.value)
+    assert "described the sanctions stage(s) as clean" in message
+    assert "not run or failed" in message
+    assert phrase not in message
+    assert find_banned_terms(message) == []
+    assert len(provider.calls) == 2
+
+
+@pytest.mark.parametrize("phrase", REQUIRED_MEDIA_PHRASES)
+def test_new_media_phrases_fail_closed_on_not_run(phrase: str) -> None:
+    dishonest = synthesis_json("green", narrative=f"The record shows {phrase} for the subject.")
+    provider = FakeModelProvider([dishonest, dishonest])
+    with pytest.raises(SynthesisError) as caught:
+        synthesize(minimal_casefile(), provider, provider_name="fake", model="canned")
+    message = str(caught.value)
+    assert "described the adverse media stage(s) as clean" in message
+    assert "not run or failed" in message
+    assert phrase not in message
+    assert find_banned_terms(message) == []
+    assert len(provider.calls) == 2
+
+
+def test_headline_pep_first_live_miss_trips_both_stages() -> None:
+    """The observed not-run lie: PEP-first sanctions wording plus the media
+    half that already tripped via 'no adverse media'."""
+    narrative = (
+        "No PEP or sanctions matches were found (SAN-000), and no adverse"
+        " media items were identified (MED-000)."
+    )
+    assert stage_honesty_violations(minimal_casefile(), [narrative]) == [
+        "sanctions",
+        "adverse media",
+    ]
+    dishonest = synthesis_json("green", narrative=narrative)
+    provider = FakeModelProvider([dishonest, dishonest])
+    with pytest.raises(SynthesisError, match="sanctions and adverse media stage"):
+        synthesize(minimal_casefile(), provider, provider_name="fake", model="canned")
+
+
+@pytest.mark.parametrize(
+    "narrative",
+    [
+        "sanctions screening ran and returned no candidates",
+        "sanctions returned no candidates",
+    ],
+)
+def test_canned_empty_sanctions_phrasing_trips_not_run(narrative: str) -> None:
+    dishonest = synthesis_json("green", narrative=narrative)
+    provider = FakeModelProvider([dishonest, dishonest])
+    with pytest.raises(SynthesisError) as caught:
+        synthesize(minimal_casefile(), provider, provider_name="fake", model="canned")
+    message = str(caught.value)
+    assert "described the sanctions stage(s) as clean" in message
+    assert narrative not in message
+
+
+@pytest.mark.parametrize("narrative", HONEST_NOT_RUN_SENTENCES)
+def test_honest_not_run_phrasing_passes_the_gate(narrative: str) -> None:
+    honest = synthesis_json("green", narrative=narrative)
+    provider = FakeModelProvider([honest])
+    result = synthesize(minimal_casefile(), provider, provider_name="fake", model="canned")
+    assert result.metadata.language_retries == 0
+
+
+def test_new_clean_phrases_are_allowed_when_the_stage_ran() -> None:
+    """A stage that RAN may still say the new phrases."""
+    from coldscreen.models import SanctionsScreening
+
+    ran_clean = minimal_casefile().model_copy(
+        update={
+            "sanctions": SanctionsScreening(performed=True, threshold=0.7),
+            "media": MediaScreening(performed=True),
+        }
+    )
+    honest = synthesis_json(
+        "green",
+        narrative=(
+            "No PEP or sanctions matches were found, and no adverse media items were identified."
+        ),
+    )
+    provider = FakeModelProvider([honest])
+    result = synthesize(ran_clean, provider, provider_name="fake", model="canned")
+    assert result.metadata.language_retries == 0
 
 
 # -- assessments: happy path through synthesize -----------------------------------
