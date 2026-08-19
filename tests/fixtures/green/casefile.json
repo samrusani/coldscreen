@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "subject": {
     "company_name": "PLACID MERIDIAN CONSULTING LTD",
     "company_number": "99999902",
@@ -487,7 +488,8 @@
         "datasets": []
       }
     ],
-    "skipped_reason": null
+    "skipped_reason": null,
+    "failed": false
   },
   "network": {
     "performed": true,
@@ -528,7 +530,8 @@
       "sanctions": 0
     },
     "items": [],
-    "skipped_reason": null
+    "skipped_reason": null,
+    "failed": false
   },
   "verdict": {
     "level": "green",
@@ -544,7 +547,7 @@
   "synthesis": {
     "provider": "ollama",
     "model": "fake-model:1b",
-    "prompt_version": "3",
+    "prompt_version": "4",
     "parse_retries": 0,
     "language_retries": 0,
     "enforcement_notes": [],

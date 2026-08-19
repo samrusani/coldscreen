@@ -84,12 +84,21 @@ def _disq_lines(casefile: CaseFile) -> list[str]:
     return lines
 
 
+def _escape_pipes(text: str) -> str:
+    """Escape pipe characters so a cell cannot break the Markdown table."""
+    return text.replace("|", "\\|")
+
+
 def _claim_rows(casefile: CaseFile) -> list[dict[str, str]]:
     """Claims-vs-evidence table rows, one per stored claim, in claim order.
 
     The claim text is rendered VERBATIM (quoted data): the language gates
     exempt exactly the stored claim strings, so any rewriting here would
     break the span match and turn a legitimate quotation into a gate hit.
+    The one transformation is pipe escaping, so a cell cannot break the
+    Markdown table structure; a claim that contains both a pipe and banned
+    vocabulary therefore no longer span-matches its stored text and fails
+    closed at the whole-memo backstop, which is the safe direction.
     Puffery rows carry "not checkable"; a checkable claim with no stored
     assessment (synthesis never ran, or failed after extraction) renders
     honestly as "not assessed".
@@ -108,9 +117,9 @@ def _claim_rows(casefile: CaseFile) -> list[dict[str, str]]:
         rows.append(
             {
                 "number": str(index),
-                "text": claim.text,
+                "text": _escape_pipes(claim.text),
                 "source": claim.source,
-                "record": record,
+                "record": _escape_pipes(record),
                 "status": status,
             }
         )

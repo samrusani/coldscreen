@@ -8,27 +8,34 @@ gate over model output (coldscreen.synthesis), the whole-memo backstop that
 runs before any memo reaches disk (coldscreen.cli), and the CI gate over
 rendered memos (scripts/check_language.py).
 
-Two exemptions, both narrow and both span-level:
+Three exemptions, all narrow and all span-level:
 
 - URLs are stripped before matching, because source URLs are data pointers,
   not prose, and real adverse-media URLs legitimately carry words like the
   ones banned here in their slugs.
 - Quoted data: a hit is exempt when its span lies inside an occurrence of
-  one of the caller-supplied exempt_texts. The only exempt texts in this
-  tool are the casefile's stored claim texts: a company's own deck or site
-  words may say it "fights fraud", and the memo's claims table quotes those
-  words verbatim.
+  one of the caller-supplied exempt_texts built from the casefile's stored
+  claim texts: a company's own deck or site words may say it "fights
+  fraud", and the memo's claims table quotes those words verbatim.
+- Registry identity: the subject's registered name, previous names, and
+  officer and PSC names (registry_identity_names below) also act as
+  caller-supplied exempt_texts. They are code-verified registry data, not
+  model output, and a company whose registered name contains a banned word
+  must still be screenable honestly.
 
 Exemption scope is deliberately narrow. Model prose fields (narrative,
-rationale, questions, record notes) are gated with ZERO exemptions at the
+rationale, questions, record notes) get NO claim-quote exemption at the
 per-field gate in coldscreen.synthesis: the model references claims by id
-and never repeats their wording. Only the whole-memo backstop and the CI
-scan take exempt texts, because the code-rendered claims table quotes the
-stored claim strings verbatim. Claim texts themselves are trustworthy only
-because the claims stage verifies each one is a real substring of its
-declared source section (after normalize_for_match on both sides) before
-storing it, and scripts/check_language.py re-verifies stored claims against
-the sibling evidence files before honoring them. Occurrence discovery
+and never repeats their wording. That gate does apply the registry
+identity set, because prose has to be able to name the company and its
+people. Only the whole-memo backstop and the CI scan take claim texts,
+because the code-rendered claims table quotes the stored claim strings
+verbatim. Claim texts themselves are trustworthy only because the claims
+stage verifies each one is a real substring of its declared source section
+(after normalize_for_match on both sides) before storing it, and
+scripts/check_language.py re-verifies stored claims against the sibling
+evidence files before honoring them; the script re-verifies identity names
+against the registry evidence files the same way. Occurrence discovery
 advances by the full match length, so overlapping occurrences of a
 self-similar quote can never union into coverage of text that was never
 quoted as a whole.
@@ -38,6 +45,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # imported for typing only; language stays dependency-light
+    from .models import CaseFile
 
 BANNED_TERMS: tuple[str, ...] = (
     "fraud",
@@ -111,6 +122,23 @@ def normalize_for_match(text: str) -> str:
     """
     folded = text.translate(_QUOTE_DASH_FOLD)
     return " ".join(folded.split()).casefold()
+
+
+def registry_identity_names(casefile: CaseFile) -> tuple[str, ...]:
+    """The registry identity exemption set for one casefile.
+
+    The subject's registered name, its previous names, and the officer and
+    PSC names, deduplicated in first-seen order. These strings were fetched
+    from the registry by code (and re-validated on every casefile load), so
+    exempting their exact rendered spans cannot launder model output; the
+    CI scan additionally re-verifies them against the persisted registry
+    evidence before honoring them.
+    """
+    names: list[str] = [casefile.subject.company_name]
+    names.extend(p.name for p in casefile.subject.previous_company_names if p.name)
+    names.extend(o.name for o in casefile.officers)
+    names.extend(p.name for p in casefile.pscs if p.name)
+    return tuple(dict.fromkeys(name for name in names if name and name.strip()))
 
 
 def _exempt_spans(prose: str, exempt_texts: Iterable[str]) -> list[tuple[int, int]]:

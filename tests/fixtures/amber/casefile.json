@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "subject": {
     "company_name": "GILDED ANVIL HOLDINGS LTD",
     "company_number": "99999901",
@@ -607,7 +608,8 @@
         "datasets": []
       }
     ],
-    "skipped_reason": null
+    "skipped_reason": null,
+    "failed": false
   },
   "network": {
     "performed": true,
@@ -687,7 +689,8 @@
         "snippet": "A fictional supplier filed a claim over unpaid invoices."
       }
     ],
-    "skipped_reason": null
+    "skipped_reason": null,
+    "failed": false
   },
   "verdict": null,
   "narrative": null,

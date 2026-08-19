@@ -60,11 +60,13 @@ class Settings:
     sanctions_limit: int = 5
     # Adverse media search.
     media_results_per_query: int = 5
-    # Claims extraction inputs (stage 6). max_deck_pages caps how many deck
+    # Claims extraction inputs (stage 6). max_deck_bytes caps the deck file
+    # size, checked before any parsing; max_deck_pages caps how many deck
     # pages are read; max_claims_chars caps the combined deck-plus-site text
     # handed to the model (an explicit truncation finding records any cut);
     # max_site_response_bytes caps how much of any single site response is
     # read off the wire.
+    max_deck_bytes: int = 50_000_000
     max_deck_pages: int = 40
     max_claims_chars: int = 60000
     max_site_response_bytes: int = 2_000_000
@@ -154,6 +156,55 @@ def _target_types() -> dict[str, type]:
     return targets
 
 
+# Settings that must be strictly positive integers: page sizes, caps, and
+# counts where zero or a negative value would silently disable retrieval.
+_POSITIVE_INT_SETTINGS = (
+    "rate_limit_requests",
+    "items_per_page",
+    "max_pages_officers",
+    "max_pages_psc",
+    "max_pages_filing_history",
+    "max_pages_appointments",
+    "officer_lookback_years",
+    "wholesale_change_min",
+    "sanctions_limit",
+    "media_results_per_query",
+    "max_deck_bytes",
+    "max_deck_pages",
+    "max_claims_chars",
+    "max_site_response_bytes",
+    "ollama_num_ctx",
+)
+
+# Settings that must be strictly positive numbers.
+_POSITIVE_FLOAT_SETTINGS = (
+    "rate_limit_window_seconds",
+    "timeout_seconds",
+    "ollama_timeout_seconds",
+)
+
+
+def validate_settings(settings: Settings) -> None:
+    """Reject out-of-range values with an error naming the setting."""
+    for name in _POSITIVE_INT_SETTINGS:
+        value = getattr(settings, name)
+        if value < 1:
+            raise ValueError(f"invalid setting {name}: must be a positive integer, got {value}")
+    for name in _POSITIVE_FLOAT_SETTINGS:
+        value = getattr(settings, name)
+        if value <= 0:
+            raise ValueError(f"invalid setting {name}: must be greater than zero, got {value}")
+    if settings.cache_ttl_days < 0:
+        raise ValueError(
+            f"invalid setting cache_ttl_days: must be zero or more, got {settings.cache_ttl_days}"
+        )
+    if not 0.0 <= settings.sanctions_threshold <= 1.0:
+        raise ValueError(
+            "invalid setting sanctions_threshold: must be between 0 and 1,"
+            f" got {settings.sanctions_threshold}"
+        )
+
+
 def load_settings(
     config_file: Path | None = None,
     cli_overrides: dict[str, Any] | None = None,
@@ -163,7 +214,8 @@ def load_settings(
 
     An explicitly passed config_file must exist; the caller is expected to
     have validated that. Unknown keys in the file produce a warning on
-    stderr rather than being silently ignored.
+    stderr rather than being silently ignored. Values are validated on
+    load; a bad value raises ValueError naming the setting.
     """
     env = os.environ if environ is None else environ
     toml_path = config_file or Path("coldscreen.toml")
@@ -182,16 +234,21 @@ def load_settings(
     values: dict[str, Any] = {}
     for field in fields(Settings):
         target = targets[field.name]
-        if field.name in toml_data:
-            values[field.name] = _coerce(toml_data[field.name], target)
-        env_key = ENV_PREFIX + field.name.upper()
-        if env_key in env:
-            values[field.name] = _coerce(env[env_key], target)
+        try:
+            if field.name in toml_data:
+                values[field.name] = _coerce(toml_data[field.name], target)
+            env_key = ENV_PREFIX + field.name.upper()
+            if env_key in env:
+                values[field.name] = _coerce(env[env_key], target)
+        except ValueError as error:
+            raise ValueError(f"invalid setting {field.name}: {error}") from None
     if cli_overrides:
         for key, value in cli_overrides.items():
             if value is not None:
                 values[key] = value
-    return Settings(**values)
+    settings = Settings(**values)
+    validate_settings(settings)
+    return settings
 
 
 def api_key_from_env(environ: dict[str, str] | None = None) -> str | None:

@@ -156,3 +156,64 @@ def test_unknown_toml_keys_warn_on_stderr(
 
 def test_cache_ttl_seconds_derives_from_days() -> None:
     assert Settings(cache_ttl_days=2.0).cache_ttl_seconds == 172800.0
+
+
+# -- validation on load ------------------------------------------------------
+
+
+def test_max_deck_bytes_default_is_50_mb() -> None:
+    assert Settings().max_deck_bytes == 50_000_000
+
+
+def test_sanctions_threshold_must_be_within_zero_and_one() -> None:
+    with pytest.raises(ValueError, match="sanctions_threshold"):
+        load_settings(environ={"COLDSCREEN_SANCTIONS_THRESHOLD": "1.5"})
+    with pytest.raises(ValueError, match="sanctions_threshold"):
+        load_settings(environ={"COLDSCREEN_SANCTIONS_THRESHOLD": "-0.1"})
+    # The boundaries themselves are valid.
+    assert load_settings(environ={"COLDSCREEN_SANCTIONS_THRESHOLD": "1.0"}).sanctions_threshold
+    assert load_settings(environ={"COLDSCREEN_SANCTIONS_THRESHOLD": "0"}).sanctions_threshold == 0
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("items_per_page", "0"),
+        ("rate_limit_requests", "-1"),
+        ("max_pages_officers", "0"),
+        ("max_deck_bytes", "0"),
+        ("media_results_per_query", "0"),
+        ("ollama_num_ctx", "-5"),
+    ],
+)
+def test_positive_integer_settings_reject_zero_and_negatives(name: str, value: str) -> None:
+    with pytest.raises(ValueError, match=name):
+        load_settings(environ={f"COLDSCREEN_{name.upper()}": value})
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("timeout_seconds", "0"),
+        ("rate_limit_window_seconds", "-3"),
+        ("ollama_timeout_seconds", "0"),
+    ],
+)
+def test_positive_float_settings_reject_zero_and_negatives(name: str, value: str) -> None:
+    with pytest.raises(ValueError, match=name):
+        load_settings(environ={f"COLDSCREEN_{name.upper()}": value})
+
+
+def test_negative_cache_ttl_is_rejected_but_zero_is_allowed() -> None:
+    with pytest.raises(ValueError, match="cache_ttl_days"):
+        load_settings(environ={"COLDSCREEN_CACHE_TTL_DAYS": "-1"})
+    assert load_settings(environ={"COLDSCREEN_CACHE_TTL_DAYS": "0"}).cache_ttl_days == 0
+
+
+def test_uncoercible_value_error_names_the_setting(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="items_per_page"):
+        load_settings(environ={"COLDSCREEN_ITEMS_PER_PAGE": "many"})
+    config = tmp_path / "coldscreen.toml"
+    config.write_text('timeout_seconds = "soon"\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        load_settings(config_file=config, environ={})

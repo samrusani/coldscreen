@@ -83,16 +83,29 @@ def _normalize_page_text(raw: str | None) -> str:
     return "\n".join(line for line in lines if line)
 
 
-def extract_deck(path: Path, max_pages: int) -> DeckExtraction:
+DEFAULT_MAX_DECK_BYTES = 50_000_000
+
+
+def extract_deck(
+    path: Path, max_pages: int, max_bytes: int = DEFAULT_MAX_DECK_BYTES
+) -> DeckExtraction:
     """Read per-page text from the deck at path, capped at max_pages pages.
 
     Raises DeckError with a clean, user-facing message when the file is
-    missing, not a file, not a PDF, or encrypted.
+    missing, not a file, larger than max_bytes (checked from the file size
+    BEFORE any bytes are read or parsed), not a PDF, or encrypted.
     """
     if not path.exists():
         raise DeckError(f"deck not found: {path}")
     if not path.is_file():
         raise DeckError(f"deck is not a file: {path}")
+    size = path.stat().st_size
+    if size > max_bytes:
+        raise DeckError(
+            f"deck {path.name} is {size} bytes, over the max_deck_bytes limit of"
+            f" {max_bytes}. Oversized decks are usually image-heavy exports;"
+            " export a smaller PDF or raise max_deck_bytes deliberately."
+        )
     try:
         deck_bytes = path.read_bytes()
     except OSError as error:

@@ -265,6 +265,101 @@ def test_check_language_ignores_a_corrupt_sibling_casefile(tmp_path: Path) -> No
     assert module.main([str(memo)]) == 1
 
 
+# -- the registry identity exemption ----------------------------------------------
+
+
+def _write_registry_evidence(case_dir: Path, company_name: str, officer_name: str) -> None:
+    evidence_dir = case_dir / "evidence"
+    evidence_dir.mkdir(exist_ok=True)
+    (evidence_dir / "registry_profile.json").write_text(
+        json.dumps(
+            {
+                "name": "registry_profile",
+                "url": "https://api.company-information.service.gov.uk/company/99999998",
+                "body": {
+                    "company_name": company_name,
+                    "company_number": "99999998",
+                    "previous_company_names": [{"name": "OLD SHAM NAME LTD"}],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (evidence_dir / "officers_p1.json").write_text(
+        json.dumps(
+            {
+                "name": "officers_p1",
+                "url": "https://api.company-information.service.gov.uk/company/99999998/officers",
+                "body": {"items": [{"name": officer_name}]},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_identity_casefile(case_dir: Path, company_name: str, officer_name: str) -> None:
+    (case_dir / "casefile.json").write_text(
+        json.dumps(
+            {
+                "subject": {
+                    "company_name": company_name,
+                    "previous_company_names": [{"name": "OLD SHAM NAME LTD"}],
+                },
+                "officers": [{"name": officer_name}],
+                "pscs": [],
+                "claims": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_check_language_honors_evidence_verified_identity_names(tmp_path: Path) -> None:
+    """A registered name carrying a banned word passes only when the
+    sibling registry evidence proves the register really spells it that
+    way; the same word outside the name spans still hits."""
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text(
+        "# Screening memo: TOTAL SHAM TRADING LTD\n"
+        "| CROOK, Cuthbert | director |\n"
+        "Previously OLD SHAM NAME LTD.\n",
+        encoding="utf-8",
+    )
+    # No casefile: full strictness.
+    assert module.main([str(memo)]) == 1
+    # Casefile alone is not enough: it is an editable file.
+    _write_identity_casefile(case_dir, "TOTAL SHAM TRADING LTD", "CROOK, Cuthbert")
+    assert module.main([str(memo)]) == 1
+    # With registry evidence carrying the same names, the memo verifies.
+    _write_registry_evidence(case_dir, "TOTAL SHAM TRADING LTD", "CROOK, Cuthbert")
+    assert module.main([str(memo)]) == 0
+    # Prose outside the exact name spans stays gated.
+    memo.write_text(
+        "# Screening memo: TOTAL SHAM TRADING LTD\nThis is a sham operation.\n",
+        encoding="utf-8",
+    )
+    assert module.main([str(memo)]) == 1
+
+
+def test_check_language_ignores_an_identity_name_the_evidence_does_not_carry(
+    tmp_path: Path,
+) -> None:
+    """A hand-added officer name buys no exemption when the registry
+    evidence never returned it."""
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text("| CROOK, Cuthbert | director |\n", encoding="utf-8")
+    _write_identity_casefile(case_dir, "PLAIN TRADING LTD", "CROOK, Cuthbert")
+    # Evidence carries the company but a DIFFERENT officer name.
+    _write_registry_evidence(case_dir, "PLAIN TRADING LTD", "HONEST, Henrietta")
+    assert module.main([str(memo)]) == 1
+
+
 def test_memo_with_banned_word_in_media_url_slug_passes() -> None:
     """The rendered media section may cite URLs whose slugs carry banned
     vocabulary; the memo's own prose stays gated."""

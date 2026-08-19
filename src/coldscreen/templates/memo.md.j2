@@ -163,6 +163,8 @@ Dataset {{ c.sanctions.dataset }}, threshold {{ c.sanctions.threshold }}, algori
 {% for r in c.sanctions.results %}
 | {{ r.subject }} | {{ r.kind }} | {{ "%.2f"|format(r.top_score) if r.top_score is not none else "no candidates" }} | {{ "match at or above threshold" if r.matched else "below threshold" }} |
 {% endfor %}
+{% elif c.sanctions and c.sanctions.failed %}
+Attempted and FAILED: {{ c.sanctions.skipped_reason }}. A failed stage is loudly recorded data, never a clean result. See finding SAN-999.
 {% elif c.sanctions %}
 Not performed: {{ c.sanctions.skipped_reason }}. Absence of screening is data, not a clean result. See finding SAN-000.
 {% else %}
@@ -218,6 +220,8 @@ Network expansion was not part of this casefile.
 {% else %}
 The adverse media search returned no results in any query category.
 {% endif %}
+{% elif c.media and c.media.failed %}
+Attempted and FAILED: {{ c.media.skipped_reason }}. {{ c.media.items|length }} result(s) gathered before the failure are preserved in the casefile and evidence. A failed stage is loudly recorded data, never a zero-result search. See finding MED-999.
 {% elif c.media %}
 Not performed: {{ c.media.skipped_reason }}. See finding MED-000.
 {% else %}

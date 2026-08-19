@@ -100,6 +100,9 @@ def prompt_version(prompt_text: str) -> str:
 def build_claims_schema(source_labels: list[str]) -> dict[str, Any]:
     """The output schema, with source constrained to the labels on offer."""
     return {
+        # Stage-specific schema name for providers that need one (OpenAI);
+        # a standard JSON Schema annotation, ignored everywhere else.
+        "title": "coldscreen_claims",
         "type": "object",
         "additionalProperties": False,
         "required": ["claims"],
@@ -437,6 +440,33 @@ def _site_findings(result: ClaimsStageResult, site: SiteFetchResult, now: ClockF
                     + ". Disallowed paths are never fetched."
                 ),
                 evidence=robots_evidence,
+            )
+        )
+    if site.blocked_redirects:
+        blocked_records = [
+            n.record
+            for n in site.records
+            if isinstance(n.record.body, dict)
+            and n.record.body.get("kind") in {"site_blocked_redirect", "site_blocked"}
+        ]
+        blocked_evidence = [
+            Evidence(source_url=r.url, retrieved_at=r.retrieved_at, excerpt="blocked redirect")
+            for r in blocked_records[:5]
+        ] or evidence
+        result.findings.append(
+            Finding(
+                id="EXT-008",
+                stage=STAGE,
+                severity="info",
+                confidence="confirmed",
+                statement=(
+                    f"Site fetch refused {len(site.blocked_redirects)} redirect(s):"
+                    " a redirect is followed only to the same host (an https"
+                    " upgrade or a www variant). The refused chain is recorded in"
+                    " the evidence; nothing was fetched from the redirect target,"
+                    " so no claims can come from it."
+                ),
+                evidence=blocked_evidence,
             )
         )
 

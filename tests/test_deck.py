@@ -70,6 +70,22 @@ def test_page_cap_truncates_and_flags() -> None:
     assert extraction.truncated_pages is True
 
 
+def test_oversized_deck_is_a_clean_error_before_parsing(tmp_path: Path) -> None:
+    """The size gate fires from the file size alone, before any bytes are
+    parsed: the oversized file here is not even a PDF and the error still
+    names max_deck_bytes, never a parse failure."""
+    huge = tmp_path / "huge.pdf"
+    huge.write_bytes(b"x" * 2048)
+    with pytest.raises(DeckError, match="max_deck_bytes"):
+        extract_deck(huge, max_pages=40, max_bytes=1024)
+
+
+def test_deck_at_the_size_limit_is_accepted() -> None:
+    size = DECK_PATH.stat().st_size
+    extraction = extract_deck(DECK_PATH, max_pages=40, max_bytes=size)
+    assert extraction.page_count == 3
+
+
 def test_missing_deck_is_a_clean_error(tmp_path: Path) -> None:
     with pytest.raises(DeckError, match="not found"):
         extract_deck(tmp_path / "absent.pdf", max_pages=40)

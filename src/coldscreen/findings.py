@@ -17,12 +17,15 @@ from typing import Literal
 from .ch_client import FetchRecord
 from .config import Settings
 from .models import Evidence, Finding
+from .rubric import INSOLVENCY_STATUS_FAMILY, NOT_ACTIVE_STATUSES
 from .stages.registry import RegistryResult, split_officers
 
 STAGE = "registry"
 
-RED_STATUSES = {"liquidation", "receivership", "administration", "insolvency-proceedings"}
-AMBER_STATUSES = {"dissolved"}
+# Status severity mirrors the rubric families: insolvency states are red
+# (the R2 status leg), non-active non-insolvency states are amber (A7).
+RED_STATUSES = INSOLVENCY_STATUS_FAMILY
+AMBER_STATUSES = NOT_ACTIVE_STATUSES
 
 
 def _evidence(record: FetchRecord, excerpt: str | None = None) -> list[Evidence]:
@@ -54,12 +57,14 @@ def build_findings(result: RegistryResult, settings: Settings, today: date) -> l
     profile = result.profile
     profile_record = result.profile_record
 
-    # REG-001 company status
+    # REG-001 company status. Severity matching is casefolded so a
+    # mixed-case registry value cannot silently miss the family sets; the
+    # statement keeps the registry's own spelling.
     status = (profile.company_status or "unknown").strip() or "unknown"
     severity: Literal["red", "amber", "info"]
-    if status in RED_STATUSES:
+    if status.casefold() in RED_STATUSES:
         severity = "red"
-    elif status in AMBER_STATUSES:
+    elif status.casefold() in AMBER_STATUSES:
         severity = "amber"
     else:
         severity = "info"
@@ -458,6 +463,34 @@ def build_findings(result: RegistryResult, settings: Settings, today: date) -> l
                 evidence=_evidence(
                     psc_record,
                     f"retrieved={len(result.pscs)} total={result.pscs_total}",
+                ),
+            )
+        )
+
+    # REG-015 charges truncation. The charges endpoint documents no
+    # pagination parameters, so retrieval is a single page; when the
+    # register reports more charges than that page carried, the gap is
+    # recorded explicitly instead of passing as a complete list.
+    if (
+        result.charges is not None
+        and result.charges_total is not None
+        and result.charges_total > len(result.charges)
+    ):
+        charges_truncation_record = result.first_record("charges") or profile_record
+        findings.append(
+            Finding(
+                id="REG-015",
+                stage=STAGE,
+                severity="info",
+                confidence="confirmed",
+                statement=(
+                    f"The charges list is truncated: retrieved {len(result.charges)}"
+                    f" of {result.charges_total} charge(s). The charges endpoint"
+                    " documents no pagination, so only the first page was retrieved."
+                ),
+                evidence=_evidence(
+                    charges_truncation_record,
+                    f"retrieved={len(result.charges)} total={result.charges_total}",
                 ),
             )
         )

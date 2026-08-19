@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "subject": {
     "company_name": "FABRICATED WIDGETS LTD",
     "company_number": "99999999",
@@ -614,7 +615,8 @@
     "dataset_release": null,
     "endpoint": null,
     "results": [],
-    "skipped_reason": "no OpenSanctions key or endpoint configured"
+    "skipped_reason": "no OpenSanctions key or endpoint configured",
+    "failed": false
   },
   "network": {
     "performed": true,
@@ -680,7 +682,8 @@
     "category_counts": {},
     "category_counts_deduped": {},
     "items": [],
-    "skipped_reason": "no search API key configured"
+    "skipped_reason": "no search API key configured",
+    "failed": false
   },
   "verdict": {
     "level": "red",
@@ -703,7 +706,7 @@
   "synthesis": {
     "provider": "ollama",
     "model": "fake-model:1b",
-    "prompt_version": "3",
+    "prompt_version": "4",
     "parse_retries": 0,
     "language_retries": 0,
     "enforcement_notes": [],

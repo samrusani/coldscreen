@@ -8,12 +8,19 @@ re-runs synthesis, including re-assessment of the STORED claims, from the
 stored casefile with no refetching and no re-extraction, or just re-renders
 with --render-only.
 
+Stage failure posture: a sanctions or media stage that fails after retries
+no longer aborts the run. The case directory is written with everything
+gathered, the failure is a distinct finding, synthesis proceeds over what
+exists, and the CLI exits 1 naming the failed stage. Absence is data;
+failure is loudly recorded data.
+
 Exit codes: 0 success, 1 error, 3 ambiguous company match that needs a
 company number. Code 2 is left to typer for usage errors.
 """
 
 from __future__ import annotations
 
+import shutil
 import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -49,8 +56,8 @@ from .config import (
 from .deck import DeckError, DeckExtraction, extract_deck
 from .findings import build_findings
 from .http_cache import HttpCache
-from .language import find_banned_terms
-from .media import MediaSearchError, MediaStageResult, TavilyProvider, run_media
+from .language import find_banned_terms, registry_identity_names
+from .media import MediaStageResult, TavilyProvider, run_media
 from .models import CaseFile
 from .providers import (
     ModelProvider,
@@ -59,7 +66,7 @@ from .providers import (
     parse_model_spec,
 )
 from .render import render_memo
-from .sanctions import SanctionsError, SanctionsStageResult, run_sanctions
+from .sanctions import SanctionsStageResult, run_sanctions
 from .site import SiteError, SiteFetchResult, fetch_site, validate_site_url
 from .stages.network import NetworkStageResult, run_network_expansion
 from .stages.registry import NamedRecord, RegistryResult, run_registry_pass, split_officers
@@ -83,6 +90,27 @@ MODEL_OPTION_HELP = (
     " openai:gpt-5.6-sol, or ollama:qwen2.5:7b (the split is on the first"
     " colon). Overrides COLDSCREEN_MODEL and coldscreen.toml."
 )
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"coldscreen {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            help="Print the coldscreen version and exit.",
+            callback=_version_callback,
+            is_eager=True,
+        ),
+    ] = False,
+) -> None:
+    """First-pass screening memos for UK companies from public registry data."""
 
 
 def _is_interactive() -> bool:
@@ -147,6 +175,17 @@ def _clock(frozen: datetime | None) -> Callable[[], datetime]:
     return lambda: datetime.now(UTC)
 
 
+def _load_settings_or_exit(
+    config_file: Path | None, cli_overrides: dict[str, str | None] | None
+) -> Settings:
+    """Load settings; a bad value is a clean configuration error, exit 1."""
+    try:
+        return load_settings(config_file, cli_overrides)
+    except ValueError as error:
+        typer.echo(f"Configuration error: {error}", err=True)
+        raise typer.Exit(code=1) from None
+
+
 def _prepare_provider(
     settings: Settings, cli_model: str | None
 ) -> tuple[ModelProvider, str, str] | None:
@@ -168,18 +207,32 @@ def _prepare_provider(
     return provider, provider_name, model_name
 
 
+def _close_provider(prepared: tuple[ModelProvider, str, str] | None) -> None:
+    """Close the provider's transport when it has one. Always in a finally."""
+    if prepared is None:
+        return
+    close = getattr(prepared[0], "close", None)
+    if callable(close):
+        close()
+
+
 def _enforce_language_backstop(memo: str, casefile: CaseFile) -> None:
     """Whole-memo language gate: the last line of defense before disk.
 
     Every rendered memo passes through here on every path (screen, rerun,
     and the synthesis-failure memo). The per-field gate on model output
     already ran; this catches banned vocabulary arriving through any other
-    channel. The casefile's stored claim texts are the one exemption: they
-    are the company's own quoted words and render verbatim in the claims
-    table. On a hit nothing is written and the error reports a count only:
-    the terms themselves never reach the output either.
+    channel. Two exemptions, both spans of code-verified data: the
+    casefile's stored claim texts (the company's own quoted words in the
+    claims table) and the registry identity names (registered name,
+    previous names, officer and PSC names), which are registry data the
+    memo must be able to spell out. On a hit nothing is written and the
+    error reports a count only: the terms themselves never reach the
+    output either.
     """
-    exempt_texts = tuple(claim.text for claim in casefile.claims)
+    exempt_texts = tuple(claim.text for claim in casefile.claims) + registry_identity_names(
+        casefile
+    )
     count = len(find_banned_terms(memo, exempt_texts))
     if count:
         typer.echo(
@@ -280,6 +333,16 @@ def screen(
         str | None,
         typer.Option("--output-dir", help="Directory that receives case directories."),
     ] = None,
+    overwrite: Annotated[
+        bool,
+        typer.Option(
+            "--overwrite",
+            help=(
+                "Replace an existing case directory for this company. Without"
+                " it, screening into an existing case directory is an error."
+            ),
+        ),
+    ] = False,
     config_file: Annotated[
         Path | None,
         typer.Option(
@@ -296,7 +359,7 @@ def screen(
     Exit codes: 0 success, 1 error, 3 ambiguous match (pass a company number).
     """
     load_dotenv_if_present()
-    settings = load_settings(config_file, {"output_dir": output_dir})
+    settings = _load_settings_or_exit(config_file, {"output_dir": output_dir})
     api_key = api_key_from_env()
     if api_key is None:
         typer.echo(
@@ -312,6 +375,36 @@ def screen(
         typer.echo(f"Model configuration error: {error}", err=True)
         raise typer.Exit(code=1) from None
 
+    try:
+        _screen_with_provider(
+            query=query,
+            settings=settings,
+            api_key=api_key,
+            prepared=prepared,
+            deck=deck,
+            site=site,
+            json_output=json_output,
+            overwrite=overwrite,
+        )
+    finally:
+        _close_provider(prepared)
+
+
+def _screen_with_provider(
+    query: str,
+    settings: Settings,
+    api_key: str,
+    prepared: tuple[ModelProvider, str, str] | None,
+    deck: Path | None,
+    site: str | None,
+    json_output: bool,
+    overwrite: bool,
+) -> None:
+    """The screen flow once configuration and the provider are resolved.
+
+    Split out so the caller can close the provider in a finally that covers
+    every exit path, early errors included.
+    """
     if (deck is not None or site is not None) and prepared is None:
         typer.echo(
             "Claims extraction needs a model: --deck and --site turn deck and"
@@ -332,12 +425,15 @@ def screen(
     frozen = fixed_now()
     now = _clock(frozen)
 
-    # The deck is read BEFORE any fetching: a missing, unreadable, encrypted,
-    # or non-PDF deck fails fast instead of after the API budget is spent.
+    # The deck is read BEFORE any fetching: a missing, unreadable, oversized,
+    # encrypted, or non-PDF deck fails fast instead of after the API budget
+    # is spent.
     deck_extraction: DeckExtraction | None = None
     if deck is not None:
         try:
-            deck_extraction = extract_deck(deck, max_pages=settings.max_deck_pages)
+            deck_extraction = extract_deck(
+                deck, max_pages=settings.max_deck_pages, max_bytes=settings.max_deck_bytes
+            )
         except DeckError as error:
             typer.echo(f"Deck error: {error}", err=True)
             raise typer.Exit(code=1) from None
@@ -382,6 +478,19 @@ def screen(
             typer.echo(f"Company {company_number} was not found on the register.", err=True)
             raise typer.Exit(code=1) from None
 
+        # Overwrite protection, checked as soon as the canonical name and
+        # number are known and before the paid screening stages run.
+        case_dir = Path(settings.output_dir) / case_dir_name(
+            registry.profile.company_name, company_number
+        )
+        if case_dir.exists() and not overwrite:
+            typer.echo(
+                f"Case directory already exists: {case_dir}. Pass --overwrite"
+                " to replace it, or move the existing directory aside.",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
         today = now().date()
         current_officers, _resigned = split_officers(
             registry.officers, today, settings.officer_lookback_years
@@ -415,23 +524,22 @@ def screen(
         client.close()
         cache.close()
 
-    try:
-        sanctions = run_sanctions(
-            registry.profile,
-            current_officers,
-            registry.pscs or [],
-            settings,
-            api_key=opensanctions_key_from_env(),
-            base_url=opensanctions_base_url_from_env(),
-            now=now,
-        )
-    except SanctionsError as error:
-        typer.echo(
-            f"Sanctions screening failed: {error} The screen was aborted so the"
-            " absence of screening cannot pass silently.",
-            err=True,
-        )
-        raise typer.Exit(code=1) from None
+    # Sanctions and media failures after retries do not abort the run: the
+    # stage records the failure as a finding, the run continues to
+    # persistence, and the exit code goes to 1 with the stage named below.
+    stage_failures: list[tuple[str, str]] = []
+
+    sanctions = run_sanctions(
+        registry.profile,
+        current_officers,
+        registry.pscs or [],
+        settings,
+        api_key=opensanctions_key_from_env(),
+        base_url=opensanctions_base_url_from_env(),
+        now=now,
+    )
+    if sanctions.failed_reason is not None:
+        stage_failures.append(("sanctions screening", sanctions.failed_reason))
 
     tavily_key = tavily_key_from_env()
     search_provider: TavilyProvider | None = None
@@ -448,12 +556,11 @@ def screen(
             results_per_query=settings.media_results_per_query,
             now=now,
         )
-    except MediaSearchError as error:
-        typer.echo(f"Adverse media search failed: {error}", err=True)
-        raise typer.Exit(code=1) from None
     finally:
         if search_provider is not None:
             search_provider.close()
+    if media.failed_reason is not None:
+        stage_failures.append(("adverse media search", media.failed_reason))
 
     site_result: SiteFetchResult | None = None
     if site is not None:
@@ -465,7 +572,7 @@ def screen(
         )
 
     synthesis_failure: str | None = None
-    exit_code = 0
+    exit_code = 1 if stage_failures else 0
     try:
         claims_stage = run_claims_stage(
             registry.profile,
@@ -509,9 +616,11 @@ def screen(
 
     memo = render_memo(casefile, synthesis_failure=synthesis_failure)
     _enforce_language_backstop(memo, casefile)
-    case_dir = Path(settings.output_dir) / case_dir_name(
-        casefile.subject.company_name, casefile.subject.company_number
-    )
+    if overwrite and (case_dir / "evidence").is_dir():
+        # Replacing a case: stale evidence files from the previous run must
+        # not linger next to the new index. Only the tool-owned evidence
+        # directory is cleared; anything else in the directory is left alone.
+        shutil.rmtree(case_dir / "evidence")
     records = (
         list(registry.records)
         + network.records
@@ -523,6 +632,13 @@ def screen(
         records.insert(0, NamedRecord("search_companies", resolution.search_record))
     write_case(case_dir, casefile, records, memo)
     typer.echo(f"Case directory written: {case_dir}", err=json_output)
+    for stage_name, reason in stage_failures:
+        typer.echo(
+            f"The {stage_name} stage FAILED after retries: {reason}\n"
+            "The run continued and the failure is recorded in the case"
+            " directory findings.",
+            err=True,
+        )
     if synthesis_failure is not None:
         typer.echo(
             f"Synthesis failed: {synthesis_failure}\n"
@@ -577,7 +693,7 @@ def rerun(
     re-rendered. Fully offline except for the model call itself.
     """
     load_dotenv_if_present()
-    settings = load_settings(config_file, None)
+    settings = _load_settings_or_exit(config_file, None)
     casefile_path = case_dir / "casefile.json"
     try:
         casefile = load_casefile(case_dir)
@@ -606,26 +722,29 @@ def rerun(
                 err=True,
             )
 
-    synthesized = False
-    if prepared is not None:
-        provider, provider_name, model_name = prepared
-        try:
-            result = synthesize(casefile, provider, provider_name, model_name)
-        except (SynthesisError, ProviderError) as error:
-            typer.echo(f"Synthesis failed: {error}", err=True)
-            typer.echo("The existing casefile and memo were left untouched.", err=True)
-            raise typer.Exit(code=1) from None
-        casefile = apply_synthesis(casefile, result)
-        synthesized = True
+    try:
+        synthesized = False
+        if prepared is not None:
+            provider, provider_name, model_name = prepared
+            try:
+                result = synthesize(casefile, provider, provider_name, model_name)
+            except (SynthesisError, ProviderError) as error:
+                typer.echo(f"Synthesis failed: {error}", err=True)
+                typer.echo("The existing casefile and memo were left untouched.", err=True)
+                raise typer.Exit(code=1) from None
+            casefile = apply_synthesis(casefile, result)
+            synthesized = True
 
-    # Render and gate the memo BEFORE touching any file, so a backstop hit
-    # leaves the existing casefile and memo exactly as they were.
-    memo = render_memo(casefile)
-    _enforce_language_backstop(memo, casefile)
-    if synthesized:
-        casefile_path.write_text(casefile.model_dump_json(indent=2) + "\n", encoding="utf-8")
-    (case_dir / "memo.md").write_text(memo, encoding="utf-8")
-    typer.echo(f"Memo re-rendered: {case_dir / 'memo.md'}")
+        # Render and gate the memo BEFORE touching any file, so a backstop hit
+        # leaves the existing casefile and memo exactly as they were.
+        memo = render_memo(casefile)
+        _enforce_language_backstop(memo, casefile)
+        if synthesized:
+            casefile_path.write_text(casefile.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        (case_dir / "memo.md").write_text(memo, encoding="utf-8")
+        typer.echo(f"Memo re-rendered: {case_dir / 'memo.md'}")
+    finally:
+        _close_provider(prepared)
 
 
 def main() -> None:

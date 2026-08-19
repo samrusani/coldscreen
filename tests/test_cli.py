@@ -31,10 +31,17 @@ EXPECTED_MEMO = FIXTURE_CASE_DIR / "memo.md"
 runner = CliRunner()
 
 
-def load_synthesis_json(name: str) -> str:
-    """A recorded synthesis response document as a compact JSON string."""
-    raw = (FIXTURES_DIR / name / "synthesis_response.json").read_text(encoding="utf-8")
-    return json.dumps(json.loads(raw))
+def neutral_synthesis_json(level: str = "green") -> str:
+    """A canned synthesis response with casefile-neutral prose.
+
+    The snapshot fixtures' recorded responses describe THEIR casefile's
+    stages ("sanctions screening ran and returned no candidates"), which is
+    a stage-honesty violation when replayed against the fixture company,
+    whose sanctions and media stages never run. These CLI tests exercise
+    plumbing and enforcement, so they use prose that asserts nothing about
+    any stage.
+    """
+    return synthesis_json(level)
 
 
 def all_output(result: Result) -> str:
@@ -101,6 +108,7 @@ def test_screen_writes_the_full_case_directory(
     casefile = CaseFile.model_validate_json(
         (case_dir / "casefile.json").read_text(encoding="utf-8")
     )
+    assert casefile.schema_version == 1
     assert casefile.subject.company_number == "99999999"
     assert casefile.verdict is None
     assert casefile.claims == []
@@ -143,8 +151,22 @@ def test_screen_json_flag_prints_the_casefile(
     mock_company_routes(respx_mock)
     result = runner.invoke(app, ["screen", "Fabricated Widgets Ltd", "--json"])
     assert result.exit_code == 0, result.output
+    assert '"schema_version": 1' in result.output
     assert '"company_number": "99999999"' in result.output
     assert '"verdict": null' in result.output
+
+
+def test_out_of_range_setting_is_a_clean_configuration_error(
+    screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("COLDSCREEN_SANCTIONS_THRESHOLD", "1.5")
+    result = runner.invoke(app, ["screen", "99999999"])
+    assert result.exit_code == 1
+    combined = all_output(result)
+    assert "Configuration error" in combined
+    assert "sanctions_threshold" in combined
+    assert "Traceback" not in combined
+    assert not (screen_env / "cases").exists()
 
 
 def test_json_stdout_is_pure_json(screen_env: Path, respx_mock: respx.MockRouter) -> None:
@@ -215,6 +237,225 @@ def test_interactive_picker_zero_aborts(
     monkeypatch.setattr(coldscreen.cli, "_is_interactive", lambda: True)
     result = runner.invoke(app, ["screen", "Fabricated Widgets"], input="0\n")
     assert result.exit_code == 3
+
+
+def test_provider_transport_is_closed_after_rerun_with_model(
+    tmp_path: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The provider's transport is closed in a finally, success or not."""
+    closed: list[str] = []
+
+    class ClosingFakeProvider:
+        def complete(self, system: str, messages: object, json_schema: object = None) -> str:
+            return neutral_synthesis_json("green")
+
+        def close(self) -> None:
+            closed.append("closed")
+
+    monkeypatch.setattr(
+        coldscreen.cli,
+        "_prepare_provider",
+        lambda settings, cli_model: (ClosingFakeProvider(), "fake", "canned"),
+    )
+    case_dir = tmp_path / "case-fabricated-widgets-ltd-99999999"
+    shutil.copytree(FIXTURE_CASE_DIR, case_dir)
+    result = runner.invoke(app, ["rerun", str(case_dir), "--model", "fake:canned"])
+    assert result.exit_code == 0, result.output
+    assert closed == ["closed"]
+
+
+def test_provider_transport_is_closed_when_synthesis_fails(
+    tmp_path: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    closed: list[str] = []
+
+    class FailingFakeProvider:
+        def complete(self, system: str, messages: object, json_schema: object = None) -> str:
+            return "not json at all"
+
+        def close(self) -> None:
+            closed.append("closed")
+
+    monkeypatch.setattr(
+        coldscreen.cli,
+        "_prepare_provider",
+        lambda settings, cli_model: (FailingFakeProvider(), "fake", "canned"),
+    )
+    case_dir = tmp_path / "case-fabricated-widgets-ltd-99999999"
+    shutil.copytree(FIXTURE_CASE_DIR, case_dir)
+    result = runner.invoke(app, ["rerun", str(case_dir), "--model", "fake:canned"])
+    assert result.exit_code == 1
+    assert closed == ["closed"]
+
+
+def test_version_flag_prints_the_version_and_exits_zero() -> None:
+    from coldscreen import __version__
+
+    result = runner.invoke(app, ["--version"])
+    assert result.exit_code == 0
+    assert f"coldscreen {__version__}" in result.output
+
+
+def test_output_dir_flag_moves_the_case_directory(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    mock_company_routes(respx_mock)
+    result = runner.invoke(app, ["screen", "99999999", "--output-dir", "elsewhere"])
+    assert result.exit_code == 0, result.output
+    assert (screen_env / "elsewhere" / "fabricated-widgets-ltd-99999999" / "memo.md").is_file()
+    assert not (screen_env / "cases").exists()
+
+
+def test_empty_search_results_exit_one_with_a_clear_message(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    respx_mock.get("https://api.company-information.service.gov.uk/search/companies").respond(
+        200, json={"total_results": 0, "items": []}
+    )
+    result = runner.invoke(app, ["screen", "Nonexistent Fictional Widgets"])
+    assert result.exit_code == 1
+    assert "No companies matched" in all_output(result)
+    assert not (screen_env / "cases").exists()
+
+
+def test_profile_404_for_a_company_number_exits_one(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    respx_mock.get("https://api.company-information.service.gov.uk/company/99999999").respond(
+        404, json={"error": "company-profile-not-found"}
+    )
+    result = runner.invoke(app, ["screen", "99999999"])
+    assert result.exit_code == 1
+    assert "was not found on the register" in all_output(result)
+    assert not (screen_env / "cases").exists()
+
+
+def test_screening_into_an_existing_case_directory_is_an_error(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    mock_company_routes(respx_mock)
+    first = runner.invoke(app, ["screen", "99999999"])
+    assert first.exit_code == 0, first.output
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    marker = (case_dir / "memo.md").read_bytes()
+
+    second = runner.invoke(app, ["screen", "99999999"])
+    assert second.exit_code == 1
+    assert "already exists" in all_output(second)
+    assert "--overwrite" in all_output(second)
+    # Nothing was touched.
+    assert (case_dir / "memo.md").read_bytes() == marker
+
+
+def test_overwrite_flag_replaces_the_case_directory_and_clears_stale_evidence(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    mock_company_routes(respx_mock)
+    first = runner.invoke(app, ["screen", "99999999"])
+    assert first.exit_code == 0, first.output
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    stale = case_dir / "evidence" / "stale_leftover.json"
+    stale.write_text("{}", encoding="utf-8")
+    user_note = case_dir / "my-notes.txt"
+    user_note.write_text("keep me", encoding="utf-8")
+
+    second = runner.invoke(app, ["screen", "99999999", "--overwrite"])
+    assert second.exit_code == 0, second.output
+    assert not stale.exists()  # tool-owned evidence dir is replaced wholesale
+    assert user_note.read_text(encoding="utf-8") == "keep me"  # user files survive
+    assert (case_dir / "memo.md").is_file()
+
+
+def test_sanctions_stage_failure_keeps_the_case_directory_and_exits_one(
+    screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Failure posture end to end: a sanctions endpoint that 401s does not
+    abort the run. The case directory is written with everything gathered,
+    SAN-999 records the failure, and the CLI exits 1 naming the stage."""
+    mock_company_routes(respx_mock)
+    monkeypatch.setenv("OPENSANCTIONS_API_KEY", "fixture-opensanctions-key-not-real")
+    respx_mock.post("https://api.opensanctions.org/match/default").respond(401)
+    result = runner.invoke(app, ["screen", "99999999"])
+    assert result.exit_code == 1
+    combined = all_output(result)
+    assert "sanctions screening stage FAILED after retries" in combined
+    assert "Traceback" not in combined
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    assert (case_dir / "memo.md").is_file()
+    assert (case_dir / "evidence" / "sanctions_failed.json").is_file()
+    casefile = CaseFile.model_validate_json(
+        (case_dir / "casefile.json").read_text(encoding="utf-8")
+    )
+    assert casefile.sanctions is not None
+    assert casefile.sanctions.failed is True
+    assert any(f.id == "SAN-999" for f in casefile.findings)
+    memo = (case_dir / "memo.md").read_text(encoding="utf-8")
+    assert "Attempted and FAILED" in memo
+    assert "SAN-999" in memo
+
+
+def test_media_stage_failure_keeps_gathered_results_and_exits_one(
+    screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The media stage fails on the second query: the first query's results
+    are kept, MED-999 records the failure, the run exits 1."""
+    mock_company_routes(respx_mock)
+    monkeypatch.setenv("TAVILY_API_KEY", "tvly-fixture-key-not-real")
+    tavily = respx_mock.post("https://api.tavily.com/search")
+    tavily.side_effect = [
+        httpx.Response(
+            200,
+            json={
+                "query": "q1",
+                "results": [
+                    {
+                        "title": "A fictional story",
+                        "url": "https://fictional-gazette.example/story",
+                        "content": "Fictional content.",
+                        "published_date": "2026-05-01",
+                    }
+                ],
+            },
+        ),
+        httpx.Response(401),
+    ]
+    result = runner.invoke(app, ["screen", "99999999"])
+    assert result.exit_code == 1
+    combined = all_output(result)
+    assert "adverse media search stage FAILED after retries" in combined
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    casefile = CaseFile.model_validate_json(
+        (case_dir / "casefile.json").read_text(encoding="utf-8")
+    )
+    assert casefile.media is not None
+    assert casefile.media.failed is True
+    assert len(casefile.media.items) == 1  # gathered before the failure, kept
+    assert any(f.id == "MED-999" for f in casefile.findings)
+    memo = (case_dir / "memo.md").read_text(encoding="utf-8")
+    assert "MED-999" in memo
+    assert "1 result(s) gathered before the failure" in memo
+
+
+def test_stage_failure_still_runs_synthesis_over_what_exists(
+    screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Synthesis proceeds over the partial casefile; the exit code stays 1
+    because a stage failed, even though synthesis itself succeeded."""
+    mock_company_routes(respx_mock)
+    monkeypatch.setenv("OPENSANCTIONS_API_KEY", "fixture-opensanctions-key-not-real")
+    monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
+    respx_mock.post("https://api.opensanctions.org/match/default").respond(401)
+    respx_mock.post(OLLAMA_CHAT_URL).respond(
+        200, json=ollama_reply(neutral_synthesis_json("green"))
+    )
+    result = runner.invoke(app, ["screen", "99999999"])
+    assert result.exit_code == 1
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    casefile = CaseFile.model_validate_json(
+        (case_dir / "casefile.json").read_text(encoding="utf-8")
+    )
+    assert casefile.verdict is not None  # synthesis ran over what exists
+    assert casefile.verdict.level == "amber"  # A1 and A2 candidates enforced
 
 
 def test_missing_api_key_is_a_clear_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -383,7 +624,7 @@ def test_screen_with_ollama_model_synthesizes_and_enforces(
     mock_company_routes(respx_mock)
     monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
     route = respx_mock.post(OLLAMA_CHAT_URL).respond(
-        200, json=ollama_reply(load_synthesis_json("green"))
+        200, json=ollama_reply(neutral_synthesis_json("green"))
     )
     result = runner.invoke(app, ["screen", "Fabricated Widgets Ltd"])
     assert result.exit_code == 0, result.output
@@ -427,7 +668,7 @@ def test_ollama_think_setting_reaches_the_request_body(
     monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
     monkeypatch.setenv("COLDSCREEN_OLLAMA_THINK", "false")
     route = respx_mock.post(OLLAMA_CHAT_URL).respond(
-        200, json=ollama_reply(load_synthesis_json("green"))
+        200, json=ollama_reply(neutral_synthesis_json("green"))
     )
     result = runner.invoke(app, ["screen", "Fabricated Widgets Ltd"])
     assert result.exit_code == 0, result.output
@@ -509,7 +750,7 @@ def test_rerun_with_model_resynthesizes_without_refetching(
     case_dir = tmp_path / "case-fabricated-widgets-ltd-99999999"
     shutil.copytree(FIXTURE_CASE_DIR, case_dir)
     route = respx_mock.post(OLLAMA_CHAT_URL).respond(
-        200, json=ollama_reply(load_synthesis_json("green"))
+        200, json=ollama_reply(neutral_synthesis_json("green"))
     )
     result = runner.invoke(app, ["rerun", str(case_dir), "--model", "ollama:fake-model:1b"])
     assert result.exit_code == 0, result.output
@@ -750,7 +991,9 @@ def test_language_backstop_on_rerun_with_model_leaves_files_untouched(
     shutil.copytree(FIXTURE_CASE_DIR, case_dir)
     poisoned = _poison_casefile(case_dir)
     before_memo = (case_dir / "memo.md").read_bytes()
-    respx_mock.post(OLLAMA_CHAT_URL).respond(200, json=ollama_reply(load_synthesis_json("green")))
+    respx_mock.post(OLLAMA_CHAT_URL).respond(
+        200, json=ollama_reply(neutral_synthesis_json("green"))
+    )
     result = runner.invoke(app, ["rerun", str(case_dir), "--model", "ollama:fake-model:1b"])
     assert result.exit_code == 1
     assert "language backstop" in all_output(result)
@@ -760,14 +1003,8 @@ def test_language_backstop_on_rerun_with_model_leaves_files_untouched(
     assert (case_dir / "memo.md").read_bytes() == before_memo
 
 
-def test_language_backstop_blocks_a_poisoned_memo_on_screen(
-    screen_env: Path, respx_mock: respx.MockRouter
-) -> None:
-    """A banned word arriving through source data (the registered company
-    name) trips the backstop on the screen path: no case directory at all."""
+def _mock_routes_with_profile(respx_mock: respx.MockRouter, profile: dict[str, object]) -> None:
     base = "https://api.company-information.service.gov.uk"
-    profile = load_fixture("profile.json")
-    profile["company_name"] = "TOTAL SHAM TRADING LTD"
     respx_mock.get(f"{base}/company/99999999").respond(200, json=profile)
     respx_mock.get(f"{base}/company/99999999/officers").respond(
         200, json=load_fixture("officers.json")
@@ -788,11 +1025,54 @@ def test_language_backstop_blocks_a_poisoned_memo_on_screen(
     respx_mock.get(f"{base}/search/disqualified-officers").respond(
         200, json=load_fixture("disqualified_search_empty.json")
     )
+
+
+def test_registered_name_with_banned_word_screens_honestly(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    """The registry identity exemption: a company whose REGISTERED name
+    contains a banned word can be screened. The name renders verbatim, the
+    memo passes the backstop, and the CI language scan re-verifies the name
+    against the persisted registry evidence and agrees."""
+    import importlib.util
+
+    profile = load_fixture("profile.json")
+    profile["company_name"] = "TOTAL SHAM TRADING LTD"
+    _mock_routes_with_profile(respx_mock, profile)
+    result = runner.invoke(app, ["screen", "99999999"])
+    assert result.exit_code == 0, result.output
+    case_dir = screen_env / "cases" / "total-sham-trading-ltd-99999999"
+    memo = (case_dir / "memo.md").read_text(encoding="utf-8")
+    assert "TOTAL SHAM TRADING LTD" in memo
+    # The word appears ONLY inside the registered name's exact spans.
+    assert memo.lower().count("sham") == memo.count("TOTAL SHAM TRADING LTD")
+    # The CI scan agrees, via re-verification against the evidence files.
+    spec = importlib.util.spec_from_file_location(
+        "check_language", Path(__file__).parent.parent / "scripts" / "check_language.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.main([str(case_dir / "memo.md")]) == 0
+
+
+def test_language_backstop_blocks_a_poisoned_memo_on_screen(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    """A banned word arriving through a NON-identity source channel (the
+    registered office address) still trips the backstop on the screen path:
+    no case directory at all. The identity exemption covers names only."""
+    profile = load_fixture("profile.json")
+    profile["registered_office_address"] = {
+        "address_line_1": "1 Scam Passage",
+        "locality": "Faketown",
+    }
+    _mock_routes_with_profile(respx_mock, profile)
     result = runner.invoke(app, ["screen", "99999999"])
     assert result.exit_code == 1
     combined = all_output(result)
     assert "language backstop" in combined
-    assert "sham" not in combined.lower()
+    assert "scam" not in combined.lower()
     assert not (screen_env / "cases").exists()
 
 

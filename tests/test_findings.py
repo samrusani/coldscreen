@@ -105,9 +105,66 @@ def test_liquidation_status_is_red() -> None:
     assert findings["REG-001"].severity == "red"
 
 
+def test_insolvency_family_statuses_are_red_including_voluntary_arrangement() -> None:
+    """The R2 status leg, rubric 0.2: all five insolvency states are red."""
+    for status in (
+        "administration",
+        "liquidation",
+        "receivership",
+        "insolvency-proceedings",
+        "voluntary-arrangement",
+    ):
+        findings = by_id(make_result(company_status=status))
+        assert findings["REG-001"].severity == "red", status
+
+
 def test_dissolved_status_is_amber() -> None:
     findings = by_id(make_result(company_status="dissolved"))
     assert findings["REG-001"].severity == "amber"
+
+
+def test_not_active_statuses_are_amber_per_a7() -> None:
+    """The A7 statuses, rubric 0.2: dissolved, closed, converted-closed,
+    removed are all amber."""
+    for status in ("dissolved", "closed", "converted-closed", "removed"):
+        findings = by_id(make_result(company_status=status))
+        assert findings["REG-001"].severity == "amber", status
+
+
+def test_status_severity_matching_is_case_insensitive() -> None:
+    """A mixed-case status still lands in its family; the statement keeps
+    the registry's own spelling."""
+    red = by_id(make_result(company_status="Liquidation"))
+    assert red["REG-001"].severity == "red"
+    assert "Liquidation" in red["REG-001"].statement
+    amber = by_id(make_result(company_status="Dissolved"))
+    assert amber["REG-001"].severity == "amber"
+
+
+def test_charges_truncation_is_an_explicit_finding() -> None:
+    """total_count above the retrieved item count records REG-015."""
+    from coldscreen.models import Charge
+
+    result = make_result()
+    result.charges_link_present = True
+    result.charges = [Charge.model_validate({"status": "outstanding"})]
+    result.charges_total = 7
+    findings = by_id(result)
+    truncation = findings["REG-015"]
+    assert truncation.severity == "info"
+    assert "retrieved 1 of 7 charge(s)" in truncation.statement
+    assert "no pagination" in truncation.statement
+
+
+def test_no_charges_truncation_finding_when_counts_agree() -> None:
+    from coldscreen.models import Charge
+
+    result = make_result()
+    result.charges_link_present = True
+    result.charges = [Charge.model_validate({"status": "outstanding"})]
+    result.charges_total = 1
+    findings = by_id(result)
+    assert "REG-015" not in findings
 
 
 def test_missing_charges_link_yields_absence_finding_citing_profile() -> None:

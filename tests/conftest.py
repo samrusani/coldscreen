@@ -1,8 +1,15 @@
-"""Shared test scaffolding. Every test runs offline against fixtures."""
+"""Shared test scaffolding. Every test runs offline against fixtures.
+
+Offline is enforced, not assumed: pytest runs with sockets disabled
+(pytest-socket via addopts), and the site stage's DNS resolver is stubbed
+below to fail loudly, because getaddrinfo does not go through a socket
+object and would otherwise slip past the socket guard.
+"""
 
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -11,6 +18,7 @@ from typing import Any
 import pytest
 import respx
 
+import coldscreen.site
 from coldscreen.ch_client import CompaniesHouseClient
 from coldscreen.config import Settings
 
@@ -19,6 +27,11 @@ BASE_URL = "https://api.company-information.service.gov.uk"
 TEST_API_KEY = "fixture-key-0123456789-not-a-real-key"
 SCREENED_AT = datetime(2026, 8, 18, 12, 0, 0, tzinfo=UTC)
 COMPANY_NUMBER = "99999999"
+
+# A globally routable address for stubbed resolutions: tests that want a
+# site fetch to proceed resolve every fictional host to this. It sits just
+# above the CGNAT block, so it exercises the "public address" path.
+PUBLIC_TEST_ADDRESS = "100.128.0.10"
 
 
 def load_fixture(name: str) -> dict[str, Any]:
@@ -29,7 +42,8 @@ def load_fixture(name: str) -> dict[str, Any]:
 
 @pytest.fixture(autouse=True)
 def _scrub_ambient_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No ambient key, model, or clock override may leak into any test.
+    """No ambient key, model, clock override, or COLDSCREEN_* setting may
+    leak into any test.
 
     Tests that need one of these set it explicitly after this scrub runs.
     """
@@ -41,10 +55,33 @@ def _scrub_ambient_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "ANTHROPIC_API_KEY",
         "OPENAI_API_KEY",
         "OLLAMA_BASE_URL",
-        "COLDSCREEN_MODEL",
-        "COLDSCREEN_SCREENED_AT",
     ):
         monkeypatch.delenv(name, raising=False)
+    for name in list(os.environ):
+        if name.startswith("COLDSCREEN_"):
+            monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Real DNS is banned in tests, mechanically.
+
+    pytest-socket blocks socket creation but not getaddrinfo, so the site
+    stage's default resolver is replaced with one that fails the test. A
+    test that needs resolution to succeed monkeypatches
+    coldscreen.site.system_resolver (or passes a resolver) itself.
+    """
+
+    def _refuse(host: str) -> list[str]:
+        raise AssertionError(f"real DNS resolution attempted in a test (host {host!r})")
+
+    monkeypatch.setattr(coldscreen.site, "system_resolver", _refuse)
+
+
+@pytest.fixture
+def resolve_public(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Resolve every host to one public address, for tests that fetch."""
+    monkeypatch.setattr(coldscreen.site, "system_resolver", lambda host: [PUBLIC_TEST_ADDRESS])
 
 
 @pytest.fixture

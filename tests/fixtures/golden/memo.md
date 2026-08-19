@@ -18,7 +18,7 @@ Triggered:
 
 R4 applies because material claims are directly contradicted by the registry record: the operating-since claim (CLM-001) against the incorporation date (REG-002), and the debt-free claim (CLM-002) against the outstanding charge (REG-006). A1 applies because the registry marks the next accounts overdue (REG-003). A2 applies because officer resignations in the last twelve months met the wholesale-change threshold (REG-009). A4 applies because the team-size claim (CLM-004), central to the deck's capability story, is unverifiable from any source in this casefile. Any RED trigger forces a RED verdict.
 
-Synthesis: provider ollama, model fake-model:1b, prompt version 3, rubric-enforced.
+Synthesis: provider ollama, model fake-model:1b, prompt version 4, rubric-enforced.
 
 This memo is a research aid generated from public sources at a point in time. It is not investment advice, not a credit reference, and not a consumer report. Do not use it for decisions regulated under the US Fair Credit Reporting Act (employment, credit, tenancy screening) or equivalent regimes. Officer and PSC data is personal data from public registers; you are responsible for processing it lawfully. Verify everything independently before acting on it.
 

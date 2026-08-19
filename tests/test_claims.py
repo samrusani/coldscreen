@@ -262,6 +262,41 @@ def test_site_pages_become_sections_and_findings() -> None:
     assert stage.extraction.deck_file is None
 
 
+def test_blocked_redirects_surface_as_the_ext008_finding() -> None:
+    """A refused redirect during the site fetch becomes an explicit finding
+    stating that nothing was fetched from the redirect target."""
+    from coldscreen.ch_client import FetchRecord
+    from coldscreen.stages.registry import NamedRecord
+
+    site = site_result()
+    site.blocked_redirects.append("/: the redirect leaves the validated host")
+    site.records.append(
+        NamedRecord(
+            "site_002",
+            FetchRecord(
+                url="https://widgets.example/",
+                params={},
+                status=0,
+                body={
+                    "kind": "site_blocked_redirect",
+                    "url": "https://widgets.example/",
+                    "redirect_chain": ["https://widgets.example/"],
+                    "blocked_target": "https://elsewhere.example/",
+                    "reason": "the redirect leaves the validated host",
+                },
+                retrieved_at=NOW,
+            ),
+        )
+    )
+    stage, _provider = run_stage(site=site)
+    ids = {f.id: f for f in stage.findings}
+    assert "EXT-008" in ids
+    finding = ids["EXT-008"]
+    assert "refused 1 redirect(s)" in finding.statement
+    assert "nothing was fetched from the redirect target" in finding.statement
+    assert finding.evidence[0].excerpt == "blocked redirect"
+
+
 def test_robots_skips_surface_as_a_finding() -> None:
     site = site_result()
     site.robots_skipped.append("/team")

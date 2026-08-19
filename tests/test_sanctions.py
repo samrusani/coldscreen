@@ -7,14 +7,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-import pytest
 import respx
 
 from coldscreen.config import Settings
 from coldscreen.models import PSC, CompanyProfile, Officer
 from coldscreen.sanctions import (
     OpenSanctionsClient,
-    SanctionsError,
     build_subjects,
     run_sanctions,
 )
@@ -379,14 +377,116 @@ def test_429_is_retried_then_succeeds(respx_mock: respx.MockRouter, settings: Se
     assert result.screening.performed is True
 
 
-def test_terminal_client_error_raises_cleanly(
+def test_terminal_client_error_is_a_recorded_stage_failure(
     respx_mock: respx.MockRouter, settings: Settings
 ) -> None:
+    """Failure posture: a 401 no longer raises out of the stage. The result
+    carries the failure reason, a stage_failed record, and a SAN-999
+    finding worded clearly differently from the not-run finding."""
     respx_mock.post(f"{HOSTED}/match/default").respond(401)
-    with pytest.raises(SanctionsError, match="401"):
-        run_sanctions(
-            profile(), officers(), pscs(), settings, api_key=KEY, base_url=None, now=lambda: NOW
-        )
+    result = run_sanctions(
+        profile(), officers(), pscs(), settings, api_key=KEY, base_url=None, now=lambda: NOW
+    )
+    assert result.failed_reason is not None
+    assert "401" in result.failed_reason
+    assert result.screening.performed is False
+    assert result.screening.failed is True
+    assert result.screening.skipped_reason == "the sanctions screening stage failed after retries"
+    finding = next(f for f in result.findings if f.id == "SAN-999")
+    assert finding.severity == "amber"
+    assert "attempted and FAILED" in finding.statement
+    assert "not performed:" not in finding.statement  # distinct from SAN-000 wording
+    record = next(r for r in result.records if r.name == "sanctions_failed")
+    assert record.record.body["kind"] == "stage_failed"
+    assert "401" in record.record.body["error"]
+
+
+def test_transport_failure_after_retries_is_a_recorded_stage_failure(
+    respx_mock: respx.MockRouter, settings: Settings
+) -> None:
+    route = respx_mock.post(f"{HOSTED}/match/default")
+    route.side_effect = httpx.ConnectError("connection refused")
+    result = run_sanctions(
+        profile(),
+        officers(),
+        pscs(),
+        settings,
+        api_key=KEY,
+        base_url=None,
+        now=lambda: NOW,
+        sleeper=lambda _s: None,
+    )
+    assert route.call_count == 5  # the full retry budget was spent first
+    assert result.failed_reason is not None
+    assert result.screening.failed is True
+    assert any(f.id == "SAN-999" for f in result.findings)
+
+
+def test_officer_match_is_an_amber_finding_not_r1_material(
+    respx_mock: respx.MockRouter, settings: Settings
+) -> None:
+    """Rubric 0.2 narrows R1 to entity and PSC matches: a match on an
+    officer-only subject is an amber finding with wording that says so."""
+    payload = empty_response(["q001", "q002", "q003"])
+    payload["responses"]["q002"]["results"] = [
+        {
+            "id": "fict-officer-match",
+            "caption": "A Fictional Person",
+            "schema": "Person",
+            "datasets": ["fict_pep_list"],
+            "score": 0.91,
+            "match": True,
+        }
+    ]
+    respx_mock.post(f"{HOSTED}/match/default").respond(200, json=payload)
+    result = run_sanctions(
+        profile(), officers(), pscs(), settings, api_key=KEY, base_url=None, now=lambda: NOW
+    )
+    officer_finding = next(f for f in result.findings if f.id == "SAN-002")
+    assert officer_finding.severity == "amber"
+    assert "Officer matches are reported for review at amber severity" in officer_finding.statement
+    assert "do not trigger R1" in officer_finding.statement
+    assert result.screening.results[1].matched is True
+
+
+def test_psc_and_merged_officer_psc_matches_stay_red(
+    respx_mock: respx.MockRouter, settings: Settings
+) -> None:
+    """The entity-or-PSC leg of R1: a PSC match and an officer-and-psc
+    match both stay red findings."""
+    match_result = {
+        "id": "fict-match",
+        "caption": "A Fictional Person",
+        "schema": "Person",
+        "datasets": ["fict_sanctions_list"],
+        "score": 0.95,
+        "match": True,
+    }
+    payload = empty_response(["q001", "q002", "q003"])
+    payload["responses"]["q003"]["results"] = [match_result]  # the PSC subject
+    respx_mock.post(f"{HOSTED}/match/default").respond(200, json=payload)
+    result = run_sanctions(
+        profile(), officers(), pscs(), settings, api_key=KEY, base_url=None, now=lambda: NOW
+    )
+    psc_finding = next(f for f in result.findings if f.id == "SAN-003")
+    assert psc_finding.severity == "red"
+
+    merged_payload = empty_response(["q001", "q002"])
+    merged_payload["responses"]["q002"]["results"] = [match_result]
+    respx_mock.post(f"{HOSTED}/match/default").respond(200, json=merged_payload)
+    same_person = PSC.model_validate(
+        {
+            "name": "Ms Gertrude May Grindstone",
+            "kind": "individual-person-with-significant-control",
+            "date_of_birth": {"month": 4, "year": 1970},
+        }
+    )
+    merged = run_sanctions(
+        profile(), officers(), [same_person], settings, api_key=KEY, base_url=None, now=lambda: NOW
+    )
+    merged_finding = next(f for f in merged.findings if f.id == "SAN-002")
+    assert merged_finding.severity == "red"
+    assert "(officer and psc)" in merged_finding.statement
 
 
 def test_evidence_record_is_persisted_with_the_raw_body(

@@ -61,6 +61,11 @@ from .registry import NamedRecord
 
 STAGE = "network"
 
+# The co-appointment overlap finding id. The R5 gate's acceptance note in
+# coldscreen.rubric renders overlap finding ids collected by filtering on
+# this constant, so it must never be minted anywhere else.
+OVERLAP_FINDING_ID = "NET-002"
+
 # Fan-out guard: at most this many disqualification detail records are
 # fetched per screened person. Common names can match many records; past
 # the cap the finding says a manual check is required.
@@ -451,7 +456,7 @@ def run_network_expansion(
         )
         result.findings.append(
             Finding(
-                id="NET-002",
+                id=OVERLAP_FINDING_ID,
                 stage=STAGE,
                 severity="info",
                 confidence="confirmed",
@@ -466,7 +471,7 @@ def run_network_expansion(
     else:
         result.findings.append(
             Finding(
-                id="NET-002",
+                id=OVERLAP_FINDING_ID,
                 stage=STAGE,
                 severity="info",
                 confidence="confirmed" if appointment_records else "indicated",

@@ -20,6 +20,15 @@ evidence/deck_text.json or the evidence/site_*.json records. No evidence,
 no exemption: a hand-tampered casefile cannot widen this scan. Prose
 outside the exact verified quoted strings stays fully gated everywhere.
 
+Registry identity exemption: the subject's registered name, its previous
+names, and the officer and PSC names render throughout a memo, and a
+company may legitimately be registered under a name containing a banned
+word. The sibling casefile's identity names are honored the same way claim
+texts are: only after re-verification against the registry evidence files
+(the profile's company_name and previous_company_names, and the name field
+of officer and PSC list items), compared with the same normalization. A
+name that the registry evidence does not carry buys no exemption.
+
 Default targets when no paths are given: every memo.md under cases/ and
 tests/fixtures/, plus everything under src/coldscreen/templates/.
 
@@ -116,10 +125,94 @@ def claim_exemptions(path: Path) -> tuple[str, ...]:
     return verified
 
 
+def _casefile_identity_names(data: Any) -> list[str]:
+    """Identity name strings a casefile claims: subject name, previous
+    names, officer names, PSC names. Order preserved, blanks dropped."""
+    if not isinstance(data, dict):
+        return []
+    names: list[str] = []
+    subject = data.get("subject")
+    if isinstance(subject, dict):
+        if isinstance(subject.get("company_name"), str):
+            names.append(subject["company_name"])
+        previous = subject.get("previous_company_names")
+        if isinstance(previous, list):
+            names.extend(
+                p["name"]
+                for p in previous
+                if isinstance(p, dict) and isinstance(p.get("name"), str)
+            )
+    for key in ("officers", "pscs"):
+        entries = data.get(key)
+        if isinstance(entries, list):
+            names.extend(
+                e["name"] for e in entries if isinstance(e, dict) and isinstance(e.get("name"), str)
+            )
+    return [name for name in names if name.strip()]
+
+
+def _registry_evidence_names(evidence_dir: Path) -> set[str]:
+    """Normalized name strings the registry evidence files actually carry.
+
+    Sources: any evidence body's company_name and previous_company_names
+    (the profile), and the name field of items entries (the officer and PSC
+    lists). These are the fields the pipeline itself reads names from.
+    """
+    if not evidence_dir.is_dir():
+        return set()
+    names: set[str] = set()
+    for candidate in sorted(evidence_dir.glob("*.json")):
+        payload = _load_json(candidate)
+        body = payload.get("body") if isinstance(payload, dict) else None
+        if not isinstance(body, dict):
+            continue
+        if isinstance(body.get("company_name"), str):
+            names.add(normalize_for_match(body["company_name"]))
+        previous = body.get("previous_company_names")
+        if isinstance(previous, list):
+            names.update(
+                normalize_for_match(p["name"])
+                for p in previous
+                if isinstance(p, dict) and isinstance(p.get("name"), str)
+            )
+        items = body.get("items")
+        if isinstance(items, list):
+            names.update(
+                normalize_for_match(item["name"])
+                for item in items
+                if isinstance(item, dict) and isinstance(item.get("name"), str)
+            )
+    names.discard("")
+    return names
+
+
+def identity_exemptions(path: Path) -> tuple[str, ...]:
+    """Verified registry identity names from the sibling casefile.json.
+
+    A name is honored only when its normalized form equals a name string
+    present in the sibling registry evidence files. No evidence, no
+    exemption: the scan stays at full strictness, the fail-closed
+    direction.
+    """
+    casefile_path = path.parent / "casefile.json"
+    if not casefile_path.is_file():
+        return ()
+    claimed = _casefile_identity_names(_load_json(casefile_path))
+    if not claimed:
+        return ()
+    evidence_names = _registry_evidence_names(path.parent / "evidence")
+    if not evidence_names:
+        return ()
+    verified = tuple(
+        dict.fromkeys(name for name in claimed if normalize_for_match(name) in evidence_names)
+    )
+    return verified
+
+
 def scan_file(path: Path) -> list[tuple[int, str]]:
     """Return (line number, matched term) pairs for one file."""
     hits: list[tuple[int, str]] = []
-    exempt_texts = claim_exemptions(path)
+    exempt_texts = claim_exemptions(path) + identity_exemptions(path)
     text = path.read_text(encoding="utf-8", errors="replace")
     for line_number, line in enumerate(text.splitlines(), start=1):
         for term in find_banned_terms(line, exempt_texts):

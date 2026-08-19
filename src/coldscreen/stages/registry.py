@@ -76,6 +76,7 @@ class RegistryResult:
     filings_server_clamped: bool = False
     charges: list[Charge] | None = None
     charges_link_present: bool = False
+    charges_total: int | None = None
     insolvency_cases: list[InsolvencyCase] | None = None
     insolvency_link_present: bool = False
     records: list[NamedRecord] = field(default_factory=list)
@@ -188,6 +189,8 @@ def run_registry_pass(
             result.charges = [
                 Charge.model_validate(item) for item in items if isinstance(item, dict)
             ]
+            total_count = body.get("total_count")
+            result.charges_total = total_count if isinstance(total_count, int) else None
 
     if links.get("insolvency"):
         result.insolvency_link_present = True

@@ -29,12 +29,15 @@ This repository is that screen, generalized and automated. A methodology like th
 ## Quickstart
 
 ```bash
-pip install coldscreen
-export ANTHROPIC_API_KEY=...        # or OPENAI_API_KEY, or point at local Ollama
+# PyPI publication is pending; install from a checkout until then:
+pip install .
 export COMPANIES_HOUSE_API_KEY=...  # free key from the Companies House developer hub
+export ANTHROPIC_API_KEY=...        # or OPENAI_API_KEY, or point COLDSCREEN_MODEL at local Ollama
 
 coldscreen screen "Acme Holdings Ltd"
 ```
+
+Sanctions and adverse media need their own keys (`OPENSANCTIONS_API_KEY`, `TAVILY_API_KEY`). Without them those stages do not run, and the memo says so explicitly: skipped coverage is recorded as findings, never silently passed.
 
 With a deck and a website:
 
@@ -99,11 +102,11 @@ A verdict is an opinion generated from public sources at a point in time. It is 
 
 Works with hosted models (Anthropic, OpenAI) or local models via Ollama. The deterministic collection layer is identical regardless of model; only synthesis quality varies. Run it fully local if your deal flow should never touch a third-party API.
 
-The verdict level cannot be moved by the model in either direction: mechanically detected rubric triggers cannot be dropped, and red triggers the evidence does not support cannot be added. In cross-model testing, a 30B coder model and a 27B generalist produced identical verdict levels on the same live companies. One practical note for local models: reasoning-family models (qwen3 non-coder variants and similar) need `COLDSCREEN_OLLAMA_THINK=false` for reliable structured output.
+Verdict discipline follows rubric rule 4: mechanically detected triggers cannot be dropped by the model, and triggers whose evidence conditions are not met cannot be added by it. Every trigger's evidence condition is published in `rubric.md`, and every enforcement intervention is recorded in the casefile and the memo. The model's judgment operates inside those conditions; the level arithmetic is never its to change. In cross-model testing, a 30B coder model and a 27B generalist produced identical verdict levels on the same live companies. One practical note for local models: reasoning-family models (qwen3 non-coder variants and similar) need `COLDSCREEN_OLLAMA_THINK=false` for reliable structured output.
 
 ## Scope and non-goals (v0.1)
 
-- UK companies only. Sweden (Bolagsverket) and US (SEC EDGAR) adapters are next; the adapter interface is documented in `ARCHITECTURE.md`.
+- UK companies only. Sweden (Bolagsverket) and US (SEC EDGAR) adapters are planned; the adapter interface gets designed once a second registry forces the right abstraction (see `FUTURE.md`).
 - No financial statement analysis. Filings are inventoried, not parsed.
 - No people search beyond registered officers and PSCs.
 - No continuous monitoring. One screen, one memo.
@@ -112,7 +115,7 @@ The verdict level cannot be moved by the model in either direction: mechanically
 ## Data sources
 
 - **Companies House** (UK registry): free API, key required. Contains public sector information licensed under the Open Government Licence v3.0; you are bound by their reuse terms, and officer data remains personal data.
-- **OpenSanctions**: sanctions, PEP, and criminal watchlist data. Check their current data license before commercial use; the code license of this repo does not extend to their data.
+- **OpenSanctions**: sanctions, PEP, and watchlist data, licensed CC BY-NC 4.0. OpenSanctions treats use inside a for-profit business, including compliance screening that earns no revenue, as commercial use requiring a paid licence from them. This tool bundles no key: you bring your own key under your own licence relationship, and this repository's MIT licence does not extend to their data.
 - **Web search**: via your model provider's search tool or a pluggable search API.
 
 ## Disclaimer
@@ -122,7 +125,7 @@ The verdict level cannot be moved by the model in either direction: mechanically
 ## Roadmap
 
 - Sweden and US registry adapters
-- JSON output mode for pipelines
+- A versioned JSON schema contract for pipelines (the `--json` flag exists today; the schema guarantee is the future work)
 - MCP server mode, so the screen runs inside agent workflows
 - Better deck parsing (tables, charts)
 

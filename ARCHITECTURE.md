@@ -216,15 +216,15 @@ Recommendation: **MIT** for the code. Maximum reach, minimum friction, and the s
 
 ## 16. Verify before build
 
-Do these before writing code or announcing a name. None of the specifics below should be trusted from memory.
+This checklist was completed on 2026-08-18 and 2026-08-19, before any code was written. Every verified fact is recorded with sources and dates in DECISIONS.md; formal trademark clearance on the final name remains a pre-announcement step tracked by the maintainer.
 
-- [ ] Name availability: GitHub, PyPI, and a trademark sanity check on the final name.
-- [ ] Companies House developer hub: registration flow, key issuance, current rate limits, data reuse terms.
-- [ ] OpenSanctions: current data license for commercial-context use; hosted API pricing (USD) vs self-hosting yente; confirm yente's current deployment docs.
-- [ ] Model provider web search tools: current availability, API shape, and pricing in Anthropic and OpenAI docs.
-- [ ] Fallback search API choice (Brave, Tavily, or similar): current API and pricing.
-- [ ] PDF text extraction library: PyMuPDF is believed to be AGPL-licensed, which sits badly inside an MIT repo; verify, and default to pdfplumber (believed MIT) if the conflict is real.
-- [ ] Retroactive demo target: confirm which Wirecard-adjacent records remain publicly retrievable, or pick a UK-adjudicated alternative.
+- [x] Name availability: GitHub, PyPI, and a trademark sanity check on the final name.
+- [x] Companies House developer hub: registration flow, key issuance, current rate limits, data reuse terms.
+- [x] OpenSanctions: current data license for commercial-context use; hosted API pricing (USD) vs self-hosting yente; confirm yente's current deployment docs.
+- [x] Model provider web search tools: current availability, API shape, and pricing in Anthropic and OpenAI docs.
+- [x] Fallback search API choice (Brave, Tavily, or similar): current API and pricing.
+- [x] PDF text extraction library: PyMuPDF is believed to be AGPL-licensed, which sits badly inside an MIT repo; verify, and default to pdfplumber (believed MIT) if the conflict is real.
+- [x] Retroactive demo target: confirm which Wirecard-adjacent records remain publicly retrievable, or pick a UK-adjudicated alternative.
 
 ## 17. Open questions
 

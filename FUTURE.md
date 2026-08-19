@@ -12,6 +12,13 @@ Ideas that are out of scope for v0.1. The non-goals in ARCHITECTURE.md section 1
 - Financial statement parsing. Explicit non-goal for v0.1; filings are inventoried, not read.
 - People search beyond registered officers and PSCs. Explicit non-goal for v0.1.
 
+Deferred from the pre-launch hardening review:
+
+- Extend the stage-honesty phrase set (the mechanical backstop that fails closed when a narrative calls a not-run or failed sanctions or media stage clean) from real model phrasing observed in live runs. The current set is fixed and deliberately narrow to avoid false positives.
+- Add a hermetic TLS test for SNI preservation through the pinned network backend. Preservation is proven by design (httpcore derives server_hostname from the origin, which the pin never touches) and by a plain-HTTP Host-header test, but no HTTPS handshake test exists yet.
+- Revisit the httpx-internals coupling in the pinned transport if httpx changes its connection-pool shape. It is pinned to the tested versions and fails closed (refuses to run the site stage) otherwise; a public-API path would remove the coupling.
+- The mechanical date-versus-incorporation R4 detector (also noted below), which would restore unconditional level anchoring for the most common contradiction class rather than the current relevance-gated R4.
+
 Ideas deferred from the weekend 3 build and review:
 
 - A mechanical R4 candidate detector for date-shaped contradictions ("operating since YYYY" against date_of_creation), restoring unconditional level anchoring for the most common contradiction class.

@@ -16,17 +16,23 @@ finding ids that ground its status. CODE resolves those ids against the
 casefile findings and copies their Evidence into ClaimAssessment.basis; the
 model never mints an evidence object. A contradicted or supported status
 whose cited evidence does not resolve is downgraded to unverified with a
-sanitized note; a checkable claim the model skipped gets an unverified
-assessment with fixed text. Only what survives this enforcement can open
-the R4 and A4 gates in the rubric ceiling.
+sanitized note, and a contradicted status additionally survives only when
+its resolved basis includes a registry finding relevant to the claim's
+category (the fixed table in coldscreen.rubric); a checkable claim the
+model skipped gets an unverified assessment with fixed text. Only what
+survives this enforcement can open the R4 and A4 gates in the rubric
+ceiling.
 
 Language: narrative, rationale, questions, and every record_note are
-mechanically gated with ZERO exemptions. The quoted-data exemption exists
-only for the code-rendered claims table (the whole-memo backstop and the CI
-scan apply it); model prose never benefits from it, so a narrative or
-record note that repeats a claim's wording fails the field gate even though
-the table quotes the same words legitimately. The prompt tells the model to
-reference claims by id instead.
+mechanically gated with no claim-quote exemptions. The quoted-data
+exemption exists only for the code-rendered claims table (the whole-memo
+backstop and the CI scan apply it); model prose never benefits from it, so
+a narrative or record note that repeats a claim's wording fails the field
+gate even though the table quotes the same words legitimately. The prompt
+tells the model to reference claims by id instead. The registry identity
+set (registered name, previous names, officer and PSC names) is the one
+exemption model prose gets, because those strings are code-verified
+registry data the memo must be able to spell out.
 """
 
 from __future__ import annotations
@@ -40,10 +46,18 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from .language import find_banned_terms
+from .language import find_banned_terms, registry_identity_names
 from .models import CaseFile, ClaimAssessment, Evidence, Finding, SynthesisMetadata, Verdict
 from .providers import Message, ModelProvider
-from .rubric import ClaimSignals, TriggerCandidate, detect_candidates, enforce, rubric_text
+from .rubric import (
+    R4_RELEVANT_FINDINGS,
+    GateSignals,
+    TriggerCandidate,
+    detect_candidates,
+    enforce,
+    rubric_text,
+)
+from .stages.network import OVERLAP_FINDING_ID
 
 MAX_PARSE_RETRIES = 2
 MAX_LANGUAGE_RETRIES = 1
@@ -54,6 +68,10 @@ _PROMPT_VERSION_RE = re.compile(r"coldscreen synthesis prompt, version ([0-9A-Za
 # additionalProperties false and full required lists everywhere so the same
 # schema works across Anthropic, OpenAI strict mode, and Ollama.
 SYNTHESIS_SCHEMA: dict[str, Any] = {
+    # The title names the schema per stage where a provider needs a name
+    # (the OpenAI json_schema format); it is a standard JSON Schema
+    # annotation, ignored everywhere else.
+    "title": "coldscreen_synthesis",
     "type": "object",
     "additionalProperties": False,
     "required": ["narrative", "verdict", "assessments"],
@@ -284,7 +302,12 @@ def enforce_assessments(
     3. contradicted or supported with an empty resolved basis is downgraded
        to unverified with a note: a status that judges the record must
        point at the record.
-    4. Every checkable claim the model did not assess gets an unverified
+    4. contradicted survives ONLY when its resolved basis includes at least
+       one registry finding relevant to the claim's category, per the fixed
+       relevance table in coldscreen.rubric (R4_RELEVANT_FINDINGS). A
+       contradiction grounded outside that set is downgraded to unverified
+       with a sanitized note; only what survives here can open the R4 gate.
+    5. Every checkable claim the model did not assess gets an unverified
        assessment with fixed text, so the memo table is always complete.
     Output order is the casefile's claim order, deterministic by
     construction.
@@ -292,6 +315,7 @@ def enforce_assessments(
     notes: list[str] = []
     checkable_ids = [c.id for c in casefile.claims if c.checkable]
     checkable_set = set(checkable_ids)
+    category_by_claim = {c.id: c.category for c in casefile.claims}
     findings_by_id: dict[str, list[Finding]] = {}
     for finding in casefile.findings:
         findings_by_id.setdefault(finding.id, []).append(finding)
@@ -308,12 +332,15 @@ def enforce_assessments(
             duplicates += 1
             continue
         basis: list[Evidence] = []
+        resolved_ids: list[str] = []
         unresolved = 0
         for finding_id in raw.basis_finding_ids:
-            matched = findings_by_id.get(finding_id.strip().upper())
+            normalized_id = finding_id.strip().upper()
+            matched = findings_by_id.get(normalized_id)
             if matched is None:
                 unresolved += 1
                 continue
+            resolved_ids.append(normalized_id)
             for finding in matched:
                 basis.extend(finding.evidence)
         if unresolved:
@@ -330,6 +357,19 @@ def enforce_assessments(
             )
             status = "unverified"
             basis = []
+        if status == "contradicted":
+            category = category_by_claim.get(claim_id, "other")
+            relevant = R4_RELEVANT_FINDINGS.get(category, frozenset())
+            if not any(finding_id in relevant for finding_id in resolved_ids):
+                # The category is a code-validated enum value, never free
+                # model text, so it is safe to name in a rendered note.
+                notes.append(
+                    f"downgraded the assessment for {claim_id} from contradicted"
+                    f" to unverified: its basis cites no registry finding relevant"
+                    f" to a claim in the {category} category"
+                )
+                status = "unverified"
+                basis = []
         by_claim[claim_id] = ClaimAssessment(
             claim_id=claim_id,
             status=status,
@@ -362,23 +402,108 @@ def enforce_assessments(
     return AssessmentEnforcement(assessments=ordered, notes=notes)
 
 
-def claim_signals(casefile: CaseFile, assessments: list[ClaimAssessment]) -> ClaimSignals:
+def gate_signals(casefile: CaseFile, assessments: list[ClaimAssessment]) -> GateSignals:
     """Gate inputs for rubric enforcement, from enforced state only.
 
-    A3 and A5 need at least one CHECKABLE claim, not merely any claim. A4
-    needs a surviving unverified assessment the MODEL authored: rows the
-    enforcement back-filled for unassessed claims (model_assessed False) do
-    not count, so a model cannot open A4 by staying silent. A downgraded
-    assessment (the model judged, its evidence did not resolve) is still
-    model-authored and does count.
+    Every field mirrors one trigger's "fires only when" condition:
+    - A3 needs charges on the register AND a checkable financials claim;
+      A5 needs a checkable history claim. Puffery unlocks nothing.
+    - A4 needs a surviving unverified assessment the MODEL authored: rows
+      the enforcement back-filled for unassessed claims (model_assessed
+      False) do not count, so a model cannot open A4 by staying silent. A
+      downgraded assessment (the model judged, its evidence did not
+      survive) is still model-authored and does count.
+    - R4 needs a surviving contradicted assessment; enforce_assessments
+      guarantees any survivor is grounded in a relevant registry finding,
+      so this function must only ever see assessments that went through it.
+    - R5 needs recorded co-appointment overlap AND claims material to judge
+      disclosure against; the overlap finding ids are collected here by
+      filtering on the fixed id so the acceptance note stays code-derived.
+    - A6 needs the media stage to have run and returned at least one item.
     """
+    checkable = [c for c in casefile.claims if c.checkable]
     overlaps = bool(casefile.network is not None and casefile.network.overlaps)
-    return ClaimSignals(
-        checkable_claims_present=any(c.checkable for c in casefile.claims),
-        contradicted_with_basis=any(a.status == "contradicted" and a.basis for a in assessments),
+    overlap_ids: tuple[str, ...] = ()
+    if overlaps:
+        overlap_ids = tuple(
+            dict.fromkeys(f.id for f in casefile.findings if f.id == OVERLAP_FINDING_ID)
+        )
+    media = casefile.media
+    return GateSignals(
+        checkable_history_present=any(c.category == "history" for c in checkable),
+        checkable_financials_present=any(c.category == "financials" for c in checkable),
+        charges_present=bool(casefile.charges),
+        contradicted_with_relevant_basis=any(
+            a.status == "contradicted" and a.basis for a in assessments
+        ),
         unverified_present=any(a.status == "unverified" and a.model_assessed for a in assessments),
         overlaps_present=overlaps,
+        claims_material_present=bool(casefile.claims),
+        media_items_present=bool(media is not None and media.performed and media.items),
+        overlap_finding_ids=overlap_ids,
     )
+
+
+# The stage-honesty gate: fixed clean-claim phrases that must not describe
+# a stage the casefile records as not run or failed. Deliberately narrow:
+# every phrase carries the stage's own vocabulary, so the gate cannot hit
+# prose about another stage, and bare words like "clean" or "no matches"
+# are excluded because honest memos legitimately use them ("... rather than
+# clean results" is the canonical honest sentence about a skipped stage).
+# The gate only arms for a stage that is recorded not run or failed, so a
+# stage that RAN and found nothing may honestly say so.
+SANCTIONS_CLEAN_PHRASES: tuple[str, ...] = (
+    "no sanctions match",
+    "no sanctions matches",
+    "no sanctions hits",
+    "no sanctions concerns",
+    "no sanctions findings",
+    "no sanctions results",
+    "no sanctions or pep match",
+    "sanctions screening was clean",
+    "sanctions screening came back clean",
+    "sanctions screening returned no",
+    "clear of sanctions",
+    "cleared sanctions screening",
+)
+MEDIA_CLEAN_PHRASES: tuple[str, ...] = (
+    "no adverse media",
+    "no adverse coverage",
+    "no adverse press",
+    "no negative media",
+    "no negative coverage",
+    "no media matches",
+    "no media results",
+    "media search was clean",
+    "media search came back clean",
+    "media search returned no",
+    "clear of adverse media",
+)
+
+
+def stage_honesty_violations(casefile: CaseFile, rendered_fields: list[str]) -> list[str]:
+    """Stage names the model described as clean although they did not run.
+
+    The prompt already forbids this; here it is mechanical. Only the
+    sanctions and media stages are covered (the stages the failure posture
+    touches), only when the casefile records them as not run or failed, and
+    only via the fixed phrase sets above. Returns fixed stage-name strings,
+    never model text, so a failure message built from them is sanitized by
+    construction.
+    """
+    prose = " ".join(" ".join(rendered_fields).split()).casefold()
+    violations: list[str] = []
+    sanctions = casefile.sanctions
+    if (sanctions is None or not sanctions.performed) and any(
+        phrase in prose for phrase in SANCTIONS_CLEAN_PHRASES
+    ):
+        violations.append("sanctions")
+    media = casefile.media
+    if (media is None or not media.performed) and any(
+        phrase in prose for phrase in MEDIA_CLEAN_PHRASES
+    ):
+        violations.append("adverse media")
+    return violations
 
 
 def _try_parse(raw: str) -> tuple[SynthesisOutput | None, str]:
@@ -445,60 +570,89 @@ def synthesize(
             ]
             continue
 
-        # Model prose is gated with ZERO exemptions: quoting a claim's
-        # wording in prose fails even when the claims table legitimately
-        # renders the same words. Exemptions here would be a laundering
-        # channel (reviewer attack shapes 2 through 4): a single-word claim
-        # would whitelist that token everywhere, and any prose embedding a
-        # claim substring would carry its vocabulary through the gate.
+        # Model prose is gated with NO claim-quote exemptions: quoting a
+        # claim's wording in prose fails even when the claims table
+        # legitimately renders the same words. Exemptions there would be a
+        # laundering channel (reviewer attack shapes 2 through 4): a
+        # single-word claim would whitelist that token everywhere, and any
+        # prose embedding a claim substring would carry its vocabulary
+        # through the gate. The one exemption is the registry identity set
+        # (the subject's registered name, previous names, officer and PSC
+        # names): those are code-verified registry data the prose must be
+        # able to spell out, and the model cannot mint them.
+        identity_names = registry_identity_names(casefile)
         rendered_fields = [
             parsed.narrative,
             parsed.verdict.rationale,
             *parsed.verdict.questions,
             *(a.record_note for a in parsed.assessments),
         ]
-        banned = sorted(set().union(*(find_banned_terms(f) for f in rendered_fields)))
-        if banned:
+        banned = sorted(
+            set().union(*(find_banned_terms(f, identity_names) for f in rendered_fields))
+        )
+        # The stage-honesty gate runs in the same corrective loop: a stage
+        # recorded as not run or failed must never be described as clean.
+        violations = stage_honesty_violations(casefile, rendered_fields)
+        if banned or violations:
             if language_retries >= MAX_LANGUAGE_RETRIES:
-                # Count only, never the terms: the CLI renders this message
-                # into the synthesis-failure memo, so quoting the vocabulary
-                # here would trip the whole-memo backstop and cost the run
-                # its audit pack. The corrective retry below still names the
-                # terms, because the model needs them to fix its output.
+                if banned:
+                    # Count only, never the terms: the CLI renders this
+                    # message into the synthesis-failure memo, so quoting the
+                    # vocabulary here would trip the whole-memo backstop and
+                    # cost the run its audit pack. The corrective retry below
+                    # still names the terms, because the model needs them to
+                    # fix its output.
+                    raise SynthesisError(
+                        "synthesis failed: the model output still used"
+                        f" {len(banned)} banned term(s) after a corrective retry."
+                        " Memos state what the record shows; they never use"
+                        " accusatory language."
+                    )
+                # Stage names here are fixed strings from the gate, never
+                # model text, so this message is sanitized by construction.
                 raise SynthesisError(
-                    "synthesis failed: the model output still used"
-                    f" {len(banned)} banned term(s) after a corrective retry."
-                    " Memos state what the record shows; they never use"
-                    " accusatory language."
+                    "synthesis failed: the model described the"
+                    f" {' and '.join(violations)} stage(s) as clean after a"
+                    " corrective retry, but the casefile records them as not"
+                    " run or failed. A screen that did not happen is a gap,"
+                    " never a clean result."
                 )
             language_retries += 1
+            corrections: list[str] = []
+            if banned:
+                corrections.append(
+                    "Your response used banned vocabulary that must not appear"
+                    f" in a memo: {', '.join(banned)}. Rewrite the narrative,"
+                    " rationale, questions, and record notes without these"
+                    " words or their variants. Reference claims by their ids"
+                    " and never repeat a claim's wording; quoting is not"
+                    " exempt in your prose. Describe what the public record"
+                    " shows instead of characterizing conduct."
+                )
+            if violations:
+                corrections.append(
+                    "Your response described the"
+                    f" {' and '.join(violations)} stage(s) as clean or as having"
+                    " found no matches, but the casefile records them as not run"
+                    " or failed. State the absence or failure explicitly; a"
+                    " screen that did not happen is a gap, never a result."
+                )
+            corrections.append("Keep the same JSON structure and trigger reasoning.")
             messages = messages + [
                 Message(role="assistant", content=raw),
-                Message(
-                    role="user",
-                    content=(
-                        "Your response used banned vocabulary that must not appear"
-                        f" in a memo: {', '.join(banned)}. Rewrite the narrative,"
-                        " rationale, questions, and record notes without these"
-                        " words or their variants. Reference claims by their ids"
-                        " and never repeat a claim's wording; quoting is not"
-                        " exempt in your prose. Describe what the public record"
-                        " shows instead of characterizing conduct. Keep the same"
-                        " JSON structure and trigger reasoning."
-                    ),
-                ),
+                Message(role="user", content=" ".join(corrections)),
             ]
             continue
         break
 
     assessment_result = enforce_assessments(parsed.assessments, casefile)
-    signals = claim_signals(casefile, assessment_result.assessments)
+    signals = gate_signals(casefile, assessment_result.assessments)
     result = enforce(
         model_level=parsed.verdict.level,
         model_triggered=parsed.verdict.triggered,
         model_questions=parsed.verdict.questions,
         candidates=candidates,
-        claim_signals=signals,
+        gate_signals=signals,
     )
     verdict = Verdict(
         level=result.level,

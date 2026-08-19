@@ -217,6 +217,37 @@ def test_openai_request_shape_without_schema_has_no_text() -> None:
     assert "text" not in kwargs
 
 
+def test_openai_schema_name_comes_from_the_schema_title_per_stage() -> None:
+    """Per-stage schema names: the JSON Schema title annotation becomes the
+    OpenAI json_schema name, so the synthesis and claims stages are
+    distinguishable in provider-side logs and dashboards."""
+    from coldscreen.claims import build_claims_schema
+    from coldscreen.synthesis import SYNTHESIS_SCHEMA, build_synthesis_schema
+
+    titled = {"title": "coldscreen_claims", "type": "object"}
+    kwargs = openai_kwargs("gpt-5.6-sol", "SYSTEM", MESSAGES[:1], titled)
+    assert kwargs["text"]["format"]["name"] == "coldscreen_claims"
+    # A schema with no title keeps the fallback name.
+    untitled = {"type": "object"}
+    fallback = openai_kwargs("gpt-5.6-sol", "SYSTEM", MESSAGES[:1], untitled)
+    assert fallback["text"]["format"]["name"] == "coldscreen_synthesis"
+    # The real stage schemas carry their stage titles.
+    assert SYNTHESIS_SCHEMA["title"] == "coldscreen_synthesis"
+    assert build_claims_schema(["deck p.1"])["title"] == "coldscreen_claims"
+    from datetime import UTC, datetime
+
+    from coldscreen.models import CaseFile, CompanyProfile
+
+    casefile = CaseFile(
+        subject=CompanyProfile.model_validate(
+            {"company_name": "FICTIONAL SUBJECT LTD", "company_number": "99999903"}
+        ),
+        tool_version="0.1.0.dev0",
+        screened_at=datetime(2026, 8, 18, 12, 0, 0, tzinfo=UTC),
+    )
+    assert build_synthesis_schema(casefile)["title"] == "coldscreen_synthesis"
+
+
 @dataclass
 class _OpenAIResponse:
     output_text: str

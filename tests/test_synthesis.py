@@ -9,7 +9,16 @@ import pytest
 
 from coldscreen.casedir import load_casefile
 from coldscreen.language import find_banned_terms
-from coldscreen.models import CaseFile, Claim, CompanyProfile, Evidence, Finding
+from coldscreen.models import (
+    CaseFile,
+    Charge,
+    Claim,
+    CompanyProfile,
+    Evidence,
+    Finding,
+    MediaItem,
+    MediaScreening,
+)
 from coldscreen.rubric import detect_candidates
 from coldscreen.synthesis import (
     MISSING_ASSESSMENT_NOTE,
@@ -19,8 +28,8 @@ from coldscreen.synthesis import (
     apply_synthesis,
     build_synthesis_input,
     build_synthesis_schema,
-    claim_signals,
     enforce_assessments,
+    gate_signals,
     load_prompt,
     prompt_version,
     serialize_input,
@@ -101,9 +110,9 @@ def claims_casefile() -> CaseFile:
 # -- prompt ---------------------------------------------------------------------
 
 
-def test_prompt_loads_and_carries_version_3() -> None:
+def test_prompt_loads_and_carries_version_4() -> None:
     prompt = load_prompt()
-    assert prompt_version(prompt) == "3"
+    assert prompt_version(prompt) == "4"
 
 
 def test_prompt_contains_the_load_bearing_rules() -> None:
@@ -112,17 +121,27 @@ def test_prompt_contains_the_load_bearing_rules() -> None:
     # Banned vocabulary is listed explicitly.
     for term in ("fraud", "criminal", "dishonest", "con artist"):
         assert term in prompt
-    # Every rubric trigger id is defined in the prompt.
-    for trigger_id in ("R1", "R2", "R3", "R4", "R5", "A1", "A2", "A3", "A4", "A5", "A6"):
+    # Every rubric trigger id is defined in the prompt, A7 included.
+    for trigger_id in ("R1", "R2", "R3", "R4", "R5", "A1", "A2", "A3", "A4", "A5", "A6", "A7"):
         assert trigger_id in prompt
     assert "Any RED trigger forces a RED verdict" in prompt
+    # Rubric 0.2: the fires-only-when conditions travel with the table.
+    assert "Fires only when" in prompt
     # The weekend 3 assessment contract is stated.
     assert "assessments" in prompt
     assert "record_note" in prompt
     assert "basis_finding_ids" in prompt
     # The prose rules after the review fix: ids, never wording.
     assert "NEVER repeat a claim's wording" in prompt
-    assert "WITH NO EXEMPTIONS" in prompt
+
+
+def test_prompt_forbids_describing_not_run_or_failed_stages_as_clean() -> None:
+    """The hardening-1 rule: absence and failure are stated, never dressed
+    up as a clean pass. Wording asserted here so the rule cannot silently
+    fall out of the prompt."""
+    prompt = load_prompt()
+    assert 'must never be described as clean, passed, or "no matches found"' in prompt
+    assert "a failed stage is a gap in the screen, not a result" in prompt
 
 
 def test_prompt_version_marker_is_required() -> None:
@@ -184,7 +203,7 @@ def test_happy_path_records_metadata_and_uses_the_schema() -> None:
     assert result.verdict.triggered == ["A1"]
     assert result.metadata.provider == "fake"
     assert result.metadata.model == "canned"
-    assert result.metadata.prompt_version == "3"
+    assert result.metadata.prompt_version == "4"
     assert result.metadata.parse_retries == 0
     assert result.metadata.language_retries == 0
     assert result.verdict_enforcement is None
@@ -376,6 +395,201 @@ def test_language_gate_covers_questions_too() -> None:
     assert result.metadata.language_retries == 1
 
 
+def _status_casefile(status: str) -> CaseFile:
+    """A casefile whose only signal is the registered status finding."""
+    status_finding = Finding(
+        id="REG-001",
+        stage="registry",
+        severity="amber" if status == "dissolved" else "red",
+        confidence="confirmed",
+        statement=f"Company status is {status}.",
+        evidence=[Evidence(source_url="https://example.invalid/profile", retrieved_at=NOW)],
+    )
+    casefile = minimal_casefile([status_finding])
+    return casefile.model_copy(
+        update={
+            "subject": CompanyProfile.model_validate(
+                {
+                    "company_name": "FICTIONAL SUBJECT LTD",
+                    "company_number": "99999903",
+                    "company_status": status,
+                }
+            )
+        }
+    )
+
+
+def test_dissolved_company_cannot_reach_green_a7_is_forced() -> None:
+    """The live-screen regression that motivated rubric 0.2: a dissolved
+    company reached GREEN. Now A7 is a mechanical candidate and the floor
+    forces it in whatever the model says."""
+    provider = FakeModelProvider([synthesis_json("green", [])])
+    result = synthesize(
+        _status_casefile("dissolved"), provider, provider_name="fake", model="canned"
+    )
+    assert result.verdict.level == "amber"
+    assert result.verdict.triggered == ["A7"]
+    assert any("the model omitted" in n for n in result.metadata.enforcement_notes)
+
+
+def test_administration_status_alone_forces_r2_without_case_detail() -> None:
+    """R2 fires from the status leg with the profile as evidence, whether
+    or not insolvency case detail was retrieved."""
+    provider = FakeModelProvider([synthesis_json("green", [])])
+    result = synthesize(
+        _status_casefile("administration"), provider, provider_name="fake", model="canned"
+    )
+    assert result.verdict.level == "red"
+    assert result.verdict.triggered == ["R2"]
+
+
+def test_prose_may_spell_out_registry_identity_names_verbatim() -> None:
+    """The registry identity exemption at the per-field gate: the model can
+    name a banned-word company and officer exactly as the register spells
+    them, with no corrective retry."""
+    from coldscreen.models import Officer
+
+    casefile = minimal_casefile().model_copy(
+        update={
+            "subject": CompanyProfile.model_validate(
+                {"company_name": "TOTAL SHAM TRADING LTD", "company_number": "99999905"}
+            ),
+            "officers": [Officer.model_validate({"name": "CROOK, Cuthbert"})],
+        }
+    )
+    clean = synthesis_json(
+        "green",
+        narrative=(
+            "TOTAL SHAM TRADING LTD is an active company; its sole director"
+            " CROOK, Cuthbert was appointed at incorporation."
+        ),
+    )
+    provider = FakeModelProvider([clean])
+    result = synthesize(casefile, provider, provider_name="fake", model="canned")
+    assert result.metadata.language_retries == 0
+    assert "TOTAL SHAM TRADING LTD" in result.narrative
+
+
+def test_identity_exemption_never_covers_prose_outside_the_exact_name() -> None:
+    """The same words outside the registered spelling still fail the gate:
+    the exemption is the exact span, not the vocabulary."""
+    casefile = minimal_casefile().model_copy(
+        update={
+            "subject": CompanyProfile.model_validate(
+                {"company_name": "TOTAL SHAM TRADING LTD", "company_number": "99999905"}
+            ),
+        }
+    )
+    dirty = synthesis_json(
+        "green",
+        narrative="TOTAL SHAM TRADING LTD looks like a sham to me.",
+    )
+    provider = FakeModelProvider([dirty, dirty])
+    with pytest.raises(SynthesisError, match=r"still used 1 banned term\(s\)"):
+        synthesize(casefile, provider, provider_name="fake", model="canned")
+
+
+# -- the stage-honesty gate ---------------------------------------------------------
+
+
+def test_clean_claim_about_a_not_run_stage_triggers_one_corrective_retry() -> None:
+    """minimal_casefile has no sanctions block at all: the stage never ran,
+    so 'no sanctions matches' is a lie the gate catches mechanically."""
+    dishonest = synthesis_json(
+        "green", narrative="No sanctions matches were found for any subject."
+    )
+    honest = synthesis_json(
+        "green", narrative="Sanctions screening was not performed this run (SAN-000)."
+    )
+    provider = FakeModelProvider([dishonest, honest])
+    result = synthesize(minimal_casefile(), provider, provider_name="fake", model="canned")
+    assert result.metadata.language_retries == 1
+    corrective = provider.calls[1].messages[-1]
+    assert corrective.role == "user"
+    assert "not run or failed" in corrective.content
+    assert "sanctions" in corrective.content
+    assert "never a result" in corrective.content
+
+
+def test_persistent_clean_claim_fails_closed_with_a_sanitized_message() -> None:
+    dishonest = synthesis_json("green", narrative="Sanctions screening was clean.")
+    provider = FakeModelProvider([dishonest, dishonest])
+    with pytest.raises(SynthesisError) as caught:
+        synthesize(minimal_casefile(), provider, provider_name="fake", model="canned")
+    message = str(caught.value)
+    assert "described the sanctions stage(s) as clean" in message
+    assert "not run or failed" in message
+    # Sanitized: no model text, no banned vocabulary; safe for the failure memo.
+    assert "No sanctions matches" not in message
+    assert find_banned_terms(message) == []
+    assert len(provider.calls) == 2
+
+
+def test_clean_claim_about_a_failed_media_stage_is_caught() -> None:
+    failed_media = minimal_casefile().model_copy(
+        update={
+            "media": MediaScreening(
+                performed=False,
+                failed=True,
+                skipped_reason="the adverse media search stage failed after retries",
+            )
+        }
+    )
+    dishonest = synthesis_json("green", rationale="There is no adverse media on this company.")
+    provider = FakeModelProvider([dishonest, dishonest])
+    with pytest.raises(SynthesisError, match=r"described the adverse media stage\(s\) as clean"):
+        synthesize(failed_media, provider, provider_name="fake", model="canned")
+
+
+def test_clean_claims_about_stages_that_ran_are_not_gated() -> None:
+    """The gate arms only for not-run or failed stages: a stage that RAN
+    and found nothing may honestly say so."""
+    from coldscreen.models import SanctionsScreening
+
+    ran_clean = minimal_casefile().model_copy(
+        update={
+            "sanctions": SanctionsScreening(performed=True, threshold=0.7),
+            "media": MediaScreening(performed=True),
+        }
+    )
+    honest = synthesis_json(
+        "green",
+        narrative=(
+            "Sanctions screening returned no candidates; there is no adverse"
+            " media in any query category."
+        ),
+    )
+    provider = FakeModelProvider([honest])
+    result = synthesize(ran_clean, provider, provider_name="fake", model="canned")
+    assert result.metadata.language_retries == 0
+
+
+def test_honest_absence_statements_pass_the_gate() -> None:
+    """The canonical honest sentence about skipped stages (the golden
+    narrative's shape) must not trip the fixed phrase set."""
+    honest = synthesis_json(
+        "green",
+        narrative=(
+            "Sanctions screening and the adverse media search were not"
+            " performed this run (SAN-000, MED-000), so those absences are"
+            " open questions rather than clean results."
+        ),
+    )
+    provider = FakeModelProvider([honest])
+    result = synthesize(minimal_casefile(), provider, provider_name="fake", model="canned")
+    assert result.metadata.language_retries == 0
+
+
+def test_both_stages_are_named_when_both_are_misdescribed() -> None:
+    dishonest = synthesis_json(
+        "green",
+        narrative="No sanctions matches and no adverse media were found.",
+    )
+    provider = FakeModelProvider([dishonest, dishonest])
+    with pytest.raises(SynthesisError, match="sanctions and adverse media stage"):
+        synthesize(minimal_casefile(), provider, provider_name="fake", model="canned")
+
+
 # -- assessments: happy path through synthesize -----------------------------------
 
 
@@ -518,17 +732,21 @@ def test_record_notes_are_collapsed_to_one_line() -> None:
     assert outcome.assessments[0].record_note == "Two lines here."
 
 
-def test_claim_signals_derive_from_enforced_state_only() -> None:
+def test_gate_signals_derive_from_enforced_state_only() -> None:
     casefile = claims_casefile()
     # A contradicted assessment whose basis did NOT resolve was downgraded:
     # it opens nothing for R4, but it IS a model-authored unverified row
     # (the model judged; its evidence failed), so A4 stays reachable.
     outcome = enforce_assessments([_raw("CLM-001", "contradicted", ["NOPE-1"])], casefile)
-    signals = claim_signals(casefile, outcome.assessments)
-    assert signals.checkable_claims_present is True
-    assert signals.contradicted_with_basis is False
+    signals = gate_signals(casefile, outcome.assessments)
+    assert signals.checkable_history_present is True  # CLM-001 is history
+    assert signals.checkable_financials_present is False
+    assert signals.charges_present is False
+    assert signals.claims_material_present is True
+    assert signals.contradicted_with_relevant_basis is False
     assert signals.unverified_present is True
     assert signals.overlaps_present is False
+    assert signals.media_items_present is False
 
     resolved = enforce_assessments(
         [
@@ -537,9 +755,73 @@ def test_claim_signals_derive_from_enforced_state_only() -> None:
         ],
         casefile,
     )
-    signals = claim_signals(casefile, resolved.assessments)
-    assert signals.contradicted_with_basis is True
+    signals = gate_signals(casefile, resolved.assessments)
+    assert signals.contradicted_with_relevant_basis is True
     assert signals.unverified_present is False
+
+
+def test_gate_signals_charges_and_media_states() -> None:
+    """charges_present tracks the register; media_items_present opens only
+    on ran-with-items (the not-run and ran-empty states are both False)."""
+    casefile = claims_casefile()
+    assert gate_signals(casefile, []).charges_present is False
+    with_charge = casefile.model_copy(update={"charges": [Charge(status="outstanding")]})
+    assert gate_signals(with_charge, []).charges_present is True
+
+    assert gate_signals(casefile, []).media_items_present is False  # media None
+    not_run = casefile.model_copy(update={"media": MediaScreening(performed=False)})
+    assert gate_signals(not_run, []).media_items_present is False
+    ran_empty = casefile.model_copy(update={"media": MediaScreening(performed=True)})
+    assert gate_signals(ran_empty, []).media_items_present is False
+    ran_with_items = casefile.model_copy(
+        update={
+            "media": MediaScreening(
+                performed=True,
+                items=[
+                    MediaItem(
+                        title="A fictional headline",
+                        url="https://fictional-gazette.example/story",
+                        source_domain="fictional-gazette.example",
+                        query_category="misconduct",
+                    )
+                ],
+            )
+        }
+    )
+    assert gate_signals(ran_with_items, []).media_items_present is True
+
+
+def test_a6_gate_matrix_through_synthesize() -> None:
+    """The A6 matrix end to end: a model citing A6 is accepted only when
+    the media stage ran and returned at least one item."""
+    base = claims_casefile()
+    item = MediaItem(
+        title="A fictional headline",
+        url="https://fictional-gazette.example/story",
+        source_domain="fictional-gazette.example",
+        query_category="misconduct",
+    )
+    states = {
+        "not_run": (MediaScreening(performed=False, skipped_reason="no key"), False),
+        "ran_empty": (MediaScreening(performed=True), False),
+        "ran_with_items": (MediaScreening(performed=True, items=[item]), True),
+    }
+    clean_assessments = [
+        assessment_json("CLM-001", "unverified", [], "No source."),
+        assessment_json("CLM-003", "unverified", [], "No source."),
+    ]
+    for label, (media, expect_accepted) in states.items():
+        casefile = base.model_copy(update={"media": media})
+        provider = FakeModelProvider(
+            [synthesis_json("amber", ["A6"], assessments=clean_assessments)]
+        )
+        result = synthesize(casefile, provider, provider_name="fake", model=label)
+        if expect_accepted:
+            assert "A6" in result.verdict.triggered, label
+        else:
+            assert "A6" not in result.verdict.triggered, label
+            notes = " ".join(result.metadata.enforcement_notes)
+            assert "rejected trigger A6" in notes, label
 
 
 def test_backfilled_unverified_rows_never_open_a4() -> None:
@@ -549,25 +831,69 @@ def test_backfilled_unverified_rows_never_open_a4() -> None:
     casefile = claims_casefile()
     outcome = enforce_assessments([], casefile)
     assert all(a.model_assessed is False for a in outcome.assessments)
-    signals = claim_signals(casefile, outcome.assessments)
+    signals = gate_signals(casefile, outcome.assessments)
     assert signals.unverified_present is False
 
     # One model-authored unverified row is enough to open it.
     partial = enforce_assessments([_raw("CLM-001", "unverified")], casefile)
     assert partial.assessments[0].model_assessed is True
     assert partial.assessments[1].model_assessed is False  # back-filled
-    signals = claim_signals(casefile, partial.assessments)
+    signals = gate_signals(casefile, partial.assessments)
     assert signals.unverified_present is True
 
 
 def test_puffery_only_claims_do_not_open_a3_a5() -> None:
-    """Review fix F3: a slogan-only deck (no checkable claims) leaves
-    checkable_claims_present False."""
+    """Review fix F3: a slogan-only deck (no checkable claims) leaves the
+    per-category checkable signals False; claims material is still present
+    for the R5 disclosure judgment."""
     casefile = claims_casefile()
     puffery_only = [c.model_copy(update={"checkable": False}) for c in casefile.claims]
     slogan_casefile = casefile.model_copy(update={"claims": puffery_only})
-    signals = claim_signals(slogan_casefile, [])
-    assert signals.checkable_claims_present is False
+    signals = gate_signals(slogan_casefile, [])
+    assert signals.checkable_history_present is False
+    assert signals.checkable_financials_present is False
+    assert signals.claims_material_present is True
+
+
+def test_contradiction_outside_the_relevance_table_is_downgraded() -> None:
+    """A team claim contradicted on the incorporation-date finding: the
+    evidence resolves, but REG-002 is not in the team category's relevance
+    set, so the contradiction is downgraded with a sanitized note and R4
+    falls to its gate."""
+    casefile = claims_casefile()
+    response = synthesis_json(
+        "red",
+        ["R4"],
+        assessments=[
+            assessment_json("CLM-001", "unverified", [], "No source."),
+            assessment_json("CLM-003", "contradicted", ["REG-002"], "Wrong-category basis."),
+        ],
+    )
+    provider = FakeModelProvider([response])
+    result = synthesize(casefile, provider, provider_name="fake", model="canned")
+    assert result.verdict.level == "green"
+    assert result.verdict.triggered == []
+    by_id = {a.claim_id: a for a in result.assessments}
+    assert by_id["CLM-003"].status == "unverified"
+    assert by_id["CLM-003"].basis == []
+    notes = " ".join(result.metadata.enforcement_notes)
+    assert (
+        "downgraded the assessment for CLM-003 from contradicted to unverified:"
+        " its basis cites no registry finding relevant to a claim in the team"
+        " category" in notes
+    )
+    assert "rejected trigger R4" in notes
+
+
+def test_relevant_contradiction_survives_per_category() -> None:
+    """The same finding id can be relevant to one category and not another:
+    REG-002 grounds a history contradiction and survives."""
+    casefile = claims_casefile()
+    outcome = enforce_assessments([_raw("CLM-001", "contradicted", ["REG-002"])], casefile)
+    survivor = outcome.assessments[0]
+    assert survivor.status == "contradicted"
+    assert survivor.basis
+    assert not any("downgraded" in note for note in outcome.notes)
 
 
 def test_fabricated_r4_without_surviving_contradiction_is_rejected() -> None:

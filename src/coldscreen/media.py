@@ -37,6 +37,7 @@ from .stages.registry import NamedRecord
 STAGE = "media"
 MAX_ATTEMPTS = 5
 NOT_RUN_URL = "coldscreen:not-run/media"
+FAILED_URL = "coldscreen:failed/media"
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 SNIPPET_MAX_CHARS = 280
 
@@ -204,6 +205,10 @@ class MediaStageResult:
     findings: list[Finding] = field(default_factory=list)
     records: list[NamedRecord] = field(default_factory=list)
     screening: MediaScreening = field(default_factory=lambda: MediaScreening(performed=False))
+    # Set when the stage was attempted and failed after retries. The CLI
+    # reports it, exits 1, and still writes the case directory with
+    # everything gathered before the failure.
+    failed_reason: str | None = None
 
 
 def build_queries(company_name: str, previous_names: list[str]) -> list[tuple[str, str]]:
@@ -307,8 +312,16 @@ def run_media(
     query_records: dict[str, list[FetchRecord]] = {c: [] for c, _t in QUERY_CATEGORIES}
     record_number = 0
 
+    failure: MediaSearchError | None = None
+    completed = 0
     for category, query in queries:
-        results = provider.search(query, n=results_per_query)
+        try:
+            results = provider.search(query, n=results_per_query)
+        except MediaSearchError as error:
+            # Failure posture: keep everything gathered so far, record the
+            # failure loudly, and let the run continue to persistence.
+            failure = error
+            break
         taker = getattr(provider, "take_records", None)
         raw_records: list[FetchRecord] = list(taker()) if callable(taker) else []
         if not raw_records:
@@ -338,9 +351,47 @@ def run_media(
                     snippet=snippet,
                 )
             )
+        completed += 1
 
     result.screening.category_counts = raw_counts
     result.screening.category_counts_deduped = deduped_counts
+
+    if failure is not None:
+        failed_record = FetchRecord(
+            url=FAILED_URL,
+            params={},
+            status=0,
+            body={"kind": "stage_failed", "stage": "media", "error": str(failure)},
+            retrieved_at=now(),
+        )
+        result.records.append(NamedRecord("media_failed", failed_record))
+        result.screening.performed = False
+        result.screening.failed = True
+        result.screening.skipped_reason = "the adverse media search stage failed after retries"
+        result.failed_reason = str(failure)
+        result.findings.append(
+            Finding(
+                id="MED-999",
+                stage=STAGE,
+                severity="amber",
+                confidence="confirmed",
+                statement=(
+                    "Adverse media search was attempted and FAILED after retries:"
+                    f" {completed} of {len(queries)} queries completed before the"
+                    " failure, and their raw results are kept in the evidence."
+                    " A failed stage is not a zero-result search, and it is not"
+                    " the same as a search that was never configured."
+                ),
+                evidence=[
+                    Evidence(
+                        source_url=FAILED_URL,
+                        retrieved_at=failed_record.retrieved_at,
+                        excerpt="kind=stage_failed",
+                    )
+                ],
+            )
+        )
+        return result
 
     finding_index = 0
     for category, _term in QUERY_CATEGORIES:

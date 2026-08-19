@@ -316,7 +316,7 @@ def test_r4_on_amber_is_rejected_because_no_claims_exist() -> None:
     notes = result.metadata.enforcement_notes
     assert (
         "rejected trigger R4: no claim assessment survives as contradicted"
-        " with resolved evidence" in notes
+        " with relevant registry evidence" in notes
     )
 
 
@@ -327,9 +327,34 @@ def test_a3_a4_a5_on_amber_are_rejected_without_claims() -> None:
     assert result.verdict.level == "amber"
     assert result.verdict.triggered == ["A1", "A2"]
     notes = " ".join(result.metadata.enforcement_notes)
-    assert "rejected trigger A3: no checkable claims are recorded" in notes
+    assert "rejected trigger A3: no charges on the register or no checkable" in notes
     assert "rejected trigger A4: no model-assessed checkable claim survives" in notes
-    assert "rejected trigger A5: no checkable claims are recorded" in notes
+    assert "rejected trigger A5: no checkable history claim is recorded" in notes
+
+
+def test_a6_on_amber_is_accepted_because_media_items_exist() -> None:
+    """The amber case's media stage ran and returned three items, so a
+    model-cited A6 clears its gate."""
+    casefile = load_casefile(AMBER_DIR)
+    assert casefile.media is not None and casefile.media.performed and casefile.media.items
+    provider = FakeModelProvider([synthesis_json("amber", ["A1", "A2", "A6"])])
+    result = synthesize(casefile, provider, provider_name="fake", model="citer")
+    assert result.verdict.triggered == ["A1", "A2", "A6"]
+    assert result.metadata.enforcement_notes == []
+
+
+def test_a6_on_golden_is_rejected_because_media_never_ran() -> None:
+    """The golden case ran without a search key: media not performed, so a
+    model-cited A6 dies at its gate."""
+    casefile = load_casefile(GOLDEN_DIR)
+    assert casefile.media is not None and casefile.media.performed is False
+    provider = FakeModelProvider(
+        [synthesis_json("amber", ["A1", "A2", "A6"], assessments=GOLDEN_CONTRADICTED)]
+    )
+    result = synthesize(casefile, provider, provider_name="fake", model="fabricator")
+    assert "A6" not in result.verdict.triggered
+    notes = " ".join(result.metadata.enforcement_notes)
+    assert "rejected trigger A6: the media stage did not run or returned no items" in notes
 
 
 def test_a3_and_a5_on_golden_are_accepted_because_claims_exist() -> None:
@@ -527,7 +552,10 @@ def test_golden_case_replays_byte_identically_with_deck_and_model(
 
 
 def test_green_case_replays_byte_identically_with_site_and_model(
-    replay_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+    replay_env: Path,
+    respx_mock: respx.MockRouter,
+    monkeypatch: pytest.MonkeyPatch,
+    resolve_public: None,
 ) -> None:
     monkeypatch.setenv("COLDSCREEN_MODEL", "ollama:fake-model:1b")
     monkeypatch.setenv("OPENSANCTIONS_API_KEY", synthetic.SANCTIONS_TEST_KEY)

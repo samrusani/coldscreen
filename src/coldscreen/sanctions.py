@@ -51,6 +51,7 @@ STAGE = "sanctions"
 MAX_QUERIES_PER_REQUEST = 100
 MAX_ATTEMPTS = 5
 NOT_RUN_URL = "coldscreen:not-run/sanctions"
+FAILED_URL = "coldscreen:failed/sanctions"
 
 
 class SanctionsError(Exception):
@@ -309,6 +310,10 @@ class SanctionsStageResult:
     screening: SanctionsScreening = field(
         default_factory=lambda: SanctionsScreening(performed=False)
     )
+    # Set when the stage was attempted and failed after retries. The CLI
+    # reports it, exits 1, and still writes the case directory: failure is
+    # loudly recorded data, never a silent abort.
+    failed_reason: str | None = None
 
 
 def _extract_resolved_algorithm(body: Any) -> str | None:
@@ -431,6 +436,7 @@ def run_sanctions(
         sleeper=sleeper,
     )
     records: list[FetchRecord] = []
+    failure: SanctionsError | None = None
     try:
         for chunk_index in range(0, len(subjects), MAX_QUERIES_PER_REQUEST):
             chunk = subjects[chunk_index : chunk_index + MAX_QUERIES_PER_REQUEST]
@@ -452,8 +458,57 @@ def run_sanctions(
             chunk_number = chunk_index // MAX_QUERIES_PER_REQUEST + 1
             name = "sanctions_match" if chunk_number == 1 else f"sanctions_match_{chunk_number}"
             result.records.append(NamedRecord(name, record))
+    except SanctionsError as error:
+        # Failure posture: keep every response already gathered, record the
+        # failure loudly, and let the run continue to persistence. Absence
+        # is data; failure is loudly recorded data.
+        failure = error
     finally:
         client.close()
+
+    if failure is not None:
+        failed_record = FetchRecord(
+            url=FAILED_URL,
+            params={},
+            status=0,
+            body={"kind": "stage_failed", "stage": "sanctions", "error": str(failure)},
+            retrieved_at=now(),
+        )
+        result.records.append(NamedRecord("sanctions_failed", failed_record))
+        result.screening = SanctionsScreening(
+            performed=False,
+            failed=True,
+            skipped_reason="the sanctions screening stage failed after retries",
+            dataset=settings.sanctions_dataset,
+            threshold=settings.sanctions_threshold,
+            algorithm_requested=settings.sanctions_algorithm,
+            limit=settings.sanctions_limit,
+            endpoint=endpoint,
+        )
+        result.failed_reason = str(failure)
+        result.findings.append(
+            Finding(
+                id="SAN-999",
+                stage=STAGE,
+                severity="amber",
+                confidence="confirmed",
+                statement=(
+                    "Sanctions screening was attempted and FAILED after retries:"
+                    " the endpoint could not be used, so no subject received a"
+                    " screening result this run. A failed stage is not a clean"
+                    " result, and it is not the same as screening that was never"
+                    " configured."
+                ),
+                evidence=[
+                    Evidence(
+                        source_url=FAILED_URL,
+                        retrieved_at=failed_record.retrieved_at,
+                        excerpt="kind=stage_failed",
+                    )
+                ],
+            )
+        )
+        return result
 
     threshold = settings.sanctions_threshold
     resolved = next((a for a in (_extract_resolved_algorithm(r.body) for r in records) if a), None)
@@ -518,24 +573,50 @@ def run_sanctions(
                 )
             )
             score_text = f"{best:.2f}" if best is not None else "unreported"
-            result.findings.append(
-                Finding(
-                    id=finding_id,
-                    stage=STAGE,
-                    severity="red",
-                    confidence="confirmed",
-                    statement=(
-                        f"Sanctions screening match for {subject.name}"
-                        f" ({subject.kind}): top score {score_text} at or above"
-                        f" threshold {threshold} in dataset(s)"
-                        f" {', '.join(datasets) or settings.sanctions_dataset}"
-                        f" (algorithm {algorithm_text}). Identity match confidence,"
-                        " not a finding of wrongdoing; verify against the cited"
-                        " evidence file."
-                    ),
-                    evidence=evidence,
+            if subject.kind == "officer":
+                # Rubric 0.2 narrows R1 to entity and PSC matches. An officer
+                # match is reported at amber severity with wording that says
+                # so plainly; it feeds no red trigger.
+                result.findings.append(
+                    Finding(
+                        id=finding_id,
+                        stage=STAGE,
+                        severity="amber",
+                        confidence="confirmed",
+                        statement=(
+                            f"Sanctions screening match for {subject.name}"
+                            f" (officer): top score {score_text} at or above"
+                            f" threshold {threshold} in dataset(s)"
+                            f" {', '.join(datasets) or settings.sanctions_dataset}"
+                            f" (algorithm {algorithm_text}). Officer matches are"
+                            " reported for review at amber severity per rubric"
+                            " 0.2; they do not trigger R1, which covers the"
+                            " entity and PSCs only. Identity match confidence,"
+                            " not a finding of wrongdoing; verify against the"
+                            " cited evidence file."
+                        ),
+                        evidence=evidence,
+                    )
                 )
-            )
+            else:
+                result.findings.append(
+                    Finding(
+                        id=finding_id,
+                        stage=STAGE,
+                        severity="red",
+                        confidence="confirmed",
+                        statement=(
+                            f"Sanctions screening match for {subject.name}"
+                            f" ({subject.kind}): top score {score_text} at or above"
+                            f" threshold {threshold} in dataset(s)"
+                            f" {', '.join(datasets) or settings.sanctions_dataset}"
+                            f" (algorithm {algorithm_text}). Identity match confidence,"
+                            " not a finding of wrongdoing; verify against the cited"
+                            " evidence file."
+                        ),
+                        evidence=evidence,
+                    )
+                )
         elif top_score is not None:
             result.screening.results.append(
                 SanctionsSubjectResult(

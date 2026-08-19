@@ -21,6 +21,9 @@ from typing import Any
 from . import Message, ProviderError, ProviderNotInstalledError, ProviderResponseError
 
 API_KEY_ENV = "OPENAI_API_KEY"
+# Fallback schema name when a schema carries no title of its own. Stage
+# schemas set a per-stage title (coldscreen_synthesis, coldscreen_claims)
+# and that title becomes the OpenAI json_schema name.
 SCHEMA_NAME = "coldscreen_synthesis"
 
 INSTALL_HINT = (
@@ -41,10 +44,11 @@ def build_request_kwargs(
         "input": [{"role": m.role, "content": m.content} for m in messages],
     }
     if json_schema is not None:
+        title = json_schema.get("title")
         kwargs["text"] = {
             "format": {
                 "type": "json_schema",
-                "name": SCHEMA_NAME,
+                "name": title if isinstance(title, str) and title else SCHEMA_NAME,
                 "schema": json_schema,
                 "strict": True,
             }

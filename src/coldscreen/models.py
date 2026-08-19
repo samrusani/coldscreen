@@ -300,6 +300,9 @@ class SanctionsScreening(BaseModel):
     endpoint: str | None = None
     results: list[SanctionsSubjectResult] = Field(default_factory=list)
     skipped_reason: str | None = None
+    # True when the stage was attempted and failed after retries: a failed
+    # stage is recorded loudly and is never the same as an unconfigured skip.
+    failed: bool = False
 
 
 class AppointmentSummary(BaseModel):
@@ -369,6 +372,9 @@ class MediaScreening(BaseModel):
     category_counts_deduped: dict[str, int] = Field(default_factory=dict)
     items: list[MediaItem] = Field(default_factory=list)
     skipped_reason: str | None = None
+    # True when the stage was attempted and failed after retries. Items
+    # gathered before the failure are kept: everything gathered persists.
+    failed: bool = False
 
 
 class ClaimsExtraction(BaseModel):
@@ -419,8 +425,13 @@ class CaseFile(BaseModel):
     Extends the ARCHITECTURE.md section 6 sketch with the registry lists the
     memo needs so that `coldscreen rerun` can re-render fully offline from
     this file alone.
+
+    schema_version is the casefile format version, bumped when the shape
+    changes incompatibly. It leads the serialized JSON so tooling can
+    dispatch on it before parsing the rest.
     """
 
+    schema_version: int = 1
     subject: CompanyProfile
     officers: list[Officer] = Field(default_factory=list)
     pscs: list[PSC] = Field(default_factory=list)

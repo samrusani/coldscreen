@@ -311,3 +311,62 @@ def test_claims_section_states_zero_claims_when_extraction_ran_dry() -> None:
 def test_claims_section_absent_marker_for_legacy_casefiles() -> None:
     memo = render_memo(minimal_casefile())
     assert "Claims extraction was not part of this casefile." in memo
+
+
+def test_pipe_characters_in_claim_text_and_record_note_are_escaped() -> None:
+    """A pipe in a table cell must not break the Markdown table. The escape
+    intentionally breaks the exemption span for such a claim: a claim with
+    a pipe AND banned vocabulary fails closed at the backstop instead."""
+    casefile = minimal_casefile().model_copy(
+        update={
+            "claims": [
+                Claim(
+                    id="CLM-001",
+                    text="Revenue | up 400 percent",
+                    source="deck p.1",
+                    category="financials",
+                    checkable=True,
+                )
+            ],
+            "assessments": [
+                ClaimAssessment(
+                    claim_id="CLM-001",
+                    status="unverified",
+                    basis=[],
+                    record_note="No source | none at all.",
+                )
+            ],
+        }
+    )
+    memo = render_memo(casefile)
+    assert '| 1 | "Revenue \\| up 400 percent" (deck p.1) |' in memo
+    assert "No source \\| none at all." in memo
+    # The raw unescaped cells never appear.
+    assert '"Revenue | up 400 percent"' not in memo
+    assert "No source | none at all." not in memo
+
+
+def test_failed_sanctions_and_media_stages_render_the_failed_wording() -> None:
+    from coldscreen.models import MediaScreening, SanctionsScreening
+
+    casefile = minimal_casefile().model_copy(
+        update={
+            "sanctions": SanctionsScreening(
+                performed=False,
+                failed=True,
+                skipped_reason="the sanctions screening stage failed after retries",
+            ),
+            "media": MediaScreening(
+                performed=False,
+                failed=True,
+                skipped_reason="the adverse media search stage failed after retries",
+            ),
+        }
+    )
+    memo = render_memo(casefile)
+    assert "Attempted and FAILED: the sanctions screening stage failed after retries" in memo
+    assert "See finding SAN-999." in memo
+    assert "Attempted and FAILED: the adverse media search stage failed after retries" in memo
+    assert "See finding MED-999." in memo
+    # The not-run wording is a different sentence entirely.
+    assert "Not performed: the sanctions" not in memo

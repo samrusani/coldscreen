@@ -137,10 +137,49 @@ def test_every_query_produces_a_persisted_record(respx_mock: respx.MockRouter) -
 def test_no_key_is_a_first_class_skip(respx_mock: respx.MockRouter) -> None:
     result = run_media("SUBJECT LTD", [], None, None, 5, lambda: NOW)
     assert result.screening.performed is False
+    assert result.screening.failed is False
     finding = next(f for f in result.findings if f.id == "MED-000")
     assert "not performed" in finding.statement
     record = next(r for r in result.records if r.name == "media_not_run")
     assert record.record.body["kind"] == "not_run"
+
+
+class FailingAfterFirstProvider:
+    """One successful query, then MediaSearchError forever."""
+
+    def __init__(self, first_results: list[SearchResult]) -> None:
+        self.first_results = first_results
+        self.calls = 0
+
+    def search(self, query: str, n: int = 5) -> list[SearchResult]:
+        self.calls += 1
+        if self.calls == 1:
+            return self.first_results[:n]
+        raise MediaSearchError("the search API returned HTTP 401. Check TAVILY_API_KEY.")
+
+
+def test_stage_failure_keeps_gathered_results_and_records_med_999(
+    respx_mock: respx.MockRouter,
+) -> None:
+    """Failure posture: a mid-run failure keeps everything gathered, adds a
+    MED-999 finding clearly distinct from the not-run wording, and reports
+    the reason for the CLI to surface."""
+    provider = FailingAfterFirstProvider([result_for("https://fictional.example/kept-story")])
+    result = run_media("SUBJECT LTD", [], provider, "fake", 5, lambda: NOW)
+    assert provider.calls == 2  # first query succeeded, second failed
+    assert result.failed_reason is not None
+    assert "401" in result.failed_reason
+    assert result.screening.performed is False
+    assert result.screening.failed is True
+    assert [i.url for i in result.screening.items] == ["https://fictional.example/kept-story"]
+    finding = next(f for f in result.findings if f.id == "MED-999")
+    assert finding.severity == "amber"
+    assert "attempted and FAILED" in finding.statement
+    assert "1 of 5 queries completed" in finding.statement
+    record = next(r for r in result.records if r.name == "media_failed")
+    assert record.record.body["kind"] == "stage_failed"
+    # The evidence record for the completed query is preserved too.
+    assert any(r.name == "media_001" for r in result.records)
 
 
 # -- the no-headline-in-memo guarantee -------------------------------------------
