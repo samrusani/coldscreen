@@ -8,7 +8,7 @@ The repository is at github.com/samrusani/coldscreen. Branch `main` is current a
 
 A CLI that turns a UK company name into a first-pass screening memo built entirely from public sources, with every finding traceable to evidence. It is not due diligence. It is the screen that decides whether due diligence is worth anyone's time. The same pipeline is also an MCP stdio server, so the screen runs inside agent workflows without a second implementation of it.
 
-Current state: 710 tests, 28 modules, roughly 9,600 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI. Rubric 0.3 adds a mechanical R4 floor for origin-year contradictions ("operating since 2015" against incorporation in 2019), so that class of claims-bearing case now anchors unconditionally. Cache UX (`--refresh`, `coldscreen cache path|clear|stats`) landed after charges pagination.
+Current state: 729 tests, 28 modules, roughly 9,600 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI. Rubric 0.3 adds a mechanical R4 floor for origin-year contradictions ("operating since 2015" against incorporation in 2019), so that class of claims-bearing case now anchors unconditionally. Cache UX (`--refresh`, `coldscreen cache path|clear|stats`) landed after charges pagination. The stage-honesty phrase set grew from observed not-run lies; the gate is still a substring check, still sanctions and media only, and still arms only when those stages are recorded not run or failed.
 
 ## The five non-negotiables
 
@@ -78,9 +78,10 @@ Findings this loop caught that the test suite did not: pagination that silently 
 
 FUTURE.md holds remaining items. My recommended ordering:
 
-1. **Extend the stage-honesty phrase set** from real model phrasing observed in live runs. The mechanical backstop that stops a memo describing a not-run stage as clean uses a deliberately narrow fixed phrase set.
-2. **A hermetic TLS test for SNI preservation** through the pinned network backend, and a plan for the httpx internals coupling in `site.py` (it fails closed if httpx changes shape, but it is coupled).
-3. Registry adapters for other jurisdictions. Design the adapter interface when a second registry forces it, not before.
+1. **A hermetic TLS test for SNI preservation** through the pinned network backend, and a plan for the httpx internals coupling in `site.py` (it fails closed if httpx changes shape, but it is coupled).
+2. Registry adapters for other jurisdictions. Design the adapter interface when a second registry forces it, not before.
+
+The stage-honesty phrase set grew from observed not-run lies (PEP-first order, evidence-of phrasing, and the `ran and returned no` leak). It is still a substring check, still sanctions and media only, and still arms only when those stages are recorded not run or failed. Unseen future phrasing remains a residual by design. The five non-negotiables above are untouched.
 
 ## Known open items that are not code
 

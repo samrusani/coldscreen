@@ -142,6 +142,18 @@ MCP gets the `refresh` flag on `screen_company` and does not get `cache_clear` o
 
 No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Live honoring of cache TTL against the production API remains UNVERIFIED in the same sense as before: the cache is proven offline.
 
+### 2026-08-19: stage-honesty phrase set extended from observed not-run lies
+The harvest was from local live synthesis memos that are not in the repository, plus the original canned leak (`sanctions screening ran and returned no candidates`). No live company or officer names were copied in. Phrases were genericized before this change.
+
+Miss classes the previous tuples missed:
+- PEP-first order (`no pep or sanctions matches` against the existing `no sanctions or pep match`)
+- `no evidence of sanctions or pep`
+- `ran and` inserted between `screening` and `returned`, and `sanctions returned no` without the word `screening`
+
+The gate is unchanged: substring match after casefold and whitespace collapse, sanctions and media only, armed only when the stage is recorded not run or failed. Finding statements and the whole memo are not scanned. No claims-stage tuple. Retry counts and the sanitized failure message are unchanged. The synthesis prompt was not edited, so snapshot memos stay byte-identical.
+
+The set stays deliberately narrow. Bare `no matches`, `clean results`, `not performed`, `returned no candidates` without a stage word, and `no evidence of sanctions` without the pep/match tail were not added, because they appear in honest gap sentences and in other stages. Unseen future phrasing remains a residual.
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.
