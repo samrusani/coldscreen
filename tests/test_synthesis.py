@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 import pytest
 
 from firstpass.casedir import load_casefile
+from firstpass.language import find_banned_terms
 from firstpass.models import CaseFile, CompanyProfile, Evidence, Finding
 from firstpass.rubric import detect_candidates
 from firstpass.synthesis import (
@@ -255,9 +256,31 @@ def test_banned_word_persisting_after_retry_fails_cleanly() -> None:
     dirty = synthesis_json("green", narrative="A scam, plainly.")
     still_dirty = synthesis_json("green", rationale="It remains a scam.")
     provider = FakeModelProvider([dirty, still_dirty])
-    with pytest.raises(SynthesisError, match="banned"):
+    with pytest.raises(SynthesisError, match=r"still used 1 banned term\(s\) after a corrective"):
         synthesize(minimal_casefile(), provider, provider_name="fake", model="canned")
     assert len(provider.calls) == 2
+
+
+def test_language_gate_exhaustion_reports_a_count_and_never_the_terms() -> None:
+    """The CLI renders this message into the synthesis-failure memo, where the
+    whole-memo backstop would block it if it quoted the vocabulary. Two
+    distinct terms across two fields, so the count is of distinct terms."""
+    dirty = synthesis_json(
+        "green",
+        narrative="A scam, plainly.",
+        rationale="The conduct looks criminal.",
+    )
+    provider = FakeModelProvider([dirty, dirty])
+    with pytest.raises(SynthesisError) as caught:
+        synthesize(minimal_casefile(), provider, provider_name="fake", model="canned")
+    message = str(caught.value)
+    assert find_banned_terms(message) == []
+    assert "2 banned term(s)" in message
+    assert "never use accusatory language" in message
+    # The corrective retry still names them: the model needs them to comply.
+    corrective = provider.calls[1].messages[-1].content
+    assert "scam" in corrective
+    assert "criminal" in corrective
 
 
 def test_language_gate_covers_questions_too() -> None:

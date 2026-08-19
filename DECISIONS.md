@@ -50,6 +50,15 @@ Local model verification with zero cloud keys, via the locally running Ollama. O
 
 Still unproven until keys exist: live Companies House, live cloud providers, live OpenSanctions and Tavily, and the weekend 2 success test on live companies (coherent AMBER and GREEN verdicts on two real screens). The offline surrogates for that test are the golden AMBER and green GREEN snapshot cases.
 
+### 2026-08-19: live verification day; both milestone success tests met
+With the maintainer's Companies House key in place, the weekend 1 success test passed (a real memo for GREGGS PLC in about two seconds, 29 evidence files, the key verified absent from every persisted byte) and the weekend 2 success test passed with margin: GREEN on GREGGS PLC, AMBER on REVOLUTION BARS GROUP LIMITED (genuinely overdue filings plus officer churn), and a bonus RED on REVOLUTION BARS LIMITED, which is in administration (R2 forced the level exactly per rubric rule 1). Live empirics recorded: the API honored items_per_page=100 with no clamping observed, and a 640-filing history truncated honestly at the configured cap.
+
+Production incident and fix, same day: on the administration company, the synthesis model used banned vocabulary, the per-field gate correctly exhausted its retry, but the failure message quoted the offending terms, the CLI rendered that message into the failure memo, and the whole-memo backstop then correctly blocked our own error report, costing the run its audit pack. Fix: the failure message reports a count only; the corrective retry still names the terms to the model. This restored audit-pack preservation on failed syntheses. The double-failure corner had been flagged as theoretical in the weekend 2 fix pass; it took hours to occur in production.
+
+Local model findings: reasoning-family Ollama models corrupt schema-constrained output when their thinking mode is active; sending think false fixes it entirely (verified empirically: the same model produced corrupted constrained JSON with thinking on and perfect output with thinking off). New tri-state setting ollama_think (default unset and omitted from requests; false recommended for reasoning-family models), wired through config, provider, and the verification scripts, which now also honor settings and accept a per-model think suffix in the anchor check. What looked like an MLX engine failure yesterday was this same cause.
+
+Cross-model verification on live data: qwen3-coder:30b and qwen3.8:27b-mlx (thinking off) produced identical verdict levels on all three live cases (GREEN, AMBER, RED), with trigger differences confined to judgment-tier ambers as designed. The anchoring property now holds mechanically by construction, in parametrized tests, and empirically across two model families on real companies.
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.

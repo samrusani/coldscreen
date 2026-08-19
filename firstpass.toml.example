@@ -73,3 +73,12 @@ ollama_timeout_seconds = 600
 # unusually large casefiles, lower it on tight-memory machines. Also
 # settable via FIRSTPASS_OLLAMA_NUM_CTX.
 ollama_num_ctx = 16384
+
+# Ollama thinking mode (the top-level "think" request field). Reasoning-family
+# local models (for example qwen3 non-coder variants) need
+# ollama_think = false for reliable schema-constrained synthesis: with
+# thinking active they return corrupted or empty content. Leave this unset
+# for models that do not support thinking, which can reject the field
+# outright. Unset means the field is never sent. Also settable via
+# FIRSTPASS_OLLAMA_THINK (true/false, or 1/0).
+#   ollama_think = false

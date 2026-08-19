@@ -20,6 +20,8 @@ def test_defaults_match_the_documented_values() -> None:
     assert settings.officer_lookback_years == 5
     assert settings.output_dir == "cases"
     assert settings.ollama_num_ctx == 16384
+    # Unset, so the request never carries the field at all.
+    assert settings.ollama_think is None
 
 
 def test_ollama_num_ctx_follows_the_precedence_chain(tmp_path: Path) -> None:
@@ -30,6 +32,44 @@ def test_ollama_num_ctx_follows_the_precedence_chain(tmp_path: Path) -> None:
     from_env = load_settings(config_file=config, environ={"FIRSTPASS_OLLAMA_NUM_CTX": "32768"})
     assert from_env.ollama_num_ctx == 32768
     assert isinstance(from_env.ollama_num_ctx, int)
+
+
+def test_ollama_think_follows_the_precedence_chain(tmp_path: Path) -> None:
+    config = tmp_path / "firstpass.toml"
+    config.write_text("ollama_think = false\n", encoding="utf-8")
+    from_toml = load_settings(config_file=config, environ={})
+    assert from_toml.ollama_think is False
+    from_env = load_settings(config_file=config, environ={"FIRSTPASS_OLLAMA_THINK": "true"})
+    assert from_env.ollama_think is True
+    from_cli = load_settings(
+        config_file=config,
+        cli_overrides={"ollama_think": False},
+        environ={"FIRSTPASS_OLLAMA_THINK": "true"},
+    )
+    assert from_cli.ollama_think is False
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("true", True),
+        ("TRUE", True),
+        ("True", True),
+        ("1", True),
+        ("false", False),
+        ("FALSE", False),
+        ("0", False),
+        (" false ", False),
+    ],
+)
+def test_ollama_think_env_spellings(raw: str, expected: bool) -> None:
+    settings = load_settings(environ={"FIRSTPASS_OLLAMA_THINK": raw})
+    assert settings.ollama_think is expected
+
+
+def test_ollama_think_rejects_an_unreadable_value() -> None:
+    with pytest.raises(ValueError, match="expected true or false"):
+        load_settings(environ={"FIRSTPASS_OLLAMA_THINK": "maybe"})
 
 
 def test_toml_overrides_defaults(tmp_path: Path) -> None:

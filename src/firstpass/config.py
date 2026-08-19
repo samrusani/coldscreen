@@ -14,7 +14,7 @@ import tomllib
 from dataclasses import dataclass, fields
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args, get_type_hints
 
 from dotenv import load_dotenv
 from platformdirs import user_cache_dir
@@ -67,6 +67,11 @@ class Settings:
     # covers the prompt plus a compact casefile with headroom. Raise it for
     # unusually large casefiles, lower it for tight-memory machines.
     ollama_num_ctx: int = 16384
+    # Ollama thinking mode (the top-level "think" request field). Tri-state:
+    # None omits the field entirely, which is what models without thinking
+    # support need because they can reject it. Reasoning-family models need
+    # false for reliable schema-constrained synthesis; see providers/ollama_p.py.
+    ollama_think: bool | None = None
 
     @property
     def cache_path(self) -> Path:
@@ -94,7 +99,29 @@ def _read_toml(path: Path) -> dict[str, Any]:
         return tomllib.load(fh)
 
 
+_TRUE_SPELLINGS = frozenset({"true", "1"})
+_FALSE_SPELLINGS = frozenset({"false", "0"})
+
+
+def coerce_bool(raw: Any) -> bool:
+    """The one definition of the accepted true/false spellings.
+
+    TOML booleans arrive already typed; environment values and script
+    arguments arrive as text.
+    """
+    if isinstance(raw, bool):
+        return raw
+    text = str(raw).strip().lower()
+    if text in _TRUE_SPELLINGS:
+        return True
+    if text in _FALSE_SPELLINGS:
+        return False
+    raise ValueError(f"expected true or false (or 1 or 0), got {raw!r}")
+
+
 def _coerce(raw: Any, target: type) -> Any:
+    if target is bool:
+        return coerce_bool(raw)
     if target is int:
         return int(raw)
     if target is float:
@@ -102,6 +129,21 @@ def _coerce(raw: Any, target: type) -> Any:
     if target is str:
         return str(raw)
     return raw
+
+
+def _target_types() -> dict[str, type]:
+    """Coercion target per setting, read from the annotations.
+
+    The default value alone is not enough: an optional setting defaults to
+    None, and None carries no useful type. ollama_think is annotated
+    bool | None and coerces as bool whenever it is set at all; leaving it
+    unset is what keeps it out of the request.
+    """
+    targets: dict[str, type] = {}
+    for name, hint in get_type_hints(Settings).items():
+        present = [arg for arg in get_args(hint) if arg is not type(None)]
+        targets[name] = present[0] if present else hint
+    return targets
 
 
 def load_settings(
@@ -128,10 +170,10 @@ def load_settings(
             file=sys.stderr,
         )
 
-    defaults = Settings()
+    targets = _target_types()
     values: dict[str, Any] = {}
     for field in fields(Settings):
-        target = type(getattr(defaults, field.name))
+        target = targets[field.name]
         if field.name in toml_data:
             values[field.name] = _coerce(toml_data[field.name], target)
         env_key = ENV_PREFIX + field.name.upper()

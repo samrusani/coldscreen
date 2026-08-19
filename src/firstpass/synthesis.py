@@ -247,11 +247,16 @@ def synthesize(
         banned = sorted(set().union(*(find_banned_terms(f) for f in rendered_fields)))
         if banned:
             if language_retries >= MAX_LANGUAGE_RETRIES:
+                # Count only, never the terms: the CLI renders this message
+                # into the synthesis-failure memo, so quoting the vocabulary
+                # here would trip the whole-memo backstop and cost the run
+                # its audit pack. The corrective retry below still names the
+                # terms, because the model needs them to fix its output.
                 raise SynthesisError(
-                    "synthesis failed: the model output still used banned"
-                    f" vocabulary ({', '.join(banned)}) after a corrective retry."
-                    " Memos state what the record shows; they never use accusatory"
-                    " language."
+                    "synthesis failed: the model output still used"
+                    f" {len(banned)} banned term(s) after a corrective retry."
+                    " Memos state what the record shows; they never use"
+                    " accusatory language."
                 )
             language_retries += 1
             messages = messages + [

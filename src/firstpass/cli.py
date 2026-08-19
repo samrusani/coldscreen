@@ -158,6 +158,7 @@ def _prepare_provider(
         ollama_base_url=ollama_base_url_from_env(),
         ollama_timeout_seconds=settings.ollama_timeout_seconds,
         ollama_num_ctx=settings.ollama_num_ctx,
+        ollama_think=settings.ollama_think,
     )
     return provider, provider_name, model_name
 

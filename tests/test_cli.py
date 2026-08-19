@@ -18,9 +18,11 @@ from typer.testing import CliRunner, Result
 
 import firstpass.cli
 from firstpass.cli import app
+from firstpass.language import find_banned_terms
 from firstpass.models import CaseFile
 
 from .conftest import FIXTURES_DIR, load_fixture, mock_company_routes
+from .fakes import synthesis_json
 
 SECRET = "fixture-key-0123456789-not-a-real-key"
 FIXTURE_CASE_DIR = FIXTURES_DIR / "case-fabricated-widgets-ltd-99999999"
@@ -387,6 +389,7 @@ def test_screen_with_ollama_model_synthesizes_and_enforces(
     assert sent["stream"] is False
     assert sent["options"] == {"temperature": 0, "num_ctx": 16384}
     assert sent["format"]["type"] == "object"  # bare JSON schema, no envelope
+    assert "think" not in sent  # unset by default, so the field is never sent
 
     casefile = CaseFile.model_validate_json(
         (screen_env / "cases" / "fabricated-widgets-ltd-99999999" / "casefile.json").read_text(
@@ -406,6 +409,26 @@ def test_screen_with_ollama_model_synthesizes_and_enforces(
     )
     assert "**AMBER**" in memo
     assert "Verdict level enforced" in memo
+
+
+def test_ollama_think_setting_reaches_the_request_body(
+    screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Environment to request body, the whole chain in one pass.
+
+    Reasoning-family local models need think false to produce usable output
+    under a schema, so the setting has to survive every hop.
+    """
+    mock_company_routes(respx_mock)
+    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    monkeypatch.setenv("FIRSTPASS_OLLAMA_THINK", "false")
+    route = respx_mock.post(OLLAMA_CHAT_URL).respond(
+        200, json=ollama_reply(load_synthesis_json("green"))
+    )
+    result = runner.invoke(app, ["screen", "Fabricated Widgets Ltd"])
+    assert result.exit_code == 0, result.output
+    sent = json.loads(route.calls.last.request.content.decode("utf-8"))
+    assert sent["think"] is False
 
 
 def test_bad_model_spec_fails_before_any_fetching(
@@ -601,3 +624,39 @@ def test_language_backstop_blocks_a_poisoned_memo_on_screen(
     assert "language backstop" in combined
     assert "sham" not in combined.lower()
     assert not (screen_env / "cases").exists()
+
+
+def test_language_gate_exhaustion_memo_survives_the_backstop(
+    screen_env: Path, respx_mock: respx.MockRouter, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The two gates must not collide. The model returns banned vocabulary on
+    the first attempt AND on the corrective retry, so synthesis gives up. Its
+    message is rendered into the failure memo, so it reports a count and never
+    the vocabulary: the backstop passes the memo and the run keeps its audit
+    pack instead of losing everything to a second gate hit."""
+    mock_company_routes(respx_mock)
+    monkeypatch.setenv("FIRSTPASS_MODEL", "ollama:fake-model:1b")
+    dirty = synthesis_json("green", narrative="The filing pattern reads like a scam.")
+    route = respx_mock.post(OLLAMA_CHAT_URL).respond(200, json=ollama_reply(dirty))
+    result = runner.invoke(app, ["screen", "Fabricated Widgets Ltd"])
+
+    assert result.exit_code == 1
+    assert route.call_count == 2  # the first attempt plus one corrective retry
+    combined = all_output(result)
+    assert "Synthesis failed" in combined
+    assert "1 banned term(s)" in combined
+    assert "language backstop" not in combined
+    assert find_banned_terms(combined) == []
+    assert "Traceback" not in combined
+
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    assert (case_dir / "casefile.json").is_file()
+    assert (case_dir / "evidence" / "index.json").is_file()
+    memo = (case_dir / "memo.md").read_text(encoding="utf-8")
+    assert "Synthesis was attempted and failed" in memo
+    assert "1 banned term(s)" in memo
+    assert find_banned_terms(memo) == []
+    casefile = CaseFile.model_validate_json(
+        (case_dir / "casefile.json").read_text(encoding="utf-8")
+    )
+    assert casefile.verdict is None

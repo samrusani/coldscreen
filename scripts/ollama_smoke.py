@@ -6,8 +6,14 @@ HTTP, no keys, no cost), and prints the enforced verdict, the trigger set,
 enforcement notes, retry counts, and wall time. This is manual verification,
 not CI: pytest stays fully offline.
 
+Ollama settings are read the way the CLI reads them (firstpass.toml, then
+the environment), so the run here matches a real screen. That matters most
+for FIRSTPASS_OLLAMA_THINK: a reasoning-family model needs it set to false
+before it will produce usable schema-constrained output.
+
 Usage: python scripts/ollama_smoke.py <model> [more models ...]
 Example: python scripts/ollama_smoke.py qwen2.5:7b
+Example: FIRSTPASS_OLLAMA_THINK=false python scripts/ollama_smoke.py qwen3:8b
 """
 
 from __future__ import annotations
@@ -20,7 +26,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from firstpass.casedir import load_casefile  # noqa: E402
-from firstpass.config import ollama_base_url_from_env  # noqa: E402
+from firstpass.config import (  # noqa: E402
+    Settings,
+    load_dotenv_if_present,
+    load_settings,
+    ollama_base_url_from_env,
+)
 from firstpass.providers import ProviderError  # noqa: E402
 from firstpass.providers.ollama_p import OllamaProvider  # noqa: E402
 from firstpass.synthesis import SynthesisError, synthesize  # noqa: E402
@@ -28,10 +39,19 @@ from firstpass.synthesis import SynthesisError, synthesize  # noqa: E402
 GOLDEN_DIR = REPO_ROOT / "tests" / "fixtures" / "golden"
 
 
-def smoke(model: str) -> int:
+def smoke(model: str, settings: Settings) -> int:
     casefile = load_casefile(GOLDEN_DIR)
-    provider = OllamaProvider(model=model, base_url=ollama_base_url_from_env())
+    provider = OllamaProvider(
+        model=model,
+        base_url=ollama_base_url_from_env(),
+        timeout_seconds=settings.ollama_timeout_seconds,
+        num_ctx=settings.ollama_num_ctx,
+        think=settings.ollama_think,
+    )
+    think = settings.ollama_think
+    think_label = "unset, so the field is omitted" if think is None else str(think).lower()
     print(f"== ollama smoke: {model} ==")
+    print(f"num_ctx: {settings.ollama_num_ctx}, think: {think_label}")
     started = time.monotonic()
     try:
         result = synthesize(casefile, provider, provider_name="ollama", model=model)
@@ -62,9 +82,11 @@ def main(argv: list[str]) -> int:
     if not argv:
         print("usage: python scripts/ollama_smoke.py <model> [more models ...]")
         return 2
+    load_dotenv_if_present()
+    settings = load_settings()
     status = 0
     for model in argv:
-        status = max(status, smoke(model))
+        status = max(status, smoke(model, settings))
         print()
     return status
 

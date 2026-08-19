@@ -95,6 +95,7 @@ def get_provider(
     ollama_base_url: str | None = None,
     ollama_timeout_seconds: float = 600.0,
     ollama_num_ctx: int = 16384,
+    ollama_think: bool | None = None,
 ) -> ModelProvider:
     """Build the named provider. SDK imports are lazy: an extra that is not
     installed produces a clear install hint, not a bare ImportError."""
@@ -114,5 +115,6 @@ def get_provider(
             base_url=ollama_base_url,
             timeout_seconds=ollama_timeout_seconds,
             num_ctx=ollama_num_ctx,
+            think=ollama_think,
         )
     raise ModelSpecError(f"unknown provider {provider!r}")

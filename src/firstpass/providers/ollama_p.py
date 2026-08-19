@@ -16,6 +16,14 @@ empty content against the default window and behaves once num_ctx covers
 the input. The window is configuration (settings key ollama_num_ctx, env
 FIRSTPASS_OLLAMA_NUM_CTX, firstpass.toml), wired through the constructor.
 
+The top-level "think" field is not in that wiki note; it comes from local
+observation 2026-08-19: reasoning-family models (qwen3 and relatives)
+returned corrupted or empty content under schema-constrained generation
+while thinking was active, and behaved once "think": false was sent. Models
+with no thinking support can reject the field outright, so it is tri-state
+(settings key ollama_think, env FIRSTPASS_OLLAMA_THINK, firstpass.toml):
+None omits it from the body entirely and is the default.
+
 Local models keep the tool self-hostable end to end, so this provider must
 never grow SDK or cloud dependencies.
 """
@@ -40,9 +48,11 @@ def build_request_body(
     messages: list[Message],
     json_schema: dict[str, Any] | None,
     num_ctx: int = DEFAULT_NUM_CTX,
+    think: bool | None = None,
 ) -> dict[str, Any]:
     """Pure request shape builder. The system prompt becomes the first
-    message because /api/chat has no separate system parameter."""
+    message because /api/chat has no separate system parameter. think is
+    tri-state: None leaves the field out of the body altogether."""
     chat_messages: list[dict[str, str]] = [{"role": "system", "content": system}]
     chat_messages.extend({"role": m.role, "content": m.content} for m in messages)
     body: dict[str, Any] = {
@@ -53,6 +63,8 @@ def build_request_body(
     }
     if json_schema is not None:
         body["format"] = json_schema
+    if think is not None:
+        body["think"] = think
     return body
 
 
@@ -65,11 +77,13 @@ class OllamaProvider:
         base_url: str | None = None,
         timeout_seconds: float = 600.0,
         num_ctx: int = DEFAULT_NUM_CTX,
+        think: bool | None = None,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.model = model
         self.base_url = (base_url or DEFAULT_OLLAMA_BASE_URL).rstrip("/")
         self.num_ctx = num_ctx
+        self.think = think
         self._http = httpx.Client(
             base_url=self.base_url,
             timeout=httpx.Timeout(timeout_seconds, connect=10.0),
@@ -85,7 +99,14 @@ class OllamaProvider:
         messages: list[Message],
         json_schema: dict[str, Any] | None = None,
     ) -> str:
-        body = build_request_body(self.model, system, messages, json_schema, num_ctx=self.num_ctx)
+        body = build_request_body(
+            self.model,
+            system,
+            messages,
+            json_schema,
+            num_ctx=self.num_ctx,
+            think=self.think,
+        )
         try:
             response = self._http.post("/api/chat", json=body)
         except httpx.TransportError as error:
@@ -111,6 +132,11 @@ class OllamaProvider:
             done_reason = payload.get("done_reason") if isinstance(payload, dict) else None
             thinking = bool(message.get("thinking")) if isinstance(message, dict) else False
             detail = f" (done_reason: {done_reason}"
-            detail += ", thinking tokens were produced)" if thinking else ")"
+            detail += (
+                ", thinking tokens were produced: reasoning-family models need"
+                " ollama_think = false for schema-constrained synthesis)"
+                if thinking
+                else ")"
+            )
             raise ProviderResponseError("Ollama response carried no message content" + detail)
         return content

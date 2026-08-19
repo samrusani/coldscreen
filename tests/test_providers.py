@@ -4,18 +4,26 @@ The request payloads are asserted against the verified shapes in
 wiki/research/model-providers.md. Anthropic and OpenAI are tested through
 pure shape builders plus injected fake clients (the openai SDK runs on
 httpx2, which respx cannot intercept). Ollama is tested over respx.
+
+The anchor_check argument parser is covered here too: it is the same model
+argument surface one colon further out, and its splitting rule only makes
+sense next to parse_model_spec.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import pytest
 import respx
 
+from firstpass.config import Settings
 from firstpass.providers import (
     Message,
     ModelSpecError,
@@ -299,6 +307,31 @@ def test_ollama_num_ctx_is_configurable_through_the_constructor(
     assert sent["options"] == {"temperature": 0, "num_ctx": 8192}
 
 
+@pytest.mark.parametrize("think", [True, False])
+def test_ollama_sends_the_configured_think_value(think: bool, respx_mock: respx.MockRouter) -> None:
+    route = respx_mock.post("http://localhost:11434/api/chat").respond(
+        200, json={"message": {"role": "assistant", "content": "ok"}, "done": True}
+    )
+    provider = OllamaProvider(model="qwen3:8b", think=think)
+    provider.complete("SYSTEM", MESSAGES[:1], json_schema=SCHEMA)
+    provider.close()
+    sent = json.loads(route.calls.last.request.content.decode("utf-8"))
+    assert sent["think"] is think
+
+
+def test_ollama_omits_think_when_unset(respx_mock: respx.MockRouter) -> None:
+    """The default must leave the field out of the body entirely: models
+    with no thinking support can reject it outright."""
+    route = respx_mock.post("http://localhost:11434/api/chat").respond(
+        200, json={"message": {"role": "assistant", "content": "ok"}, "done": True}
+    )
+    provider = OllamaProvider(model="qwen2.5:7b")
+    provider.complete("SYSTEM", MESSAGES[:1], json_schema=SCHEMA)
+    provider.close()
+    sent = json.loads(route.calls.last.request.content.decode("utf-8"))
+    assert "think" not in sent
+
+
 def test_ollama_omits_format_without_schema(respx_mock: respx.MockRouter) -> None:
     route = respx_mock.post("http://localhost:11434/api/chat").respond(
         200, json={"message": {"role": "assistant", "content": "plain text"}, "done": True}
@@ -343,6 +376,7 @@ def test_get_provider_builds_ollama_with_base_url(respx_mock: respx.MockRouter) 
     provider = get_provider("ollama", "qwen2.5:7b", ollama_base_url="http://localhost:11434")
     assert isinstance(provider, OllamaProvider)
     assert provider.num_ctx == 16384  # the documented default
+    assert provider.think is None  # unset, so the field is never sent
     provider.close()
 
 
@@ -358,6 +392,115 @@ def test_get_provider_passes_the_configured_num_ctx(respx_mock: respx.MockRouter
     provider.close()
 
 
+def test_get_provider_passes_the_configured_think(respx_mock: respx.MockRouter) -> None:
+    provider = get_provider(
+        "ollama",
+        "qwen3:8b",
+        ollama_base_url="http://localhost:11434",
+        ollama_think=False,
+    )
+    assert isinstance(provider, OllamaProvider)
+    assert provider.think is False
+    provider.close()
+
+
 def test_get_provider_unknown_name_raises() -> None:
     with pytest.raises(ModelSpecError):
         get_provider("sorcery", "crystal-ball")
+
+
+# -- the ollama helper scripts: settings wiring and the think suffix ---------
+
+SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
+
+
+def load_script(name: str) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(name, SCRIPTS_DIR / f"{name}.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_anchor_check() -> ModuleType:
+    return load_script("anchor_check")
+
+
+class _RecordingProvider:
+    """Captures the constructor kwargs, then refuses to talk to a daemon."""
+
+    captured: dict[str, Any] = {}
+
+    def __init__(self, **kwargs: Any) -> None:
+        type(self).captured = dict(kwargs)
+
+    def complete(self, *args: Any, **kwargs: Any) -> str:
+        raise ProviderError("no daemon in tests")
+
+    def close(self) -> None:
+        return None
+
+
+@pytest.mark.parametrize(
+    ("argument", "expected"),
+    [
+        ("qwen2.5:7b", ("qwen2.5:7b", None)),  # a plain name keeps its own colon
+        ("gemma4:26b:think=false", ("gemma4:26b", False)),
+        ("qwen3:8b:think=true", ("qwen3:8b", True)),
+        ("qwen3:8b:think=FALSE", ("qwen3:8b", False)),
+        ("plainname:think=0", ("plainname", False)),
+    ],
+)
+def test_anchor_check_splits_the_think_suffix(
+    argument: str, expected: tuple[str, bool | None]
+) -> None:
+    module = load_anchor_check()
+    assert module.parse_model_argument(argument, None) == expected
+
+
+def test_anchor_check_suffix_overrides_the_configured_default() -> None:
+    """Mixed pairs are the whole point: one model may reject the field that
+    the other one needs."""
+    module = load_anchor_check()
+    assert module.parse_model_argument("qwen2.5-coder:7b", False) == ("qwen2.5-coder:7b", False)
+    assert module.parse_model_argument("qwen2.5-coder:7b:think=true", False) == (
+        "qwen2.5-coder:7b",
+        True,
+    )
+
+
+def test_anchor_check_rejects_a_bad_suffix_and_an_empty_model() -> None:
+    module = load_anchor_check()
+    with pytest.raises(ValueError, match="expected true or false"):
+        module.parse_model_argument("qwen3:8b:think=maybe", None)
+    with pytest.raises(ValueError, match="no model name"):
+        module.parse_model_argument(":think=false", None)
+
+
+def test_anchor_check_builds_the_provider_from_the_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The per-model think value wins over the configured default; the rest
+    of the Ollama configuration comes from the settings."""
+    module = load_anchor_check()
+    monkeypatch.setattr(module, "OllamaProvider", _RecordingProvider)
+    settings = Settings(ollama_num_ctx=4096, ollama_timeout_seconds=12.0, ollama_think=False)
+    with pytest.raises(ProviderError):
+        module.run_one("qwen3:8b", True, settings)
+    assert _RecordingProvider.captured["model"] == "qwen3:8b"
+    assert _RecordingProvider.captured["num_ctx"] == 4096
+    assert _RecordingProvider.captured["timeout_seconds"] == 12.0
+    assert _RecordingProvider.captured["think"] is True
+
+
+def test_ollama_smoke_builds_the_provider_from_the_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The smoke script has no per-model override: the settings are it."""
+    module = load_script("ollama_smoke")
+    monkeypatch.setattr(module, "OllamaProvider", _RecordingProvider)
+    settings = Settings(ollama_num_ctx=4096, ollama_think=False)
+    assert module.smoke("qwen3:8b", settings) == 1  # the provider refuses, reported not raised
+    assert _RecordingProvider.captured["model"] == "qwen3:8b"
+    assert _RecordingProvider.captured["num_ctx"] == 4096
+    assert _RecordingProvider.captured["think"] is False
