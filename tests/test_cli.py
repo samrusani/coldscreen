@@ -102,7 +102,7 @@ def test_screen_writes_the_full_case_directory(
         "officers_p1",
         "psc_p1",
         "filing_history_p1",
-        "charges",
+        "charges_p1",
         # Weekend 2: network expansion evidence for the three CURRENT
         # officers, disqualification searches for each screened person, and
         # the explicit not-run notes for the unconfigured stages. The PSC

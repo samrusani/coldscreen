@@ -253,6 +253,127 @@ def test_pagination_stops_at_total_without_truncation(respx_mock: respx.MockRout
     assert len(result.records) == 1
 
 
+def _charge_item(code: str) -> dict[str, object]:
+    return {"charge_code": code, "status": "outstanding"}
+
+
+def test_charges_walk_collects_two_pages_of_new_items(respx_mock: respx.MockRouter) -> None:
+    url = f"{BASE_URL}/company/{COMPANY_NUMBER}/charges"
+    pages = {
+        "0": {
+            "total_count": 4,
+            "items": [_charge_item("999999990101"), _charge_item("999999990102")],
+        },
+        "2": {
+            "total_count": 4,
+            "items": [_charge_item("999999990103"), _charge_item("999999990104")],
+        },
+    }
+
+    def two_pages(request: httpx.Request) -> httpx.Response:
+        start = request.url.params["start_index"]
+        return httpx.Response(200, json=pages[start])
+
+    route = respx_mock.get(url).mock(side_effect=two_pages)
+    with make_client() as client:
+        result = client.charges(COMPANY_NUMBER, items_per_page=2, max_pages=10)
+    assert route.call_count == 2
+    assert [c.request.url.params["start_index"] for c in route.calls] == ["0", "2"]
+    assert [item["charge_code"] for item in result.items] == [
+        "999999990101",
+        "999999990102",
+        "999999990103",
+        "999999990104",
+    ]
+    assert result.total == 4
+    assert result.truncated is False
+    assert result.did_not_advance is False
+    assert len(result.records) == 2
+
+
+def test_charges_walk_advances_by_items_received_when_server_clamps(
+    respx_mock: respx.MockRouter,
+) -> None:
+    url = f"{BASE_URL}/company/{COMPANY_NUMBER}/charges"
+
+    def clamped_pages(request: httpx.Request) -> httpx.Response:
+        start = int(request.url.params["start_index"])
+        page = [_charge_item(f"99999999{i:04d}") for i in range(start, min(start + 2, 6))]
+        return httpx.Response(200, json={"total_count": 6, "items": page})
+
+    route = respx_mock.get(url).mock(side_effect=clamped_pages)
+    with make_client() as client:
+        result = client.charges(COMPANY_NUMBER, items_per_page=100, max_pages=10)
+    assert [c.request.url.params["start_index"] for c in route.calls] == ["0", "2", "4"]
+    assert [item["charge_code"] for item in result.items] == [f"99999999{i:04d}" for i in range(6)]
+    assert result.total == 6
+    assert result.truncated is False
+    assert result.server_clamped is True
+    assert result.did_not_advance is False
+
+
+def test_charges_walk_stops_when_start_index_is_ignored(respx_mock: respx.MockRouter) -> None:
+    url = f"{BASE_URL}/company/{COMPANY_NUMBER}/charges"
+    repeated = {
+        "total_count": 7,
+        "items": [_charge_item("999999990201"), _charge_item("999999990202")],
+    }
+    route = respx_mock.get(url).respond(200, json=repeated)
+    with make_client() as client:
+        result = client.charges(COMPANY_NUMBER, items_per_page=2, max_pages=10)
+    assert route.call_count == 2
+    assert [item["charge_code"] for item in result.items] == [
+        "999999990201",
+        "999999990202",
+    ]
+    assert result.total == 7
+    assert result.truncated is True
+    assert result.did_not_advance is True
+    assert result.hit_page_cap is False
+
+
+def test_charges_walk_stops_after_one_get_when_the_first_page_is_complete(
+    respx_mock: respx.MockRouter,
+) -> None:
+    url = f"{BASE_URL}/company/{COMPANY_NUMBER}/charges"
+    route = respx_mock.get(url).respond(200, json=load_fixture("charges.json"))
+    with make_client() as client:
+        result = client.charges(COMPANY_NUMBER, items_per_page=100, max_pages=10)
+    assert route.call_count == 1
+    assert len(result.items) == 2
+    assert result.total == 2
+    assert result.truncated is False
+    assert result.did_not_advance is False
+
+
+def test_charges_walk_stops_after_one_get_when_there_is_no_total(
+    respx_mock: respx.MockRouter,
+) -> None:
+    url = f"{BASE_URL}/company/{COMPANY_NUMBER}/charges"
+    route = respx_mock.get(url).respond(200, json={"items": [_charge_item("999999990301")]})
+    with make_client() as client:
+        result = client.charges(COMPANY_NUMBER, items_per_page=1, max_pages=10)
+    assert route.call_count == 1
+    assert len(result.items) == 1
+    assert result.total is None
+    assert result.truncated is False
+
+
+def test_429_without_retry_after_still_backs_off(respx_mock: respx.MockRouter) -> None:
+    naps: list[float] = []
+    route = respx_mock.get(PROFILE_URL)
+    route.side_effect = [
+        httpx.Response(429),
+        httpx.Response(200, json=load_fixture("profile.json")),
+    ]
+    with make_client(sleeper=naps.append) as client:
+        record = client.company_profile(COMPANY_NUMBER)
+    assert record.status == 200
+    assert route.call_count == 2
+    assert len(naps) == 1
+    assert naps[0] >= 0.0
+
+
 def test_throttle_sleeps_when_the_window_is_full() -> None:
     clock = FakeClock()
     naps: list[float] = []

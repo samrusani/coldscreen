@@ -44,6 +44,7 @@ class Settings:
     max_pages_officers: int = 10
     max_pages_psc: int = 10
     max_pages_filing_history: int = 3
+    max_pages_charges: int = 10
     max_pages_appointments: int = 5
     officer_lookback_years: int = 5
     wholesale_change_min: int = 2
@@ -164,6 +165,7 @@ _POSITIVE_INT_SETTINGS = (
     "max_pages_officers",
     "max_pages_psc",
     "max_pages_filing_history",
+    "max_pages_charges",
     "max_pages_appointments",
     "officer_lookback_years",
     "wholesale_change_min",

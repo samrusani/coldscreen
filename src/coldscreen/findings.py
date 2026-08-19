@@ -162,7 +162,7 @@ def build_findings(result: RegistryResult, settings: Settings, today: date) -> l
             )
         )
     elif result.charges is None:
-        charges_404 = result.first_record("charges") or profile_record
+        charges_404 = result.first_record("charges_p1") or profile_record
         findings.append(
             Finding(
                 id="REG-006",
@@ -178,7 +178,7 @@ def build_findings(result: RegistryResult, settings: Settings, today: date) -> l
             )
         )
     else:
-        charges_record = result.first_record("charges") or profile_record
+        charges_record = result.first_record("charges_p1") or profile_record
         outstanding = sum(1 for c in result.charges if c.status == "outstanding")
         satisfied = sum(1 for c in result.charges if c.status in {"fully-satisfied", "satisfied"})
         part_satisfied = sum(1 for c in result.charges if c.status == "part-satisfied")
@@ -467,27 +467,30 @@ def build_findings(result: RegistryResult, settings: Settings, today: date) -> l
             )
         )
 
-    # REG-015 charges truncation. The charges endpoint documents no
-    # pagination parameters, so retrieval is a single page; when the
-    # register reports more charges than that page carried, the gap is
-    # recorded explicitly instead of passing as a complete list.
+    # REG-015 charges truncation. The list is incomplete when unique
+    # retrieved items are fewer than total_count. State why retrieval
+    # stopped: page cap, or a later page that did not advance.
     if (
         result.charges is not None
         and result.charges_total is not None
         and result.charges_total > len(result.charges)
     ):
-        charges_truncation_record = result.first_record("charges") or profile_record
+        charges_truncation_record = result.first_record("charges_p1") or profile_record
+        statement = (
+            f"The charges list is truncated: retrieved {len(result.charges)}"
+            f" of {result.charges_total} charge(s)."
+        )
+        if result.charges_page_cap_hit:
+            statement += " Retrieval stopped at the configured page cap."
+        elif result.charges_did_not_advance:
+            statement += " Retrieval stopped because further pages did not advance."
         findings.append(
             Finding(
                 id="REG-015",
                 stage=STAGE,
                 severity="info",
                 confidence="confirmed",
-                statement=(
-                    f"The charges list is truncated: retrieved {len(result.charges)}"
-                    f" of {result.charges_total} charge(s). The charges endpoint"
-                    " documents no pagination, so only the first page was retrieved."
-                ),
+                statement=statement,
                 evidence=_evidence(
                     charges_truncation_record,
                     f"retrieved={len(result.charges)} total={result.charges_total}",
