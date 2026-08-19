@@ -1,4 +1,10 @@
-"""Typer CLI: `coldscreen screen` and `coldscreen rerun`.
+"""Typer CLI: `coldscreen screen`, `coldscreen rerun`, `coldscreen mcp`.
+
+The flows themselves live in `coldscreen.pipeline`, which is interface-free
+and returns structured results. This module is the adapter: it parses
+options, loads settings, resolves the provider, calls the pipeline, and maps
+the result to exit codes and to stdout or stderr. `coldscreen mcp` hands the
+same pipeline to an MCP stdio server (optional extra).
 
 screen resolves the input to one company, runs the deterministic stages
 (registry, network expansion, sanctions, adverse media), extracts claims
@@ -9,7 +15,7 @@ stored casefile with no refetching and no re-extraction, or just re-renders
 with --render-only.
 
 Stage failure posture: a sanctions or media stage that fails after retries
-no longer aborts the run. The case directory is written with everything
+does not abort the run. The case directory is written with everything
 gathered, the failure is a distinct finding, synthesis proceeds over what
 exists, and the CLI exits 1 naming the failed stage. Absence is data;
 failure is loudly recorded data.
@@ -20,58 +26,25 @@ company number. Code 2 is left to typer for usage errors.
 
 from __future__ import annotations
 
-import shutil
 import sys
 from collections.abc import Callable
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
-from pydantic import ValidationError
 
 from . import __version__
-from .casedir import case_dir_name, load_casefile, validate_company_number, write_case
-from .ch_client import (
-    AuthError,
-    CompaniesHouseClient,
-    CompaniesHouseError,
-    NotFoundError,
-    Throttle,
-    TransportFailure,
+from .config import API_KEY_ENV, Settings, api_key_from_env, load_dotenv_if_present, load_settings
+from .pipeline import (
+    PreparedProvider,
+    close_provider,
+    load_case,
+    prepare_provider,
+    run_rerun,
+    run_screen,
 )
-from .claims import ClaimsExtractionError, ClaimsStageResult, run_claims_stage
-from .config import (
-    API_KEY_ENV,
-    Settings,
-    api_key_from_env,
-    fixed_now,
-    load_dotenv_if_present,
-    load_settings,
-    ollama_base_url_from_env,
-    opensanctions_base_url_from_env,
-    opensanctions_key_from_env,
-    tavily_key_from_env,
-)
-from .deck import DeckError, DeckExtraction, extract_deck
-from .findings import build_findings
-from .http_cache import HttpCache
-from .language import find_banned_terms, registry_identity_names
-from .media import MediaStageResult, TavilyProvider, run_media
-from .models import CaseFile
-from .providers import (
-    ModelProvider,
-    ProviderError,
-    get_provider,
-    parse_model_spec,
-)
-from .render import render_memo
-from .sanctions import SanctionsStageResult, run_sanctions
-from .site import SiteError, SiteFetchResult, fetch_site, validate_site_url
-from .stages.network import NetworkStageResult, run_network_expansion
-from .stages.registry import NamedRecord, RegistryResult, run_registry_pass, split_officers
-from .stages.resolve import Resolution, resolve
-from .synthesis import SynthesisError, apply_synthesis, synthesize
+from .providers import ProviderError
+from .stages.resolve import Resolution
 
 app = typer.Typer(
     name="coldscreen",
@@ -89,6 +62,12 @@ MODEL_OPTION_HELP = (
     'Synthesis model as "provider:model", for example anthropic:claude-opus-5,'
     " openai:gpt-5.6-sol, or ollama:qwen2.5:7b (the split is on the first"
     " colon). Overrides COLDSCREEN_MODEL and coldscreen.toml."
+)
+
+MCP_EXTRA_MISSING = (
+    "MCP server mode needs the optional mcp extra, which is not installed."
+    " Install it with: pip install 'coldscreen[mcp]' (from a checkout:"
+    " pip install '.[mcp]')."
 )
 
 
@@ -131,8 +110,13 @@ def _candidate_lines(resolution: Resolution) -> list[str]:
     return lines
 
 
-def _pick_candidate(resolution: Resolution) -> str:
-    """Numbered picker on a terminal; candidate table plus exit code 3 otherwise."""
+def _pick_candidate(resolution: Resolution) -> str | None:
+    """Numbered picker on a terminal; candidate table plus a decline otherwise.
+
+    Returning None declines: nothing is picked, the pipeline reports the
+    ambiguity, and the command exits 3. This function owns all of the
+    messaging for both paths, so the caller adds nothing.
+    """
     lines = _candidate_lines(resolution)
     if not _is_interactive():
         typer.echo("Multiple plausible companies matched:", err=True)
@@ -143,36 +127,15 @@ def _pick_candidate(resolution: Resolution) -> str:
             " number, for example: coldscreen screen <number>",
             err=True,
         )
-        raise typer.Exit(code=AMBIGUOUS_EXIT_CODE)
+        return None
     typer.echo("Multiple plausible companies matched:")
     for line in lines:
         typer.echo(f"  {line}")
     choice = typer.prompt("Select a company by list position, or 0 to abort", type=int)
     if choice < 1 or choice > len(resolution.candidates):
         typer.echo("Aborted without selecting a company.", err=True)
-        raise typer.Exit(code=AMBIGUOUS_EXIT_CODE)
+        return None
     return resolution.candidates[choice - 1].company_number
-
-
-def _announce_exact_match(resolution: Resolution) -> None:
-    """A resolved tie is still a choice; say so where the user can see it."""
-    if resolution.chosen is None or not resolution.exact_title_match:
-        return
-    if resolution.set_aside < 1:
-        return
-    typer.echo(
-        f"Matched {resolution.chosen.title} ({resolution.chosen.company_number})"
-        f" by exact name; {resolution.set_aside} other candidate(s) were set"
-        " aside. Pass a company number to choose differently.",
-        err=True,
-    )
-
-
-def _clock(frozen: datetime | None) -> Callable[[], datetime]:
-    if frozen is not None:
-        fixed = frozen
-        return lambda: fixed
-    return lambda: datetime.now(UTC)
 
 
 def _load_settings_or_exit(
@@ -186,104 +149,14 @@ def _load_settings_or_exit(
         raise typer.Exit(code=1) from None
 
 
-def _prepare_provider(
-    settings: Settings, cli_model: str | None
-) -> tuple[ModelProvider, str, str] | None:
-    """Resolve and construct the synthesis provider, or None when no model
-    is configured. Runs BEFORE any fetching so a bad spec or a missing SDK
-    fails fast instead of after the API budget is spent."""
-    spec = (cli_model if cli_model is not None else settings.model).strip()
-    if not spec:
-        return None
-    provider_name, model_name = parse_model_spec(spec)
-    provider = get_provider(
-        provider_name,
-        model_name,
-        ollama_base_url=ollama_base_url_from_env(),
-        ollama_timeout_seconds=settings.ollama_timeout_seconds,
-        ollama_num_ctx=settings.ollama_num_ctx,
-        ollama_think=settings.ollama_think,
-    )
-    return provider, provider_name, model_name
+def _prepare_provider(settings: Settings, cli_model: str | None) -> PreparedProvider | None:
+    """Adapter seam over pipeline.prepare_provider, kept so the CLI resolves
+    the provider itself and the tests can substitute a canned one."""
+    return prepare_provider(settings, cli_model)
 
 
-def _close_provider(prepared: tuple[ModelProvider, str, str] | None) -> None:
-    """Close the provider's transport when it has one. Always in a finally."""
-    if prepared is None:
-        return
-    close = getattr(prepared[0], "close", None)
-    if callable(close):
-        close()
-
-
-def _enforce_language_backstop(memo: str, casefile: CaseFile) -> None:
-    """Whole-memo language gate: the last line of defense before disk.
-
-    Every rendered memo passes through here on every path (screen, rerun,
-    and the synthesis-failure memo). The per-field gate on model output
-    already ran; this catches banned vocabulary arriving through any other
-    channel. Two exemptions, both spans of code-verified data: the
-    casefile's stored claim texts (the company's own quoted words in the
-    claims table) and the registry identity names (registered name,
-    previous names, officer and PSC names), which are registry data the
-    memo must be able to spell out. On a hit nothing is written and the
-    error reports a count only: the terms themselves never reach the
-    output either.
-    """
-    exempt_texts = tuple(claim.text for claim in casefile.claims) + registry_identity_names(
-        casefile
-    )
-    count = len(find_banned_terms(memo, exempt_texts))
-    if count:
-        typer.echo(
-            f"The rendered memo failed the language backstop: {count} banned"
-            " term(s) were found in the memo text. The memo was not written."
-            " Inspect the casefile inputs; memos never use accusatory language.",
-            err=True,
-        )
-        raise typer.Exit(code=1)
-
-
-def _build_casefile(
-    registry: RegistryResult,
-    network: NetworkStageResult,
-    sanctions: SanctionsStageResult,
-    media: MediaStageResult,
-    claims_stage: ClaimsStageResult,
-    settings: Settings,
-    screened_at: datetime,
-    clock_override: bool,
-) -> CaseFile:
-    today = screened_at.date()
-    current, resigned_recent = split_officers(
-        registry.officers, today, settings.officer_lookback_years
-    )
-    findings = (
-        build_findings(registry, settings, today)
-        + network.findings
-        + sanctions.findings
-        + media.findings
-        + claims_stage.findings
-    )
-    return CaseFile(
-        subject=registry.profile,
-        officers=current + resigned_recent,
-        pscs=registry.pscs or [],
-        charges=registry.charges or [],
-        filings=registry.filings,
-        filings_total=registry.filings_total,
-        insolvency_cases=registry.insolvency_cases or [],
-        findings=findings,
-        claims=claims_stage.claims,
-        claims_extraction=claims_stage.extraction,
-        sanctions=sanctions.screening,
-        network=network.expansion,
-        media=media.screening,
-        verdict=None,
-        tool_version=__version__,
-        screened_at=screened_at,
-        clock_override=clock_override,
-    )
+def _close_provider(prepared: PreparedProvider | None) -> None:
+    close_provider(prepared)
 
 
 @app.command()
@@ -376,280 +249,48 @@ def screen(
         raise typer.Exit(code=1) from None
 
     try:
-        _screen_with_provider(
+        result = run_screen(
             query=query,
             settings=settings,
             api_key=api_key,
             prepared=prepared,
             deck=deck,
             site=site,
-            json_output=json_output,
             overwrite=overwrite,
+            chooser=_pick_candidate,
         )
     finally:
         _close_provider(prepared)
 
+    for notice in result.notices:
+        typer.echo(notice, err=True)
 
-def _screen_with_provider(
-    query: str,
-    settings: Settings,
-    api_key: str,
-    prepared: tuple[ModelProvider, str, str] | None,
-    deck: Path | None,
-    site: str | None,
-    json_output: bool,
-    overwrite: bool,
-) -> None:
-    """The screen flow once configuration and the provider are resolved.
-
-    Split out so the caller can close the provider in a finally that covers
-    every exit path, early errors included.
-    """
-    if (deck is not None or site is not None) and prepared is None:
-        typer.echo(
-            "Claims extraction needs a model: --deck and --site turn deck and"
-            " site text into discrete claims, and that conversion is model"
-            " work. Configure one via --model, COLDSCREEN_MODEL, or"
-            " coldscreen.toml, or drop the --deck/--site flags.",
-            err=True,
-        )
+    if result.status == "ambiguous":
+        # _pick_candidate already said everything there is to say.
+        raise typer.Exit(code=AMBIGUOUS_EXIT_CODE)
+    if result.status != "ok":
+        typer.echo(result.message, err=True)
         raise typer.Exit(code=1)
 
-    if site is not None:
-        try:
-            site = validate_site_url(site)
-        except SiteError as error:
-            typer.echo(f"Site URL error: {error}", err=True)
-            raise typer.Exit(code=1) from None
-
-    frozen = fixed_now()
-    now = _clock(frozen)
-
-    # The deck is read BEFORE any fetching: a missing, unreadable, oversized,
-    # encrypted, or non-PDF deck fails fast instead of after the API budget
-    # is spent.
-    deck_extraction: DeckExtraction | None = None
-    if deck is not None:
-        try:
-            deck_extraction = extract_deck(
-                deck, max_pages=settings.max_deck_pages, max_bytes=settings.max_deck_bytes
-            )
-        except DeckError as error:
-            typer.echo(f"Deck error: {error}", err=True)
-            raise typer.Exit(code=1) from None
-
-    cache = HttpCache(settings.cache_path, ttl_seconds=settings.cache_ttl_seconds)
-    throttle = Throttle(settings.rate_limit_requests, settings.rate_limit_window_seconds)
-    client = CompaniesHouseClient(
-        api_key,
-        base_url=settings.base_url,
-        cache=cache,
-        throttle=throttle,
-        timeout_seconds=settings.timeout_seconds,
-        now=now,
-    )
-    try:
-        resolution = resolve(client, query, items_per_page=settings.items_per_page)
-        if resolution.company_number is not None:
-            _announce_exact_match(resolution)
-            company_number = resolution.company_number
-        elif resolution.is_empty:
-            typer.echo(f"No companies matched {query!r}.", err=True)
-            raise typer.Exit(code=1)
-        else:
-            company_number = _pick_candidate(resolution)
-
-        try:
-            company_number = validate_company_number(company_number)
-        except ValueError:
-            typer.echo(
-                f"The resolved company number {company_number!r} is not plain"
-                " alphanumeric, so it is not safe to use. Screening aborted.",
-                err=True,
-            )
-            raise typer.Exit(code=1) from None
-
-        try:
-            registry = run_registry_pass(client, company_number, settings)
-        except NotFoundError:
-            # The profile endpoint is the one place where 404 does mean the
-            # company is not on the register. Insolvency 404s never surface
-            # here; the registry stage absorbs them.
-            typer.echo(f"Company {company_number} was not found on the register.", err=True)
-            raise typer.Exit(code=1) from None
-
-        # Overwrite protection, checked as soon as the canonical name and
-        # number are known and before the paid screening stages run.
-        case_dir = Path(settings.output_dir) / case_dir_name(
-            registry.profile.company_name, company_number
-        )
-        if case_dir.exists() and not overwrite:
-            typer.echo(
-                f"Case directory already exists: {case_dir}. Pass --overwrite"
-                " to replace it, or move the existing directory aside.",
-                err=True,
-            )
-            raise typer.Exit(code=1)
-
-        today = now().date()
-        current_officers, _resigned = split_officers(
-            registry.officers, today, settings.officer_lookback_years
-        )
-        network = run_network_expansion(
-            client,
-            company_number,
-            current_officers,
-            registry.pscs or [],
-            settings,
-            today,
-            fallback_record=registry.first_record("officers_p1") or registry.profile_record,
-        )
-    except AuthError:
-        typer.echo(
-            f"Authentication failed (HTTP 401). Check {API_KEY_ENV}.",
-            err=True,
-        )
-        raise typer.Exit(code=1) from None
-    except TransportFailure as error:
-        typer.echo(
-            f"Could not reach the Companies House API: {error.cause}."
-            " Check your network connection and retry.",
-            err=True,
-        )
-        raise typer.Exit(code=1) from None
-    except CompaniesHouseError as error:
-        typer.echo(f"Registry access failed: {error}", err=True)
-        raise typer.Exit(code=1) from None
-    finally:
-        client.close()
-        cache.close()
-
-    # Sanctions and media failures after retries do not abort the run: the
-    # stage records the failure as a finding, the run continues to
-    # persistence, and the exit code goes to 1 with the stage named below.
-    stage_failures: list[tuple[str, str]] = []
-
-    sanctions = run_sanctions(
-        registry.profile,
-        current_officers,
-        registry.pscs or [],
-        settings,
-        api_key=opensanctions_key_from_env(),
-        base_url=opensanctions_base_url_from_env(),
-        now=now,
-    )
-    if sanctions.failed_reason is not None:
-        stage_failures.append(("sanctions screening", sanctions.failed_reason))
-
-    tavily_key = tavily_key_from_env()
-    search_provider: TavilyProvider | None = None
-    if tavily_key is not None:
-        search_provider = TavilyProvider(
-            tavily_key, timeout_seconds=settings.timeout_seconds, now=now
-        )
-    try:
-        media = run_media(
-            registry.profile.company_name,
-            [p.name for p in registry.profile.previous_company_names if p.name],
-            provider=search_provider,
-            provider_name="tavily" if search_provider is not None else None,
-            results_per_query=settings.media_results_per_query,
-            now=now,
-        )
-    finally:
-        if search_provider is not None:
-            search_provider.close()
-    if media.failed_reason is not None:
-        stage_failures.append(("adverse media search", media.failed_reason))
-
-    site_result: SiteFetchResult | None = None
-    if site is not None:
-        site_result = fetch_site(
-            site,
-            timeout_seconds=settings.timeout_seconds,
-            max_response_bytes=settings.max_site_response_bytes,
-            now=now,
-        )
-
-    synthesis_failure: str | None = None
-    exit_code = 1 if stage_failures else 0
-    try:
-        claims_stage = run_claims_stage(
-            registry.profile,
-            deck_extraction,
-            site_result,
-            provider=prepared[0] if prepared is not None else None,
-            provider_name=prepared[1] if prepared is not None else None,
-            model=prepared[2] if prepared is not None else None,
-            settings=settings,
-            now=now,
-        )
-    except ClaimsExtractionError as error:
-        # The deck and site evidence the stage already produced is kept; the
-        # judgment layer is skipped because it would reason over inputs the
-        # user supplied but the run could not convert into claims.
-        claims_stage = error.result
-        synthesis_failure = str(error)
-        exit_code = 1
-
-    casefile = _build_casefile(
-        registry,
-        network,
-        sanctions,
-        media,
-        claims_stage,
-        settings,
-        screened_at=now(),
-        clock_override=frozen is not None,
-    )
-
-    if prepared is not None and synthesis_failure is None:
-        provider, provider_name, model_name = prepared
-        try:
-            result = synthesize(casefile, provider, provider_name, model_name)
-            casefile = apply_synthesis(casefile, result)
-        except (SynthesisError, ProviderError) as error:
-            # The deterministic work is done and paid for; keep the audit
-            # pack, say plainly that synthesis failed, and exit nonzero.
-            synthesis_failure = str(error)
-            exit_code = 1
-
-    memo = render_memo(casefile, synthesis_failure=synthesis_failure)
-    _enforce_language_backstop(memo, casefile)
-    if overwrite and (case_dir / "evidence").is_dir():
-        # Replacing a case: stale evidence files from the previous run must
-        # not linger next to the new index. Only the tool-owned evidence
-        # directory is cleared; anything else in the directory is left alone.
-        shutil.rmtree(case_dir / "evidence")
-    records = (
-        list(registry.records)
-        + network.records
-        + sanctions.records
-        + media.records
-        + claims_stage.records
-    )
-    if resolution.search_record is not None:
-        records.insert(0, NamedRecord("search_companies", resolution.search_record))
-    write_case(case_dir, casefile, records, memo)
-    typer.echo(f"Case directory written: {case_dir}", err=json_output)
-    for stage_name, reason in stage_failures:
+    typer.echo(f"Case directory written: {result.case_dir}", err=json_output)
+    for stage_name, reason in result.stage_failures:
         typer.echo(
             f"The {stage_name} stage FAILED after retries: {reason}\n"
             "The run continued and the failure is recorded in the case"
             " directory findings.",
             err=True,
         )
-    if synthesis_failure is not None:
+    if result.synthesis_failure is not None:
         typer.echo(
-            f"Synthesis failed: {synthesis_failure}\n"
+            f"Synthesis failed: {result.synthesis_failure}\n"
             "The deterministic memo and evidence were kept. Fix the model"
-            " configuration and run: coldscreen rerun " + str(case_dir),
+            " configuration and run: coldscreen rerun " + str(result.case_dir),
             err=True,
         )
-    if json_output:
-        typer.echo(casefile.model_dump_json(indent=2))
-    if exit_code:
-        raise typer.Exit(code=exit_code)
+    if json_output and result.casefile is not None:
+        typer.echo(result.casefile.model_dump_json(indent=2))
+    if result.stage_failures or result.synthesis_failure is not None:
+        raise typer.Exit(code=1)
 
 
 @app.command()
@@ -694,21 +335,12 @@ def rerun(
     """
     load_dotenv_if_present()
     settings = _load_settings_or_exit(config_file, None)
-    casefile_path = case_dir / "casefile.json"
-    try:
-        casefile = load_casefile(case_dir)
-    except FileNotFoundError as error:
-        typer.echo(str(error), err=True)
-        raise typer.Exit(code=1) from None
-    except ValidationError:
-        typer.echo(
-            f"{casefile_path} is not a valid casefile (corrupt JSON or wrong"
-            " shape). Re-run the screen to regenerate it.",
-            err=True,
-        )
-        raise typer.Exit(code=1) from None
+    loaded = load_case(case_dir)
+    if loaded.status != "ok" or loaded.casefile is None:
+        typer.echo(loaded.message, err=True)
+        raise typer.Exit(code=1)
 
-    prepared: tuple[ModelProvider, str, str] | None = None
+    prepared: PreparedProvider | None = None
     if not render_only:
         try:
             prepared = _prepare_provider(settings, model)
@@ -723,28 +355,61 @@ def rerun(
             )
 
     try:
-        synthesized = False
-        if prepared is not None:
-            provider, provider_name, model_name = prepared
-            try:
-                result = synthesize(casefile, provider, provider_name, model_name)
-            except (SynthesisError, ProviderError) as error:
-                typer.echo(f"Synthesis failed: {error}", err=True)
-                typer.echo("The existing casefile and memo were left untouched.", err=True)
-                raise typer.Exit(code=1) from None
-            casefile = apply_synthesis(casefile, result)
-            synthesized = True
-
-        # Render and gate the memo BEFORE touching any file, so a backstop hit
-        # leaves the existing casefile and memo exactly as they were.
-        memo = render_memo(casefile)
-        _enforce_language_backstop(memo, casefile)
-        if synthesized:
-            casefile_path.write_text(casefile.model_dump_json(indent=2) + "\n", encoding="utf-8")
-        (case_dir / "memo.md").write_text(memo, encoding="utf-8")
-        typer.echo(f"Memo re-rendered: {case_dir / 'memo.md'}")
+        result = run_rerun(case_dir=case_dir, casefile=loaded.casefile, prepared=prepared)
     finally:
         _close_provider(prepared)
+
+    if result.status != "ok":
+        typer.echo(result.message, err=True)
+        raise typer.Exit(code=1)
+    typer.echo(f"Memo re-rendered: {result.memo_path}")
+
+
+def _load_mcp_server_builder() -> Callable[[], Any] | None:
+    """The MCP server builder, or None when the optional extra is missing.
+
+    The import is deliberately late and local: `import coldscreen.cli` must
+    work on a default install, which does not ship the mcp dependency.
+
+    Only a genuinely absent `mcp` package returns None. Anything else that
+    goes wrong while importing our own module (a typo, a broken sibling
+    import, an mcp submodule that moved) is re-raised rather than reported
+    as a missing extra, because "install the extra" is unhelpful advice for
+    a bug in this repository.
+    """
+    try:
+        from .mcp_server import build_server
+    except ModuleNotFoundError:
+        try:
+            import mcp  # noqa: F401
+        except ModuleNotFoundError:
+            return None
+        raise
+    return build_server
+
+
+@app.command()
+def mcp() -> None:
+    """Serve the screening pipeline to MCP hosts over stdio.
+
+    stdout carries JSON-RPC only; status lines and logs go to stderr. Keys
+    come from this process's environment, never from tool arguments. Needs
+    the optional mcp extra: pip install 'coldscreen[mcp]'.
+    """
+    load_dotenv_if_present()
+    builder = _load_mcp_server_builder()
+    if builder is None:
+        typer.echo(MCP_EXTRA_MISSING, err=True)
+        raise typer.Exit(code=1)
+    server = builder()
+    typer.echo(
+        "coldscreen MCP server ready on stdio. Tools: screen_company,"
+        " rerun_case. Keys are read from this process's environment.",
+        err=True,
+    )
+    # run() is synchronous and owns the transport; stdio is the only mode
+    # this project ships.
+    server.run("stdio")
 
 
 def main() -> None:

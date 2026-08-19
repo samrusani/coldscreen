@@ -3,7 +3,8 @@
 Ideas that are out of scope for v0.1. The non-goals in ARCHITECTURE.md section 13 are binding, so good ideas land here instead of in the codebase.
 
 - Registry adapters beyond the UK: Bolagsverket (Sweden), SEC EDGAR (US). Design the adapter interface after the UK pass works, not before.
-- MCP server mode, so the screen runs inside agent workflows. Candidate for v0.1.5 once the core is a library.
+- Remote MCP: Streamable HTTP transport, an OAuth story, and a hosted deployment. The stdio server is built (`coldscreen mcp`, ARCHITECTURE.md section 18); everything past the local process boundary is future work and carries the same cost and abuse questions as the hosted demo below.
+- MCP resources for case directories, so a host can browse evidence files directly. Deliberately not built with the stdio server: exposing arbitrary files as resources is a much wider surface than two tools, and the memo already comes back in the tool result.
 - Hosted "screen one company in your browser" demo. Decide after launch signal, not before.
 - Stable JSON output contract for pipelines. The CLI flag ships in v0.1; a versioned schema guarantee is the future work.
 - Better deck parsing: tables, charts, image-heavy decks.

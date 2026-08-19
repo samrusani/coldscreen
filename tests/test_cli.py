@@ -6,10 +6,13 @@ test. The rerun tests register no routes at all: rerun must be offline.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import shutil
+import sys
 import time
+import types
 from pathlib import Path
 
 import httpx
@@ -311,6 +314,73 @@ def test_version_flag_prints_the_version_and_exits_zero() -> None:
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
     assert f"coldscreen {__version__}" in result.output
+
+
+def test_cli_imports_and_runs_when_the_mcp_extra_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A default install has no mcp dependency. Importing the CLI must not
+    care, and `coldscreen mcp` must say what to install rather than raise.
+
+    The extra is simulated by evicting every mcp module from the import
+    cache and parking None under the top-level name, which is what makes
+    `import mcp` raise ImportError. The CLI module is then executed from
+    source into a throwaway module object, so the cached one that the rest
+    of this file uses is left alone.
+    """
+    for name in [n for n in sys.modules if n == "mcp" or n.startswith("mcp.")]:
+        monkeypatch.delitem(sys.modules, name)
+    monkeypatch.delitem(sys.modules, "coldscreen.mcp_server", raising=False)
+    monkeypatch.setitem(sys.modules, "mcp", None)
+
+    spec = importlib.util.spec_from_file_location("coldscreen.cli", coldscreen.cli.__file__)
+    assert spec is not None and spec.loader is not None
+    fresh = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fresh)
+
+    assert fresh._load_mcp_server_builder() is None
+    result = runner.invoke(fresh.app, ["mcp"])
+    assert result.exit_code == 1
+    combined = all_output(result)
+    assert "coldscreen[mcp]" in combined
+    assert "Traceback" not in combined
+
+
+def test_a_broken_mcp_server_module_is_not_reported_as_a_missing_extra(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Telling the user to install the extra is useless advice for a bug here.
+
+    The stub stands in for an import inside mcp_server.py that fails while
+    the mcp package itself is perfectly importable: a typo, or an SDK
+    submodule that moved. That must surface, not be swallowed.
+    """
+
+    class BrokenModule(types.ModuleType):
+        def __getattr__(self, name: str) -> object:
+            raise ModuleNotFoundError("No module named 'mcp.server.moved_away'")
+
+    monkeypatch.setitem(sys.modules, "coldscreen.mcp_server", BrokenModule("coldscreen.mcp_server"))
+    with pytest.raises(ModuleNotFoundError, match="moved_away"):
+        coldscreen.cli._load_mcp_server_builder()
+
+
+def test_the_mcp_command_starts_a_stdio_server_and_keeps_stdout_clean(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """stdout belongs to JSON-RPC: the readiness line goes to stderr."""
+    transports: list[str] = []
+
+    class FakeServer:
+        def run(self, transport: str) -> None:
+            transports.append(transport)
+
+    monkeypatch.setattr(coldscreen.cli, "_load_mcp_server_builder", lambda: FakeServer)
+    result = runner.invoke(app, ["mcp"])
+    assert result.exit_code == 0, result.output
+    assert transports == ["stdio"]
+    assert result.stdout == ""
+    assert "ready on stdio" in result.stderr
 
 
 def test_output_dir_flag_moves_the_case_directory(

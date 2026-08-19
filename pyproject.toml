@@ -51,8 +51,17 @@ openai = [
     # with this project's httpx pin. Verified at install time 2026-08-18.
     "openai>=3.2",
 ]
+# MCP server mode (stdio). The official Model Context Protocol Python SDK,
+# distribution "mcp" on PyPI, MIT licensed. Verified against the installed
+# 2.0.0 package (DECISIONS.md, 2026-08-19). Not a default dependency: the
+# CLI is the primary interface and imports this lazily. Plain "mcp", not
+# "mcp[cli]"; the third-party "fastmcp" distribution is a different package
+# and is not used.
+mcp = [
+    "mcp>=2,<3",
+]
 all = [
-    "coldscreen[anthropic,openai]",
+    "coldscreen[anthropic,mcp,openai]",
 ]
 dev = [
     "pytest>=8.2",
@@ -63,8 +72,9 @@ dev = [
     "respx>=0.21",
     "ruff>=0.5",
     "mypy>=1.10",
-    # Both provider SDKs so CI exercises the optional import paths.
-    "coldscreen[anthropic,openai]",
+    # Both provider SDKs and the MCP server extra, so CI exercises every
+    # optional import path including the MCP tool tests.
+    "coldscreen[anthropic,mcp,openai]",
 ]
 
 [project.scripts]

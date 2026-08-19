@@ -104,6 +104,46 @@ Works with hosted models (Anthropic, OpenAI) or local models via Ollama. The det
 
 Verdict discipline follows rubric rule 4: mechanically detected triggers cannot be dropped by the model, and triggers whose evidence conditions are not met cannot be added by it. Every trigger's evidence condition is published in `rubric.md` (currently version 0.3), and every enforcement intervention is recorded in the casefile and the memo. Origin-year claims that predate the registry incorporation date are a mechanical R4 candidate: the model cannot drop that red. The model's judgment operates inside those conditions; the level arithmetic is never its to change. In cross-model testing, a 30B coder model and a 27B generalist produced identical verdict levels on the same live companies. One practical note for local models: reasoning-family models (qwen3 non-coder variants and similar) need `COLDSCREEN_OLLAMA_THINK=false` for reliable structured output.
 
+## MCP server mode (stdio)
+
+`coldscreen` speaks the Model Context Protocol over stdio, so the same pipeline runs inside agent workflows. It ships as an optional extra:
+
+```bash
+pip install '.[mcp]'   # or 'coldscreen[mcp]' once the package is on PyPI
+coldscreen mcp         # serves on stdio; stdout is JSON-RPC only
+```
+
+Two tools, and only two:
+
+- `screen_company(query, company_number, deck_path, site_url, model, overwrite)` runs the full screen and writes a case directory. It returns the company name and number, the enforced verdict level with its rubric trigger ids, the case directory path, and the memo markdown.
+- `rerun_case(case_dir, model, render_only)` re-synthesizes from a case directory that already exists, without refetching anything.
+
+Three properties worth knowing before you wire it up:
+
+- **Keys never travel as tool arguments.** Every key comes from the server process environment, which the host sets. No tool has a field for one, and a missing `COMPANIES_HOUSE_API_KEY` comes back as a plain error naming the variable.
+- **Ambiguity is never resolved for you.** A company name matching several companies returns a candidate list with status `ambiguous` and writes nothing. Choose one and call again with `company_number`. There is no picker on this path and nothing is guessed.
+- **`rerun_case` is confined to the configured output directory** (`COLDSCREEN_OUTPUT_DIR`, default `cases/`), because on this path the directory is chosen by a host rather than typed by a person.
+
+Most hosts configure stdio servers with a `command`, `args`, and `env` block. The file and the exact top-level key differ per host, so check your host's documentation; the block itself looks like this, with your own values in place of the empty strings:
+
+```json
+{
+  "mcpServers": {
+    "coldscreen": {
+      "command": "coldscreen",
+      "args": ["mcp"],
+      "env": {
+        "COMPANIES_HOUSE_API_KEY": "",
+        "COLDSCREEN_MODEL": "",
+        "COLDSCREEN_OUTPUT_DIR": ""
+      }
+    }
+  }
+}
+```
+
+Connecting this server to a hosted MCP host means memo content, including officer names from the register, is sent to that host. `PRIVACY.md` covers what flows where. Streamable HTTP and a hosted MCP deployment are not built; stdio is the shipped transport.
+
 ## Scope and non-goals (v0.1)
 
 - UK companies only. Sweden (Bolagsverket) and US (SEC EDGAR) adapters are planned; the adapter interface gets designed once a second registry forces the right abstraction (see `FUTURE.md`).
@@ -126,7 +166,7 @@ Verdict discipline follows rubric rule 4: mechanically detected triggers cannot 
 
 - Sweden and US registry adapters
 - A versioned JSON schema contract for pipelines (the `--json` flag exists today; the schema guarantee is the future work)
-- MCP server mode, so the screen runs inside agent workflows
+- Streamable HTTP for MCP, and a hosted MCP deployment (the stdio server is built; see above)
 - Better deck parsing (tables, charts)
 
 ## Contributing
