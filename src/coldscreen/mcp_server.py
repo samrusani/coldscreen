@@ -53,8 +53,9 @@ SERVER_NAME = "coldscreen"
 SERVER_INSTRUCTIONS = (
     "First-pass screening memos for UK companies, built only from public"
     " sources with every finding tied to evidence. screen_company runs the"
-    " full pipeline and writes a case directory; rerun_case re-synthesizes"
-    " from a case directory that already exists without refetching anything."
+    " full pipeline and writes a case directory unless no_write is true;"
+    " rerun_case re-synthesizes from a case directory that already exists"
+    " without refetching anything."
     " API keys come from this server's environment and are never tool"
     " arguments. A company name that matches several companies is returned as"
     " a candidate list, never resolved for you: pick one and call again with"
@@ -158,7 +159,7 @@ def _verdict_payload(casefile: CaseFile) -> dict[str, Any]:
 
 def _case_payload(
     casefile: CaseFile,
-    case_dir: Path,
+    case_dir: Path | None,
     memo: str,
     status: str,
     notices: tuple[str, ...] = (),
@@ -173,15 +174,16 @@ def _case_payload(
     resolved tie is still a choice, so the host has to be able to see it.
 
     Deliberately not included: raw evidence bodies, cache contents, and
-    anything key-shaped. The memo is the already language-gated memo that
-    was written to disk, not a fresh piece of model prose.
+    anything key-shaped. The memo is the already language-gated memo. On
+    the default path it was written to disk; on a no-write screen it is
+    the same memo held in memory and `case_dir` is JSON null.
     """
     return {
         "status": status,
         "company_name": casefile.subject.company_name,
         "company_number": casefile.subject.company_number,
         "verdict": _verdict_payload(casefile),
-        "case_dir": str(case_dir),
+        "case_dir": str(case_dir) if case_dir is not None else None,
         "memo": memo,
         "notices": list(notices),
         "stage_failures": [{"stage": stage, "reason": reason} for stage, reason in stage_failures],
@@ -220,6 +222,7 @@ def build_server() -> MCPServer:
         model: str | None = None,
         overwrite: bool = False,
         refresh: bool = False,
+        no_write: bool = False,
     ) -> dict[str, Any]:
         """Screen one UK company from public sources and write a case directory.
 
@@ -234,14 +237,18 @@ def build_server() -> MCPServer:
         overwrite: replace an existing case directory for this company.
         refresh: skip HTTP cache reads for this screen and still write
         successful 200 responses back into the cache.
+        no_write: do not create a case directory. The payload still carries
+        the memo and verdict; case_dir is JSON null. The HTTP cache is
+        unchanged. An existing case directory is not a conflict.
 
         Returns the company name and number, the enforced verdict level with
         its rubric trigger ids (or a "synthesis not run" note), the case
-        directory path, the memo markdown, and any notices (for example a
-        name tie resolved by exact title match, which you should check). A
-        name matching several companies returns status "ambiguous" with the
-        candidate list and writes nothing. API keys are read from this
-        server's environment and are never accepted as arguments.
+        directory path (or null when no_write), the memo markdown, and any
+        notices (for example a name tie resolved by exact title match, which
+        you should check). A name matching several companies returns status
+        "ambiguous" with the candidate list and writes nothing. API keys are
+        read from this server's environment and are never accepted as
+        arguments.
         """
         settings = _settings_or_fail()
         api_key = _api_key_or_fail()
@@ -258,6 +265,7 @@ def build_server() -> MCPServer:
                 site=site_url,
                 overwrite=overwrite,
                 refresh=refresh,
+                no_write=no_write,
                 chooser=None,
                 arguments=MCP_ARGUMENTS,
             )
@@ -276,15 +284,18 @@ def build_server() -> MCPServer:
                 "message": result.message,
                 "candidates": [_candidate_payload(c) for c in result.candidates],
             }
-        if result.status != "ok" or result.casefile is None or result.case_dir is None:
+        if result.status != "ok" or result.casefile is None:
+            raise ToolError(result.message or "The screen failed.")
+        if result.case_dir is None and not no_write:
             raise ToolError(result.message or "The screen failed.")
 
         status = "ok"
         if result.stage_failures or result.synthesis_failure is not None:
             status = "completed_with_failures"
+        written = result.case_dir.resolve() if result.case_dir is not None else None
         return _case_payload(
             result.casefile,
-            result.case_dir.resolve(),
+            written,
             result.memo or "",
             status,
             notices=result.notices,

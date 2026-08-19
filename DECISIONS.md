@@ -159,6 +159,19 @@ The new clean-claim substrings (`no pep matches`, `no evidence of sanctions or p
 
 Fix: each rendered field is scored on its own. A fixed not-run marker in the same field (`not performed`, `did not run`, `was not run`, `not searched`, `not conducted`, and close variants) suppresses a clean-claim substring there. A marker in a different field does not. Finding statements and the whole memo are still not scanned. Residual: an honest gap sentence that uses a clean-claim substring and never uses a marker still fails closed, which is the original narrow-set tradeoff.
 
+### 2026-08-19: --no-write is an explicit opt-out of the case directory
+`screen` always persisted the audit pack. Pipelines that only want the `--json` casefile still left a case directory, and an existing directory blocked the run unless `--overwrite` was passed.
+
+`--no-write` on `coldscreen screen` (and `no_write=True` on `run_screen` / MCP `screen_company`) skips `write_case` for that run only. No `mkdir`, no `memo.md`, no `casefile.json`, no `evidence/`. The default path still persists everything. Findings, language control, and verdict enforcement are unchanged.
+
+Overwrite is skipped: an existing case directory is not a conflict when this run will not write one. `--overwrite` with `--no-write` is a no-op (no error, no delete). The HTTP cache is not the case directory: cache reads and `HttpCache.put` of HTTP 200s stay as they are. `--refresh` still skips get and still puts 200s.
+
+CLI `--no-write` prints the casefile JSON to stdout the same way `--json` does (status on stderr). `--json --no-write` prints the casefile once. The CLI does not print "Case directory written"; it says the case directory was not written, without a machine-local path. `--json` without `--no-write` still writes the case directory. `coldscreen rerun` did not grow `--no-write`.
+
+MCP `screen_company` got `no_write`. A successful no-write payload still carries memo and verdict; `case_dir` is JSON null. `result.case_dir is None` is not a `ToolError` when `no_write` succeeded. No third tool. The schema still has no key-shaped field names; `no_write` is not treated as one. `rerun_case` is unchanged.
+
+No live Companies House, OpenSanctions, Tavily, or model calls in this sprint.
+
 ### 2026-08-19: screen --help assertions must ignore Rich markup
 CI `checks` on 3.11-3.13 went red from the cache UX PR (`test_screen_help_includes_refresh`) while ruff and mypy stayed green. Rich styles a long option as two bold spans (`-` then `-refresh`), so a raw `--refresh` substring is missing from colored help on the runner even though the flag is present. Local pytest without `color=True` did not insert those spans. The test now uses the existing `flat_output` helper, which already exists for width-independent CLI wording, and invokes help with color on so the CI shape is what the assertion sees.
 

@@ -15,6 +15,8 @@ re-runs synthesis, including re-assessment of the STORED claims, from the
 stored casefile with no refetching and no re-extraction, or just re-renders
 with --render-only. screen --refresh skips HTTP cache reads and still writes
 successful 200 responses back; rerun does not fetch and has no --refresh.
+screen --no-write skips the case directory for that run and prints the
+casefile JSON; the HTTP cache still stores 200s. rerun has no --no-write.
 
 Stage failure posture: a sanctions or media stage that fails after retries
 does not abort the run. The case directory is written with everything
@@ -238,6 +240,18 @@ def screen(
             ),
         ),
     ] = False,
+    no_write: Annotated[
+        bool,
+        typer.Option(
+            "--no-write",
+            help=(
+                "Do not create a case directory. Print the casefile JSON to"
+                " stdout the same way --json does. The HTTP cache is"
+                " unchanged. An existing case directory is not a conflict."
+                " Does not apply to rerun."
+            ),
+        ),
+    ] = False,
     config_file: Annotated[
         Path | None,
         typer.Option(
@@ -249,7 +263,7 @@ def screen(
         ),
     ] = None,
 ) -> None:
-    """Screen one company and write the case directory.
+    """Screen one company and, by default, write the case directory.
 
     Exit codes: 0 success, 1 error, 3 ambiguous match (pass a company number).
     """
@@ -281,6 +295,7 @@ def screen(
             overwrite=overwrite,
             chooser=_pick_candidate,
             refresh=refresh,
+            no_write=no_write,
         )
     finally:
         _close_provider(prepared)
@@ -295,22 +310,35 @@ def screen(
         typer.echo(result.message, err=True)
         raise typer.Exit(code=1)
 
-    typer.echo(f"Case directory written: {result.case_dir}", err=json_output)
+    emit_json = json_output or no_write
+    if no_write:
+        typer.echo("Case directory was not written.", err=True)
+    else:
+        typer.echo(f"Case directory written: {result.case_dir}", err=json_output)
     for stage_name, reason in result.stage_failures:
+        findings_where = "casefile findings" if no_write else "case directory findings"
         typer.echo(
             f"The {stage_name} stage FAILED after retries: {reason}\n"
-            "The run continued and the failure is recorded in the case"
-            " directory findings.",
+            "The run continued and the failure is recorded in the"
+            f" {findings_where}.",
             err=True,
         )
     if result.synthesis_failure is not None:
-        typer.echo(
-            f"Synthesis failed: {result.synthesis_failure}\n"
-            "The deterministic memo and evidence were kept. Fix the model"
-            " configuration and run: coldscreen rerun " + str(result.case_dir),
-            err=True,
-        )
-    if json_output and result.casefile is not None:
+        if no_write:
+            typer.echo(
+                f"Synthesis failed: {result.synthesis_failure}\n"
+                "The deterministic memo was kept in memory. The case"
+                " directory was not written, so there is nothing to rerun.",
+                err=True,
+            )
+        else:
+            typer.echo(
+                f"Synthesis failed: {result.synthesis_failure}\n"
+                "The deterministic memo and evidence were kept. Fix the model"
+                " configuration and run: coldscreen rerun " + str(result.case_dir),
+                err=True,
+            )
+    if emit_json and result.casefile is not None:
         typer.echo(result.casefile.model_dump_json(indent=2))
     if result.stage_failures or result.synthesis_failure is not None:
         raise typer.Exit(code=1)

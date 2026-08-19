@@ -142,6 +142,7 @@ def test_both_tools_are_listed() -> None:
         "model",
         "overwrite",
         "refresh",
+        "no_write",
     }
     assert set(schemas["rerun_case"]["properties"]) == {"case_dir", "model", "render_only"}
 
@@ -296,6 +297,21 @@ def test_a_missing_companies_house_key_is_a_recoverable_error(
     assert "never tool arguments" in text
     assert "Traceback" not in text
     assert not (tmp_path / "cases").exists()
+
+
+def test_no_write_returns_null_case_dir_and_writes_nothing(
+    mcp_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    mock_company_routes(respx_mock)
+    payload = structured(call_tool("screen_company", {"query": "99999999", "no_write": True}))
+
+    assert payload["status"] == "ok"
+    assert payload["company_number"] == "99999999"
+    assert payload["case_dir"] is None
+    assert payload["memo"]
+    assert payload["verdict"] == {"level": None, "triggered": [], "status": "synthesis not run"}
+    assert SECRET not in json.dumps(payload)
+    assert not (mcp_env / "cases").exists()
 
 
 def test_overwrite_false_against_an_existing_case_fails_closed(
