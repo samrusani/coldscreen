@@ -64,6 +64,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from html.parser import HTMLParser
+from typing import Any
 from urllib.parse import urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
 
@@ -470,13 +471,15 @@ class _PinnedTransport(httpx.HTTPTransport):
     transport's connection pool to install it. The isinstance guard fails
     closed if httpx internals ever change shape: the site stage must not
     run without connection pinning, and the hermetic pinning tests exercise
-    this wiring against a real socket.
+    this wiring against a real socket. Extra keyword arguments are
+    forwarded to HTTPTransport so a test can pass verify=; production
+    construction keeps the default verify-on against system CAs.
     """
 
-    def __init__(self, pinner: _HostPinner) -> None:
-        super().__init__()
+    def __init__(self, pinner: _HostPinner, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
         pool = getattr(self, "_pool", None)
-        if not isinstance(pool, httpcore.ConnectionPool):  # pragma: no cover - httpx drift
+        if not isinstance(pool, httpcore.ConnectionPool):
             raise RuntimeError(
                 "httpx internals changed: the pinned network backend cannot be"
                 " installed, so the site stage refuses to run without its"

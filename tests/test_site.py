@@ -7,18 +7,23 @@ itself part of the property under test (for example: a robots-disallowed
 path, or a cross-host redirect target, must never be fetched at all).
 Resolution is always a fake resolver: no real DNS in tests, enforced by the
 conftest autouse guard. The pinning tests at the bottom run against a real
-loopback HTTP server with sockets re-enabled for 127.0.0.1 only, because
-the property under test lives below the mock layer: the TCP connection
-must go to the address the pinner validated, never to a second resolution.
+loopback HTTP or HTTPS server with sockets re-enabled for 127.0.0.1 only,
+because the property under test lives below the mock layer: the TCP
+connection must go to the address the pinner validated, never to a second
+resolution, and TLS SNI must stay on the origin hostname.
 """
 
 from __future__ import annotations
 
 import json
+import shutil
 import socket
+import ssl
+import subprocess
 import threading
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import cast
 
 import httpx
@@ -489,8 +494,8 @@ def test_robots_redirecting_off_host_means_nothing_is_fetched(
 
 # -- connection pinning: check and connect share one resolution -----------------------
 #
-# These tests are hermetic but real: a loopback HTTP server, sockets
-# re-enabled for 127.0.0.1 only (any other connect is refused by
+# These tests are hermetic but real: a loopback HTTP or HTTPS server,
+# sockets re-enabled for 127.0.0.1 only (any other connect is refused by
 # pytest-socket before a packet leaves), and injected resolvers. They prove
 # the F1 property below the respx mock layer, where the TOCTOU lived.
 
@@ -516,6 +521,77 @@ class _LoopbackServer(ThreadingHTTPServer):
         self.hits: list[tuple[str | None, str]] = []
 
 
+class _LoopbackTLSServer(_LoopbackServer):
+    """Same recorder as the HTTP pin server, with a TLS handshake."""
+
+    def __init__(self, body: bytes, ssl_context: ssl.SSLContext) -> None:
+        super().__init__(body)
+        self.socket = ssl_context.wrap_socket(self.socket, server_side=True)
+
+
+def _self_signed_hostname_cert(directory: Path, hostname: str) -> tuple[Path, Path]:
+    """Self-signed cert for hostname, generated into directory via openssl.
+
+    A temp config sets SAN DNS:hostname so the file works on Ubuntu OpenSSL
+    and macOS LibreSSL without relying on -addext.
+    """
+    openssl = shutil.which("openssl")
+    if openssl is None:
+        pytest.skip("openssl is required to generate the hermetic TLS test certificate")
+    key_path = directory / "tls-sni-key.pem"
+    cert_path = directory / "tls-sni-cert.pem"
+    config_path = directory / "tls-sni-openssl.cnf"
+    config_path.write_text(
+        (
+            "[req]\n"
+            "default_bits = 2048\n"
+            "prompt = no\n"
+            "default_md = sha256\n"
+            "distinguished_name = dn\n"
+            "x509_extensions = v3_ext\n"
+            "req_extensions = v3_ext\n"
+            "\n"
+            "[dn]\n"
+            f"CN = {hostname}\n"
+            "\n"
+            "[v3_ext]\n"
+            f"subjectAltName = DNS:{hostname}\n"
+            "basicConstraints = CA:TRUE\n"
+        ),
+        encoding="utf-8",
+    )
+    completed = subprocess.run(
+        [
+            openssl,
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-keyout",
+            str(key_path),
+            "-out",
+            str(cert_path),
+            "-days",
+            "1",
+            "-config",
+            str(config_path),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if completed.returncode != 0:
+        message = completed.stderr.strip() or completed.stdout.strip() or str(completed.returncode)
+        raise RuntimeError(
+            f"openssl failed to generate the hermetic TLS test certificate: {message}"
+        )
+    if not cert_path.is_file() or not key_path.is_file():
+        raise RuntimeError("openssl did not write the hermetic TLS test certificate files")
+    return cert_path, key_path
+
+
 def test_connect_time_enforcement_blocks_a_host_the_precheck_never_saw() -> None:
     """The pinner verdict is enforced at connect, not only at the polite
     pre-check: a request straight through the transport is refused before
@@ -527,6 +603,20 @@ def test_connect_time_enforcement_blocks_a_host_the_precheck_never_saw() -> None
             client.get("http://sneaky.example/")
     finally:
         client.close()
+
+
+def test_pinned_transport_fails_closed_when_pool_is_not_a_connection_pool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If httpx no longer exposes a ConnectionPool on _pool, refuse to run."""
+
+    def broken_init(self: httpx.HTTPTransport, **_kwargs: object) -> None:
+        self._pool = object()  # type: ignore[assignment]
+
+    monkeypatch.setattr(httpx.HTTPTransport, "__init__", broken_init)
+    pinner = _HostPinner(resolver=lambda host: [PUBLIC_TEST_ADDRESS])
+    with pytest.raises(RuntimeError, match="httpx internals changed"):
+        _PinnedTransport(pinner)
 
 
 @pytest.mark.enable_socket
@@ -579,6 +669,64 @@ def test_pinned_transport_dials_the_validated_address_and_keeps_the_host_header(
     # One resolution, shared by check and connect; never a system lookup.
     assert resolver_calls == ["pinned-host.example"]
     assert "pinned-host.example" not in getaddrinfo_hosts
+
+
+@pytest.mark.enable_socket
+@pytest.mark.allow_hosts(["127.0.0.1"])
+def test_pinned_transport_preserves_tls_sni_on_the_origin_hostname(tmp_path: Path) -> None:
+    """HTTPS pinning proof: TCP goes to the validated address, and the TLS
+    ClientHello SNI the server observes is the fictional hostname, not the
+    pinned IP. Handshake verifies against a cert for that name."""
+    hostname = "sni-pin.example"
+    cert_path, key_path = _self_signed_hostname_cert(tmp_path, hostname)
+    observed_sni: list[str | None] = []
+
+    def capture_sni(_sock: object, server_name: str | None, _ctx: object) -> int | None:
+        observed_sni.append(server_name)
+        return None
+
+    server_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    server_ctx.load_cert_chain(certfile=str(cert_path), keyfile=str(key_path))
+    server_ctx.set_servername_callback(capture_sni)
+
+    server = _LoopbackTLSServer(b"PINNED-TLS-SNI-OK", server_ctx)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    port = server.server_address[1]
+    resolver_calls: list[str] = []
+
+    def resolver(host: str) -> list[str]:
+        resolver_calls.append(host)
+        return ["127.0.0.1"]
+
+    getaddrinfo_hosts: list[object] = []
+    real_getaddrinfo = socket.getaddrinfo
+
+    def spying_getaddrinfo(host: object, *args: object, **kwargs: object) -> object:
+        getaddrinfo_hosts.append(host)
+        return real_getaddrinfo(host, *args, **kwargs)  # type: ignore[arg-type]
+
+    pinner = _HostPinner(resolver=resolver, classifier=lambda address: False)
+    verify_ctx = ssl.create_default_context(cafile=str(cert_path))
+    client = httpx.Client(
+        transport=_PinnedTransport(pinner, verify=verify_ctx),
+        timeout=5.0,
+    )
+    try:
+        socket.getaddrinfo = spying_getaddrinfo  # type: ignore[assignment]
+        response = client.get(f"https://{hostname}:{port}/hello")
+    finally:
+        socket.getaddrinfo = real_getaddrinfo
+        client.close()
+        server.shutdown()
+        server.server_close()
+    assert response.status_code == 200
+    assert response.text == "PINNED-TLS-SNI-OK"
+    assert server.hits == [(f"{hostname}:{port}", "/hello")]
+    assert observed_sni == [hostname]
+    assert "127.0.0.1" not in observed_sni
+    assert resolver_calls == [hostname]
+    assert hostname not in getaddrinfo_hosts
 
 
 @pytest.mark.enable_socket
