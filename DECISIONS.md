@@ -159,6 +159,9 @@ The new clean-claim substrings (`no pep matches`, `no evidence of sanctions or p
 
 Fix: each rendered field is scored on its own. A fixed not-run marker in the same field (`not performed`, `did not run`, `was not run`, `not searched`, `not conducted`, and close variants) suppresses a clean-claim substring there. A marker in a different field does not. Finding statements and the whole memo are still not scanned. Residual: an honest gap sentence that uses a clean-claim substring and never uses a marker still fails closed, which is the original narrow-set tradeoff.
 
+### 2026-08-19: screen --help assertions must ignore Rich markup
+CI `checks` on 3.11-3.13 went red from the cache UX PR (`test_screen_help_includes_refresh`) while ruff and mypy stayed green. Rich styles a long option as two bold spans (`-` then `-refresh`), so a raw `--refresh` substring is missing from colored help on the runner even though the flag is present. Local pytest without `color=True` did not insert those spans. The test now uses the existing `flat_output` helper, which already exists for width-independent CLI wording, and invokes help with color on so the CI shape is what the assertion sees.
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.
