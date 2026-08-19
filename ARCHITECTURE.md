@@ -177,9 +177,12 @@ coldscreen screen "Acme Holdings Ltd"
 coldscreen screen 01234567 --deck pitch.pdf --site https://example.com
 coldscreen screen 01234567 --model <provider:model> --json
 coldscreen rerun cases/acme-holdings-01234567
+coldscreen mcp                                  # MCP stdio server, see section 18
 ```
 
 Keys via environment variables. Optional `coldscreen.toml` for defaults (model, output dir, officer lookback years, media result count).
+
+Every write into a case directory refuses to follow a symbolic link at the name it is writing (`casedir.write_case_text`, `O_NOFOLLOW`). A validated directory does not imply a validated write: the kernel resolves the final name again at open time, so a link left at `memo.md` would otherwise redirect the write outside the directory the caller was confined to.
 
 ## 10. Caching, rate limits, audit trail
 
@@ -234,5 +237,26 @@ This checklist was completed on 2026-08-18 and 2026-08-19, before any code was w
 ## 17. Open questions
 
 - Adapter interface shape for v0.2 registries (Bolagsverket for Sweden, SEC EDGAR for the US): design after, not before, the UK pass works.
-- MCP server mode: cheap to add once the core is a library, and it multiplies distribution through agent workflows. Candidate for v0.1.5 rather than v0.1.
+- Remote MCP: Streamable HTTP, an OAuth story, and a hosted deployment. The stdio server is shipped (section 18); everything past the local process boundary is still open, and it is the same question as the hosted demo below.
 - Hosted "screen one company in your browser" demo: raises virality, adds cost and abuse surface. Decide after launch signal, not before.
+
+## 18. MCP surface (stdio)
+
+The screen and rerun flows live in `coldscreen.pipeline`, which returns structured results (`ScreenResult`, `RerunResult`) and never exits the process or writes to a stream. `coldscreen.cli` and `coldscreen.mcp_server` are two thin adapters over that one pipeline: the CLI maps results to exit codes and console output, the MCP server maps them to structured tool content and `ToolError`. There is no second implementation of the screen, so the rubric, the language backstop, and the verdict floor and ceiling apply identically on both paths.
+
+```
+coldscreen mcp        # stdio transport, stdout is JSON-RPC only
+
+screen_company(query, company_number=None, deck_path=None,
+               site_url=None, model=None, overwrite=False)
+rerun_case(case_dir, model=None, render_only=False)
+```
+
+Properties that are structural rather than incidental:
+
+- **Optional extra.** The `mcp` package is imported lazily inside the `mcp` command, so a plain install imports and runs with the extra absent and the command explains what to install.
+- **stdout discipline.** Human status and logs go to stderr on this path; the transport owns stdout.
+- **No key surface.** Neither tool schema has a field that could carry key material. Keys are read from the server process environment, and a missing one is a recoverable error naming the variable.
+- **No silent disambiguation.** Where the CLI can prompt a person, the MCP path cannot, so an ambiguous name returns `status: "ambiguous"` with the candidate list and writes nothing. The caller re-calls with `company_number`.
+- **Confined writes.** `rerun_case` resolves `case_dir` and refuses anything outside the configured output directory, because on this path the path comes from a host rather than a person's shell. Confining the directory is not sufficient by itself: the tool-owned names inside it are written through `casedir.write_case_text`, which opens with `O_NOFOLLOW` so a symbolic link at `memo.md`, `casefile.json`, or an evidence file is refused rather than followed out of the directory. The case directory and `evidence/` are refused if they are links. This applies to every path that writes a case, CLI included.
+- **Tests stay offline.** The server is exercised through the SDK's in-memory client under `pytest-socket --disable-socket`, so the MCP surface is covered without a socket.

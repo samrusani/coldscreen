@@ -6,9 +6,9 @@ The repository is at github.com/samrusani/coldscreen. Branch `main` is current a
 
 ## What this is
 
-A CLI that turns a UK company name into a first-pass screening memo built entirely from public sources, with every finding traceable to evidence. It is not due diligence. It is the screen that decides whether due diligence is worth anyone's time.
+A CLI that turns a UK company name into a first-pass screening memo built entirely from public sources, with every finding traceable to evidence. It is not due diligence. It is the screen that decides whether due diligence is worth anyone's time. The same pipeline is also an MCP stdio server, so the screen runs inside agent workflows without a second implementation of it.
 
-Current state: 649 tests, 26 modules, roughly 8,900 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI. Rubric 0.3 adds a mechanical R4 floor for origin-year contradictions ("operating since 2015" against incorporation in 2019), so that class of claims-bearing case now anchors unconditionally.
+Current state: 683 tests, 28 modules, roughly 9,600 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI. Rubric 0.3 adds a mechanical R4 floor for origin-year contradictions ("operating since 2015" against incorporation in 2019), so that class of claims-bearing case now anchors unconditionally.
 
 ## The five non-negotiables
 
@@ -29,7 +29,9 @@ The level is a pure function of the enforced trigger set. There is a property te
 
 That exemption is the subtle part and it has already been attacked successfully once. Claim text is the company's own words, so a deck saying "we fight fraud" must render. But claim text comes from the model, so an unverified exemption is a laundering channel: an early design let a model smuggle arbitrary vocabulary into memos by inventing a "quotation". The fix, which you must not weaken: a claim is stored only if it verifies as a normalized verbatim substring of its declared source section, model prose gets zero exemptions ever, and the CI language script re-verifies exemptions against the committed evidence files. Four attack shapes are permanent regression tests in `tests/test_exemption_attacks.py`.
 
-**5. No key material anywhere it can leak.** Secrets come from environment variables only. The Companies House key travels in a basic auth header, never in URLs, cache keys, evidence params, or `__repr__`. There is a test that greps every written file for the key. The tool bundles no OpenSanctions key: their terms make rights non-transferable, so every user brings their own key under their own licence.
+**5. No key material anywhere it can leak.** Secrets come from environment variables only. The Companies House key travels in a basic auth header, never in URLs, cache keys, evidence params, or `__repr__`. There is a test that greps every written file for the key. The tool bundles no OpenSanctions key: their terms make rights non-transferable, so every user brings their own key under their own licence. The MCP surface inherits this rather than reopening it: no tool schema has a field that could carry a key, there is a test that walks both schemas asserting so, and keys are read from the server process environment the host sets.
+
+None of the five is relaxed on the MCP path. It is an adapter over the same `coldscreen.pipeline` functions the CLI calls, so the rubric floor and ceiling, the language backstop, and the evidence schema are the identical code. If you ever find yourself adding a screen path that does not go through the pipeline, that is the bug.
 
 ## How the work has been done, and why it is worth continuing
 
@@ -68,16 +70,17 @@ Findings this loop caught that the test suite did not: pagination that silently 
 
 **Reruns are cheap.** `coldscreen rerun <case-dir> --model <provider:model>` re-synthesizes from cached evidence without refetching, which is how prompt iteration and model comparison are done without spending API calls.
 
+**MCP.** `pip install '.[mcp]'` then `coldscreen mcp` serves `screen_company` and `rerun_case` over stdio. The `mcp` package is imported lazily so a plain install still works and the command tells you what to install. Two things surprise people: stdout is JSON-RPC only, so anything you print for a human on that path must go to stderr; and `rerun_case` refuses a `case_dir` outside the configured output directory, which the CLI does not, because a host chooses that path rather than a person. Note what that confinement does and does not do, because the first version of it got this wrong: validating the directory does nothing about a symbolic link left at `memo.md` inside it, since the kernel resolves that name again when the file is opened. Every case write therefore goes through `casedir.write_case_text`, which opens with `O_NOFOLLOW` and refuses a link at the final name, and the case and `evidence` directories are refused if they are links. If you add a file to the case directory, write it with that function, not with `Path.write_text`. Tests drive the server through the SDK's in-memory client, which works under `pytest-socket --disable-socket` only because `tests/test_mcp_server.py` builds its event loop at import time, before the socket guard is installed. That line has a comment on it; do not move it into a fixture.
+
 ## What to build next
 
 FUTURE.md holds remaining items. My recommended ordering:
 
-1. **MCP server mode.** The core is already a library; exposing it as an MCP server multiplies distribution through agent workflows. Cheap relative to its reach.
-2. **Charges pagination and the undocumented limits.** Charges are currently a single unpaginated GET. While you are there, probe the pagination maxima and 429 behavior empirically now that a key exists, and record the findings in DECISIONS.md.
-3. **Cache UX**: a `--refresh` flag, plus commands to print the cache path and clear it. Today a filing that lands is invisible for up to seven days and the cache path is undiscoverable from the CLI.
-4. **Extend the stage-honesty phrase set** from real model phrasing observed in live runs. The mechanical backstop that stops a memo describing a not-run stage as clean uses a deliberately narrow fixed phrase set.
-5. **A hermetic TLS test for SNI preservation** through the pinned network backend, and a plan for the httpx internals coupling in `site.py` (it fails closed if httpx changes shape, but it is coupled).
-6. Registry adapters for other jurisdictions. Design the adapter interface when a second registry forces it, not before.
+1. **Charges pagination and the undocumented limits.** Charges are currently a single unpaginated GET. While you are there, probe the pagination maxima and 429 behavior empirically now that a key exists, and record the findings in DECISIONS.md.
+2. **Cache UX**: a `--refresh` flag, plus commands to print the cache path and clear it. Today a filing that lands is invisible for up to seven days and the cache path is undiscoverable from the CLI.
+3. **Extend the stage-honesty phrase set** from real model phrasing observed in live runs. The mechanical backstop that stops a memo describing a not-run stage as clean uses a deliberately narrow fixed phrase set.
+4. **A hermetic TLS test for SNI preservation** through the pinned network backend, and a plan for the httpx internals coupling in `site.py` (it fails closed if httpx changes shape, but it is coupled).
+5. Registry adapters for other jurisdictions. Design the adapter interface when a second registry forces it, not before.
 
 ## Known open items that are not code
 
