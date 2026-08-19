@@ -1,9 +1,14 @@
-"""Language rules: rendered memos never use the banned accusatory terms.
+"""Language rules: rendered memos and tool-authored casefile fields.
 
-The one exemption is quoted data: the casefile's stored claim texts are the
-company's own words and pass the gate span-exactly; everything around them
-stays gated. scripts/check_language.py builds the same exemptions from the
-sibling casefile.json of each memo it scans.
+Quoted data is the one exemption on memos: the casefile's stored claim
+texts are the company's own words and pass the memo gate span-exactly;
+everything around them stays gated. scripts/check_language.py builds those
+exemptions from the sibling casefile.json of each memo it scans, after
+re-verifying against sibling evidence.
+
+The same script also parses casefile.json and scans the tool-authored
+fields. Identity exemptions apply there after the same evidence
+re-verification. Claim-quote exemptions do not.
 """
 
 from __future__ import annotations
@@ -12,6 +17,9 @@ import importlib.util
 import json
 from pathlib import Path
 from types import ModuleType
+from typing import Any
+
+import pytest
 
 from coldscreen.casedir import load_casefile
 from coldscreen.language import find_banned_terms, normalize_for_match
@@ -383,3 +391,237 @@ def test_memo_with_banned_word_in_media_url_slug_passes() -> None:
     assert find_banned_terms(memo) == []
     # The same word in prose is still a hit.
     assert find_banned_terms(memo + "\nA fraud inquiry is open.\n") == ["fraud"]
+
+
+# -- casefile.json field scan -----------------------------------------------------
+
+
+def _finding(statement: str) -> dict[str, Any]:
+    """A finding payload that keeps Finding.evidence at min length 1."""
+    return {
+        "id": "REG-001",
+        "stage": "registry",
+        "severity": "info",
+        "confidence": "confirmed",
+        "statement": statement,
+        "evidence": [
+            {
+                "source_url": "https://registry.example/company/99999998",
+                "retrieved_at": "2026-08-20T00:00:00+00:00",
+            }
+        ],
+    }
+
+
+def _write_tmp_casefile(directory: Path, payload: dict[str, Any]) -> Path:
+    path = directory / "casefile.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def test_default_targets_include_fixture_casefiles() -> None:
+    module = load_script()
+    targets = module.default_targets(REPO_ROOT)
+    fixture_casefiles = sorted(FIXTURES_DIR.rglob("casefile.json"))
+    assert fixture_casefiles
+    for path in fixture_casefiles:
+        assert path in targets
+    for path in sorted(FIXTURES_DIR.rglob("memo.md")):
+        assert path in targets
+    templates = REPO_ROOT / "src" / "coldscreen" / "templates"
+    for path in templates.rglob("*"):
+        if path.is_file():
+            assert path in targets
+
+
+def test_check_language_passes_on_fixture_casefiles_and_memos() -> None:
+    module = load_script()
+    targets = [str(p) for p in sorted(FIXTURES_DIR.rglob("casefile.json"))]
+    targets.extend(str(p) for p in sorted(FIXTURES_DIR.rglob("memo.md")))
+    template_dir = REPO_ROOT / "src" / "coldscreen" / "templates"
+    targets.extend(str(p) for p in sorted(template_dir.rglob("*")) if p.is_file())
+    assert module.main(targets) == 0
+
+
+@pytest.mark.parametrize(
+    ("field_path", "payload"),
+    [
+        (
+            "findings[0].statement",
+            {"findings": [_finding("The director committed fraud.")]},
+        ),
+        ("narrative", {"narrative": "The public record shows fraud."}),
+        (
+            "verdict.rationale",
+            {
+                "verdict": {
+                    "level": "red",
+                    "triggered": [],
+                    "rationale": "Because of fraud.",
+                    "questions": [],
+                }
+            },
+        ),
+        (
+            "verdict.questions[0]",
+            {
+                "verdict": {
+                    "level": "green",
+                    "triggered": [],
+                    "rationale": "The record is silent.",
+                    "questions": ["Was this fraud?"],
+                }
+            },
+        ),
+        (
+            "assessments[0].record_note",
+            {
+                "assessments": [
+                    {
+                        "claim_id": "CLM-001",
+                        "status": "unverified",
+                        "basis": [],
+                        "record_note": "Looks like fraud.",
+                    }
+                ]
+            },
+        ),
+    ],
+)
+def test_check_language_fails_on_banned_casefile_field(
+    tmp_path: Path,
+    field_path: str,
+    payload: dict[str, Any],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = load_script()
+    path = _write_tmp_casefile(tmp_path, payload)
+    assert module.main([str(path)]) == 1
+    err = capsys.readouterr().err
+    assert f"{field_path}: banned term 'fraud'" in err
+
+
+def test_check_language_ignores_media_title_on_committed_amber() -> None:
+    """The committed amber fixture stores a fraud headline. Titles are not
+    scanned; the tool-authored fields on that fixture are clean."""
+    module = load_script()
+    path = FIXTURES_DIR / "amber" / "casefile.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    titles = [item["title"] for item in data["media"]["items"]]
+    assert any("fraud" in title.lower() for title in titles)
+    assert module.main([str(path)]) == 0
+
+
+def test_check_language_ignores_media_title_on_tmp_casefile(tmp_path: Path) -> None:
+    module = load_script()
+    path = _write_tmp_casefile(
+        tmp_path,
+        {
+            "narrative": "The public record is silent on the headline.",
+            "media": {
+                "items": [
+                    {
+                        "title": "Gilded Anvil Holdings faces fraud inquiry by trade body",
+                        "snippet": "A trade body opened a fraud inquiry.",
+                    }
+                ]
+            },
+        },
+    )
+    assert module.main([str(path)]) == 0
+
+
+def test_check_language_ignores_claim_text_on_committed_golden() -> None:
+    """The committed golden fixture stores a verified claim that contains
+    fraud. Claim text is quoted data and is not a casefile-field hit."""
+    module = load_script()
+    path = FIXTURES_DIR / "golden" / "casefile.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert any("fraud" in claim["text"].lower() for claim in data["claims"])
+    assert module.main([str(path)]) == 0
+
+
+def test_check_language_ignores_verified_claim_text_on_tmp_casefile(
+    tmp_path: Path,
+) -> None:
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    path = _write_tmp_casefile(
+        case_dir,
+        {
+            "claims": [{"id": "CLM-001", "text": QUOTED}],
+            "narrative": "See CLM-001.",
+        },
+    )
+    _write_evidence(case_dir, {"2": f"Slide two. {QUOTED}."})
+    assert module.main([str(path)]) == 0
+
+
+def test_check_language_record_note_copying_claim_is_a_hit(tmp_path: Path) -> None:
+    """Claim-quote exemption does not apply to casefile statements. A
+    record_note that repeats a verified claim's fraud sentence fails even
+    when sibling evidence would honour that text on a memo."""
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    path = _write_tmp_casefile(
+        case_dir,
+        {
+            "claims": [{"id": "CLM-001", "text": QUOTED}],
+            "assessments": [
+                {
+                    "claim_id": "CLM-001",
+                    "status": "unverified",
+                    "basis": [],
+                    "record_note": QUOTED,
+                }
+            ],
+        },
+    )
+    _write_evidence(case_dir, {"2": f"Slide two. {QUOTED}."})
+    assert module.main([str(path)]) == 1
+
+
+def test_check_language_identity_name_in_finding_needs_registry_evidence(
+    tmp_path: Path,
+) -> None:
+    """A finding statement that names CROOK, Cuthbert passes only when
+    sibling registry evidence carries that name."""
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    statement = "Officer CROOK, Cuthbert is currently appointed."
+    _write_identity_casefile(case_dir, "PLAIN TRADING LTD", "CROOK, Cuthbert")
+    path = case_dir / "casefile.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["findings"] = [_finding(statement)]
+    path.write_text(json.dumps(data), encoding="utf-8")
+    assert module.main([str(path)]) == 1
+    _write_registry_evidence(case_dir, "PLAIN TRADING LTD", "CROOK, Cuthbert")
+    assert module.main([str(path)]) == 0
+
+
+def test_check_language_tampered_officer_name_in_statement_fails(
+    tmp_path: Path,
+) -> None:
+    """A hand-added officer name in a finding statement buys no exemption
+    when the registry evidence never returned it."""
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    _write_identity_casefile(case_dir, "PLAIN TRADING LTD", "CROOK, Cuthbert")
+    path = case_dir / "casefile.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["findings"] = [_finding("Officer CROOK, Cuthbert is currently appointed.")]
+    path.write_text(json.dumps(data), encoding="utf-8")
+    _write_registry_evidence(case_dir, "PLAIN TRADING LTD", "HONEST, Henrietta")
+    assert module.main([str(path)]) == 1
+
+
+def test_check_language_corrupt_casefile_target_fails(tmp_path: Path) -> None:
+    """A casefile that is itself a scan target fails closed on bad JSON."""
+    module = load_script()
+    path = tmp_path / "casefile.json"
+    path.write_text("{ not json", encoding="utf-8")
+    assert module.main([str(path)]) == 1

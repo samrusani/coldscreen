@@ -188,6 +188,13 @@ A loopback HTTPS handshake now proves server-observed SNI. The test binds `127.0
 
 Alternatives considered and rejected this sprint: dropping httpx for hand-rolled TLS (more surface), pinning an upper httpx bound with no public-API evidence (churn without a hook), adding a third-party TLS test extra (`cryptography` or `trustme`).
 
+### 2026-08-20: language check scans casefile statements, not the JSON blob
+`scripts/check_language.py` default targets now include `casefile.json` under `cases/` and `tests/fixtures/` as well as memos and templates. A casefile is parsed as JSON. Only tool-authored string fields are scanned: `findings[].statement`, `assessments[].record_note`, `verdict.rationale`, `verdict.questions[]`, `narrative`, `verdict_enforcement`, `synthesis.enforcement_notes[]`, and `sanctions.skipped_reason` / `media.skipped_reason` / `claims_extraction.skipped_reason`. The raw file text is not scanned. Two committed fixtures make a blob scan wrong: golden stores the verified claim that contains "fraud", and amber stores a media title that contains "fraud". Those strings are quoted data and synthesis input; they are allowed where they live and forbidden in tool prose.
+
+Identity exemption: yes, and only after the same sibling registry-evidence re-verification the memo scan already uses. Claim-quote exemption: no, same polarity as the synthesis per-field gate. A `record_note` that repeats a verified claim's banned wording is a hit. Media titles and snippets are out. Unreadable or invalid JSON on a casefile that is itself a scan target fails closed (exit 1). A corrupt sibling used only to build memo exemptions is still ignored.
+
+The synthesis per-field gate, the whole-memo backstop, the claims verifier, and rubric.md were not changed. Committed fixture casefiles and snapshot memos were not edited.
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.
