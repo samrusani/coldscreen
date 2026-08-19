@@ -1,6 +1,6 @@
 # Scoring rubric
 
-Version 0.2. This file is the verdict logic. It is versioned with the code and cited by trigger ID in every memo, so changing it is a visible, reviewable act. Version 0.2 refines version 0.1 against real screens: a status trigger was added after a live screen showed a dissolved company could reach GREEN, and the evidence conditions column makes each trigger's mechanical gate explicit.
+Version 0.3. This file is the verdict logic. It is versioned with the code and cited by trigger ID in every memo, so changing it is a visible, reviewable act. Version 0.3 adds a mechanical floor to R4 for date-shaped origin claims. Version 0.2 refined version 0.1 against real screens: a status trigger was added after a live screen showed a dissolved company could reach GREEN, and the evidence conditions column makes each trigger's mechanical gate explicit.
 
 ## Triggers
 
@@ -9,7 +9,7 @@ Version 0.2. This file is the verdict logic. It is versioned with the code and c
 | R1 | Sanctions or PEP match (entity or PSC) at or above threshold | RED | A sanctions match finding at or above threshold exists for the entity or a PSC. Officer matches are reported as amber findings, not R1. |
 | R2 | Active insolvency event | RED | Insolvency cases are on the register, or the company status is itself an insolvency state (administration, liquidation, receivership, insolvency proceedings, voluntary arrangement). |
 | R3 | Disqualified director in current officer set | RED | A strong-match disqualification (name and date of birth, or name and company number for corporate officers) that is currently active. |
-| R4 | Material claim directly contradicted by registry record | RED | A surviving contradicted claim assessment whose basis includes a registry finding relevant to the claim's category. |
+| R4 | Material claim directly contradicted by registry record | RED | A surviving contradicted claim assessment whose basis includes a registry finding relevant to the claim's category, or a stored claim whose text places the company's origin in a calendar year before the registry incorporation date. |
 | R5 | Undisclosed related-party network across officers | RED | Co-appointment overlap findings exist and claims material is present to judge disclosure against. |
 | A1 | Overdue or irregular filings | AMBER | The registry marks accounts or the confirmation statement overdue. |
 | A2 | Wholesale officer changes within 12 months | AMBER | Resignations in the last 12 months meet the wholesale threshold. |

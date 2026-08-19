@@ -706,7 +706,7 @@
   "synthesis": {
     "provider": "ollama",
     "model": "fake-model:1b",
-    "prompt_version": "4",
+    "prompt_version": "5",
     "parse_retries": 0,
     "language_retries": 0,
     "enforcement_notes": [],

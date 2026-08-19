@@ -1,6 +1,6 @@
 """Rubric catalog, mechanical trigger detection, and verdict enforcement.
 
-The catalog mirrors rubric.md version 0.2 exactly, including each trigger's
+The catalog mirrors rubric.md version 0.3 exactly, including each trigger's
 "fires only when" evidence condition (a test parses rubric.md and asserts
 the mirror). Enforcement is both a floor and a ceiling over the model's
 cited triggers, and as of rubric 0.2 EVERY trigger id is gated:
@@ -12,10 +12,15 @@ cited triggers, and as of rubric 0.2 EVERY trigger id is gated:
   only when the same id is in the mechanically detected candidate set. The
   judgment ids are gated on GateSignals, built by the caller AFTER
   assessment enforcement from surviving enforced state only:
-    - R4 opens only when at least one claim assessment SURVIVED enforcement
-      as contradicted with resolved evidence relevant to the claim's
-      category (the relevance table below; coldscreen.synthesis downgrades
-      everything else).
+    - R4 is a hybrid. The floor fires when a stored claim places origin in
+      a calendar year before the registry incorporation date (see
+      coldscreen.date_contradictions); that candidate cannot be dropped.
+      The judgment path still opens when at least one claim assessment
+      SURVIVED enforcement as contradicted with resolved evidence relevant
+      to the claim's category (the relevance table below;
+      coldscreen.synthesis downgrades everything else). A citation of R4
+      is accepted if the gate is open OR the date-contradiction candidate
+      is present.
     - R5 opens only when co-appointment overlap is recorded in the
       casefile's network expansion AND claims material is present to judge
       disclosure against. Acceptance is noted with the overlap finding ids.
@@ -49,9 +54,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+from .date_contradictions import candidate_reason, origin_year_contradictions
 from .models import CaseFile
 
-RUBRIC_VERSION = "0.2"
+RUBRIC_VERSION = "0.3"
 
 # Company status values that ARE an insolvency state (the R2 status leg).
 # rubric.md spells them with spaces; the registry uses hyphens.
@@ -84,7 +90,7 @@ class Trigger:
     condition: str
 
 
-# Mirrors the table in rubric.md, version 0.2. Do not edit one without the
+# Mirrors the table in rubric.md, version 0.3. Do not edit one without the
 # other; tests/test_rubric.py parses rubric.md and asserts equality.
 TRIGGERS: tuple[Trigger, ...] = (
     Trigger(
@@ -114,7 +120,9 @@ TRIGGERS: tuple[Trigger, ...] = (
         "Material claim directly contradicted by registry record",
         "red",
         "A surviving contradicted claim assessment whose basis includes a registry"
-        " finding relevant to the claim's category.",
+        " finding relevant to the claim's category, or a stored claim whose text"
+        " places the company's origin in a calendar year before the registry"
+        " incorporation date.",
     ),
     Trigger(
         "R5",
@@ -177,8 +185,11 @@ _TRIGGER_ID_BY_LOWER: dict[str, str] = {t.id.lower(): t.id for t in TRIGGERS}
 # Trigger ids with a mechanical detector in detect_candidates. The ceiling
 # accepts a model citation of these only when the detector fired on this
 # casefile. The judgment ids (R4, R5, A3, A4, A5, A6) are gated on
-# GateSignals instead. Together the two sets cover the whole catalog, so no
-# trigger is freely citable.
+# GateSignals instead. R4 is the hybrid: it stays in the judgment set so a
+# non-date contradiction still has to clear the gate, AND detect_candidates
+# may emit it as a floor candidate when an origin-year contradiction is
+# present. Together the two sets cover the whole catalog, so no trigger is
+# freely citable.
 MECHANICAL_IDS = frozenset({"R1", "R2", "R3", "A1", "A2", "A7"})
 
 # The R4 relevance table: claim category -> registry finding ids that can
@@ -245,12 +256,13 @@ class TriggerCandidate:
 
 
 def detect_candidates(casefile: CaseFile) -> list[TriggerCandidate]:
-    """Mechanical candidates from deterministic findings, per rubric 0.2.
+    """Mechanical candidates from deterministic findings, per rubric 0.3.
 
     Detection reads the casefile only, so it works identically at screen
-    time and at rerun time. Covered here: R1, R2, R3, A1, A2, A7. The
-    judgment triggers (R4, R5, A3, A4, A5, A6) are the model's to add when
-    their gates are open.
+    time and at rerun time. Covered here: R1, R2, R3, A1, A2, A7, and the
+    origin-year path of R4. The remaining judgment triggers (R5, A3, A4,
+    A5, A6) and the non-date path of R4 are the model's to add when their
+    gates are open.
     """
     candidates: list[TriggerCandidate] = []
     findings = casefile.findings
@@ -328,6 +340,19 @@ def detect_candidates(casefile: CaseFile) -> list[TriggerCandidate]:
             )
         )
 
+    # R4 floor: a stored claim places origin in a calendar year before
+    # incorporation. The judgment path of R4 still goes through GateSignals;
+    # this candidate is the unconditional red for the date-shaped class.
+    origin_hits = origin_year_contradictions(casefile)
+    if origin_hits:
+        candidates.append(
+            TriggerCandidate(
+                id="R4",
+                reason=candidate_reason(origin_hits),
+                finding_ids=[f.id for f in findings if f.id == "REG-002"],
+            )
+        )
+
     return candidates
 
 
@@ -387,9 +412,11 @@ def enforce(
        mechanical ids (R1, R2, R3, A1, A2, A7) are rejected unless
        mechanically detected on this casefile. The judgment ids (R4, R5,
        A3, A4, A5, A6) are rejected unless their gate_signals gate is open
-       (module docstring); with no gate_signals every gate is locked. Every
-       rejection is noted with fixed text and the catalog-validated id. An
-       accepted R5 is noted with the overlap finding ids that ground it.
+       (module docstring) OR the same id is in the mechanical candidate
+       set (R4's origin-year floor). With no gate_signals every gate is
+       locked. Every rejection is noted with fixed text and the
+       catalog-validated id. An accepted R5 is noted with the overlap
+       finding ids that ground it.
     3. The floor: every mechanical candidate must be present; missing ones
        are added and noted.
     4. The level is computed from the final trigger set; the model's level
@@ -460,7 +487,9 @@ def enforce(
     for trigger_id in cited:
         if trigger_id in gate_rejections:
             gate_open, rejection_note = gate_rejections[trigger_id]
-            if gate_open:
+            # Hybrid path: R4 (and any future hybrid) is accepted when its
+            # judgment gate is open OR detect_candidates emitted it.
+            if gate_open or trigger_id in candidate_ids:
                 triggered.append(trigger_id)
                 if trigger_id == "R5" and signals.overlap_finding_ids:
                     notes.append(

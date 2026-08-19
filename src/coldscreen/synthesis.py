@@ -21,7 +21,10 @@ its resolved basis includes a registry finding relevant to the claim's
 category (the fixed table in coldscreen.rubric); a checkable claim the
 model skipped gets an unverified assessment with fixed text. Only what
 survives this enforcement can open the R4 and A4 gates in the rubric
-ceiling.
+ceiling. Origin-year contradictions are additionally forced: a stored
+claim whose text places origin before incorporation becomes a mechanical
+R4 candidate and a contradicted assessment, so the model cannot drop
+that red.
 
 Language: narrative, rationale, questions, and every record_note are
 mechanically gated with no claim-quote exemptions. The quoted-data
@@ -46,6 +49,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from .date_contradictions import assessment_note, origin_year_contradictions
 from .language import find_banned_terms, registry_identity_names
 from .models import CaseFile, ClaimAssessment, Evidence, Finding, SynthesisMetadata, Verdict
 from .providers import Message, ModelProvider
@@ -302,13 +306,23 @@ def enforce_assessments(
     3. contradicted or supported with an empty resolved basis is downgraded
        to unverified with a note: a status that judges the record must
        point at the record.
-    4. contradicted survives ONLY when its resolved basis includes at least
+       4. contradicted survives ONLY when its resolved basis includes at least
        one registry finding relevant to the claim's category, per the fixed
        relevance table in coldscreen.rubric (R4_RELEVANT_FINDINGS). A
        contradiction grounded outside that set is downgraded to unverified
-       with a sanitized note; only what survives here can open the R4 gate.
+       with a sanitized note. Rule 6 can still restore a contradicted
+       origin-year claim afterwards.
     5. Every checkable claim the model did not assess gets an unverified
        assessment with fixed text, so the memo table is always complete.
+    6. A stored checkable claim whose text places origin in a calendar year
+       before incorporation is forced to contradicted with REG-002 evidence.
+       A surviving model contradiction with a non-empty basis is left
+       alone (its record note already passed the language gate). Everything
+       else (supported, unverified, back-filled, or a contradiction that
+       did not survive) is replaced with a code-written note that names
+       only the parsed year, the ISO incorporation date, and REG-002.
+       Puffery claims have no assessment row and are unchanged here; they
+       still feed the R4 candidate detector.
     Output order is the casefile's claim order, deterministic by
     construction.
     """
@@ -398,8 +412,50 @@ def enforce_assessments(
     if missing:
         notes.append("added unverified assessment(s) the model omitted for: " + ", ".join(missing))
 
+    _apply_origin_year_overrides(by_claim, casefile, findings_by_id, checkable_set, notes)
+
     ordered = [by_claim[claim_id] for claim_id in checkable_ids]
     return AssessmentEnforcement(assessments=ordered, notes=notes)
+
+
+def _apply_origin_year_overrides(
+    by_claim: dict[str, ClaimAssessment],
+    casefile: CaseFile,
+    findings_by_id: dict[str, list[Finding]],
+    checkable_set: set[str],
+    notes: list[str],
+) -> None:
+    """Force contradicted on origin-year hits. Mutates by_claim and notes."""
+    hits = origin_year_contradictions(casefile)
+    if not hits:
+        return
+    basis: list[Evidence] = []
+    for finding in findings_by_id.get("REG-002", ()):
+        basis.extend(finding.evidence)
+    if not basis:
+        # A Finding without evidence cannot exist; without REG-002 there is
+        # nothing to copy. The R4 candidate can still fire from the profile
+        # date; the table row stays as the model (or back-fill) left it.
+        return
+    for hit in hits:
+        if hit.claim_id not in checkable_set:
+            continue
+        existing = by_claim.get(hit.claim_id)
+        if existing is not None and existing.status == "contradicted" and existing.basis:
+            continue
+        previous = existing.status if existing is not None else "unverified"
+        by_claim[hit.claim_id] = ClaimAssessment(
+            claim_id=hit.claim_id,
+            status="contradicted",
+            basis=list(basis),
+            record_note=assessment_note(hit),
+            model_assessed=existing.model_assessed if existing is not None else False,
+        )
+        notes.append(
+            f"overrode the assessment for {hit.claim_id} from {previous} to"
+            f" contradicted: a stored claim places origin in {hit.claimed_year},"
+            f" before incorporation on {hit.incorporated_on.isoformat()}"
+        )
 
 
 def gate_signals(casefile: CaseFile, assessments: list[ClaimAssessment]) -> GateSignals:
@@ -413,9 +469,12 @@ def gate_signals(casefile: CaseFile, assessments: list[ClaimAssessment]) -> Gate
       False) do not count, so a model cannot open A4 by staying silent. A
       downgraded assessment (the model judged, its evidence did not
       survive) is still model-authored and does count.
-    - R4 needs a surviving contradicted assessment; enforce_assessments
-      guarantees any survivor is grounded in a relevant registry finding,
-      so this function must only ever see assessments that went through it.
+    - R4 needs a surviving contradicted assessment OR the origin-year
+      candidate (enforce_assessments forces the former when the latter
+      holds and REG-002 evidence exists). enforce_assessments guarantees
+      any survivor is grounded in a relevant registry finding or in the
+      mechanical origin-year path, so this function must only ever see
+      assessments that went through it.
     - R5 needs recorded co-appointment overlap AND claims material to judge
       disclosure against; the overlap finding ids are collected here by
       filtering on the fixed id so the acceptance note stays code-derived.

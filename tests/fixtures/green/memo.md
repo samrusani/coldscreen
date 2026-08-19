@@ -15,7 +15,7 @@ Triggered:
 
 No rubric trigger is met: the site's checkable claim is supported by the register (CLM-001, REG-002), filings are current, the officer record is stable, sanctions screening returned no candidates, the disqualification register shows no matches, and the media search returned nothing. A verdict citing no triggers is GREEN by rubric rule 3.
 
-Synthesis: provider ollama, model fake-model:1b, prompt version 4, rubric-enforced.
+Synthesis: provider ollama, model fake-model:1b, prompt version 5, rubric-enforced.
 
 This memo is a research aid generated from public sources at a point in time. It is not investment advice, not a credit reference, and not a consumer report. Do not use it for decisions regulated under the US Fair Credit Reporting Act (employment, credit, tenancy screening) or equivalent regimes. Officer and PSC data is personal data from public registers; you are responsible for processing it lawfully. Verify everything independently before acting on it.
 

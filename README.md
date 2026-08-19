@@ -82,9 +82,9 @@ Row 3 is worth a note: the company's own marketing words render verbatim in the 
 
 Verdicts follow a published rubric (`rubric.md`), version-controlled with the code so the logic is auditable.
 
-**RED**: sanctions or PEP match on the entity or its PSCs; active insolvency; a disqualified director in the current officer set; a material claim directly contradicted by the registry; an undisclosed related-party network around the officers.
+**RED**: sanctions or PEP match on the entity or its PSCs; active insolvency; a disqualified director in the current officer set; a material claim directly contradicted by the registry (including an origin year that predates incorporation, which is detected mechanically); an undisclosed related-party network around the officers.
 
-**AMBER**: overdue or irregular filings; recent wholesale officer changes; registered charges inconsistent with the stated capital story; central claims that no public source can verify; corporate age or scale inconsistent with the stated history.
+**AMBER**: overdue or irregular filings; recent wholesale officer changes; registered charges inconsistent with the stated capital story; central claims that no public source can verify; corporate age or scale inconsistent with the stated history; substantive adverse media from a confirmed source; a company status that is not active (dissolved, closed, converted-closed, or removed; insolvency states escalate to RED instead).
 
 **GREEN**: clean registry, claims supported or plausibly verifiable, no substantive adverse media.
 
@@ -102,7 +102,7 @@ A verdict is an opinion generated from public sources at a point in time. It is 
 
 Works with hosted models (Anthropic, OpenAI) or local models via Ollama. The deterministic collection layer is identical regardless of model; only synthesis quality varies. Run it fully local if your deal flow should never touch a third-party API.
 
-Verdict discipline follows rubric rule 4: mechanically detected triggers cannot be dropped by the model, and triggers whose evidence conditions are not met cannot be added by it. Every trigger's evidence condition is published in `rubric.md`, and every enforcement intervention is recorded in the casefile and the memo. The model's judgment operates inside those conditions; the level arithmetic is never its to change. In cross-model testing, a 30B coder model and a 27B generalist produced identical verdict levels on the same live companies. One practical note for local models: reasoning-family models (qwen3 non-coder variants and similar) need `COLDSCREEN_OLLAMA_THINK=false` for reliable structured output.
+Verdict discipline follows rubric rule 4: mechanically detected triggers cannot be dropped by the model, and triggers whose evidence conditions are not met cannot be added by it. Every trigger's evidence condition is published in `rubric.md` (currently version 0.3), and every enforcement intervention is recorded in the casefile and the memo. Origin-year claims that predate the registry incorporation date are a mechanical R4 candidate: the model cannot drop that red. The model's judgment operates inside those conditions; the level arithmetic is never its to change. In cross-model testing, a 30B coder model and a 27B generalist produced identical verdict levels on the same live companies. One practical note for local models: reasoning-family models (qwen3 non-coder variants and similar) need `COLDSCREEN_OLLAMA_THINK=false` for reliable structured output.
 
 ## Scope and non-goals (v0.1)
 

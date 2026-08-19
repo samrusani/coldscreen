@@ -97,10 +97,18 @@ def test_rubric_text_carries_every_trigger_condition_and_rule() -> None:
 
 
 def test_every_trigger_id_is_either_mechanical_or_signal_gated() -> None:
-    """Rubric rule 4 requires a gate for every id: nothing is freely citable."""
+    """Rubric rule 4 requires a gate for every id: nothing is freely citable.
+
+    R4 is a hybrid: it stays in the signal-gated set so a non-date
+    contradiction still has to clear GateSignals, and detect_candidates may
+    also emit it as a floor candidate. It is not in MECHANICAL_IDS, because
+    a citation of R4 without the origin-year hit must not be accepted the
+    way a citation of R1 is (only when the detector fired).
+    """
     signal_gated = {"R4", "R5", "A3", "A4", "A5", "A6"}
     assert MECHANICAL_IDS | signal_gated == set(TRIGGER_INDEX)
     assert MECHANICAL_IDS & signal_gated == set()
+    assert "R4" not in MECHANICAL_IDS
 
 
 def test_r4_relevance_table_is_the_fixed_registry_set() -> None:
@@ -500,6 +508,40 @@ def test_r4_gate_needs_a_surviving_relevant_contradiction_not_just_claims() -> N
     result = enforce("red", ["R4"], QUESTIONS, [], gate_signals=claims_only)
     assert result.triggered == []
     assert result.level == "green"
+
+
+def test_r4_candidate_is_accepted_even_when_the_judgment_gate_is_locked() -> None:
+    """The hybrid path: detect_candidates emitted R4, so a citation cannot
+    be rejected for want of a surviving assessment. The floor would add it
+    anyway; citing it must not produce a rejection note."""
+    result = enforce("red", ["R4"], QUESTIONS, _candidates("R4"), gate_signals=LOCKED)
+    assert result.triggered == ["R4"]
+    assert result.level == "red"
+    assert result.notes == []
+
+
+def test_r4_candidate_is_forced_when_the_model_omits_it() -> None:
+    result = enforce("green", [], QUESTIONS, _candidates("R4"), gate_signals=LOCKED)
+    assert result.triggered == ["R4"]
+    assert result.level == "red"
+    assert any("the model omitted" in note and "R4" in note for note in result.notes)
+
+
+def test_mechanical_r4_floor_survives_every_citation_subset() -> None:
+    """With an origin-year R4 candidate, every combination of model-cited
+    catalog ids still yields red with R4 present. Gates stay locked, so no
+    judgment trigger other than the candidate can join it."""
+    catalog_ids = [t.id for t in TRIGGERS]
+    candidates = _candidates("R4", "A1")
+    for mask in range(1 << len(catalog_ids)):
+        cited = [catalog_ids[i] for i in range(len(catalog_ids)) if mask & (1 << i)]
+        result = enforce("green", cited, QUESTIONS, candidates, gate_signals=LOCKED)
+        assert result.level == "red"
+        assert "R4" in result.triggered
+        assert "A1" in result.triggered
+        # Locked gates: no judgment id except R4 (the candidate) survives.
+        assert "R5" not in result.triggered
+        assert "A6" not in result.triggered
 
 
 def test_r5_gate_needs_overlap_and_claims_material_together() -> None:

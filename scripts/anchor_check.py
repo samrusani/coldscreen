@@ -3,17 +3,17 @@
 produce the SAME enforced verdict level.
 
 The check runs on the AMBER fixture casefile (claims-free) by default,
-because that is where the anchoring property is unconditional: every
-trigger that can move the level there is mechanical, so a level mismatch
-means the enforcement or the prompt is broken, not the models. Trigger sets
-may differ on judgment triggers; the level must not.
+because that is where the anchoring property is unconditional and the
+trigger set is small: every trigger that can move the level there is
+mechanical, so a level mismatch means the enforcement or the prompt is
+broken, not the models. Trigger sets may differ on judgment triggers;
+the level must not.
 
-The golden RED case is deliberately NOT the default: its level rides on
-R4, a judgment trigger the enforcement gates but does not force, so two
-models may legitimately land on different levels there (one cites the
-surviving contradiction as material, the other does not). Set
-COLDSCREEN_ANCHOR_CASE to another fixture directory to probe that behavior
-knowingly.
+The golden RED case now also anchors unconditionally: an origin-year R4
+candidate plus A1 and A2 force red regardless of model output. It is not
+the default because its trigger set is larger and still has judgment-tier
+additions. Set COLDSCREEN_ANCHOR_CASE to another fixture directory to
+probe that behavior knowingly.
 
 Ollama settings are read the way the CLI reads them (coldscreen.toml, then
 the environment), and the configured think value is the default for both

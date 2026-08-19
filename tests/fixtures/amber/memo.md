@@ -16,7 +16,7 @@ Triggered:
 
 A1 applies because the registry marks the next accounts overdue (REG-003). A2 applies because officer resignations in the last twelve months reached the wholesale-change threshold (REG-009). Both are confirmed registry facts. The sub-threshold sanctions score (SAN-001) and the unconfirmed media coverage (MED-001, MED-003, MED-004) are noted as context but do not meet their trigger definitions. Two AMBER triggers with no RED trigger give an AMBER verdict.
 
-Synthesis: provider fake, model canned-amber, prompt version 4, rubric-enforced.
+Synthesis: provider fake, model canned-amber, prompt version 5, rubric-enforced.
 
 This memo is a research aid generated from public sources at a point in time. It is not investment advice, not a credit reference, and not a consumer report. Do not use it for decisions regulated under the US Fair Credit Reporting Act (employment, credit, tenancy screening) or equivalent regimes. Officer and PSC data is personal data from public registers; you are responsible for processing it lawfully. Verify everything independently before acting on it.
 

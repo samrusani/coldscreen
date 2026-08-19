@@ -8,7 +8,7 @@ The repository is at github.com/samrusani/coldscreen. Branch `main` is current a
 
 A CLI that turns a UK company name into a first-pass screening memo built entirely from public sources, with every finding traceable to evidence. It is not due diligence. It is the screen that decides whether due diligence is worth anyone's time.
 
-Current state: 598 tests, 25 modules, roughly 8,600 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI.
+Current state: 649 tests, 26 modules, roughly 8,900 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI. Rubric 0.3 adds a mechanical R4 floor for origin-year contradictions ("operating since 2015" against incorporation in 2019), so that class of claims-bearing case now anchors unconditionally.
 
 ## The five non-negotiables
 
@@ -57,6 +57,7 @@ Findings this loop caught that the test suite did not: pagination that silently 
 - Five gates must pass before anything ships: `pytest`, `ruff check`, `ruff format --check`, `mypy`, `python scripts/check_language.py`. CI adds a wheel-install smoke job and a blocking `pip-audit`.
 - Snapshot fixtures are regenerated through the real pipeline, never hand-edited. If a memo snapshot changes, understand why before accepting it.
 - Docs and prompts: plain language, no em dashes. Repository files carry no personal information beyond a GitHub handle, no secrets, and no machine-local paths.
+- Official documentation (README, ARCHITECTURE.md, rubric.md, the website rubric table, DECISIONS.md) and the internal wiki (gitignored: log, plan, launch, work-orders) both get updated when behavior changes. The wiki is easy to miss because it is not in the tree.
 - Do not commit `cases/` (real screening output contains personal data) or `.env`.
 
 ## Operational facts you will want
@@ -69,15 +70,14 @@ Findings this loop caught that the test suite did not: pagination that silently 
 
 ## What to build next
 
-FUTURE.md holds 26 items. My recommended ordering:
+FUTURE.md holds remaining items. My recommended ordering:
 
-1. **A mechanical R4 detector for date-shaped contradictions** ("operating since 2015" against an incorporation date of 2019). Today R4 has a ceiling but no floor, so a claims-bearing case anchors conditionally. This restores unconditional anchoring for the most common contradiction class and is the single highest-value correctness item.
-2. **MCP server mode.** The core is already a library; exposing it as an MCP server multiplies distribution through agent workflows. Cheap relative to its reach.
-3. **Charges pagination and the undocumented limits.** Charges are currently a single unpaginated GET. While you are there, probe the pagination maxima and 429 behavior empirically now that a key exists, and record the findings in DECISIONS.md.
-4. **Cache UX**: a `--refresh` flag, plus commands to print the cache path and clear it. Today a filing that lands is invisible for up to seven days and the cache path is undiscoverable from the CLI.
-5. **Extend the stage-honesty phrase set** from real model phrasing observed in live runs. The mechanical backstop that stops a memo describing a not-run stage as clean uses a deliberately narrow fixed phrase set.
-6. **A hermetic TLS test for SNI preservation** through the pinned network backend, and a plan for the httpx internals coupling in `site.py` (it fails closed if httpx changes shape, but it is coupled).
-7. Registry adapters for other jurisdictions. Design the adapter interface when a second registry forces it, not before.
+1. **MCP server mode.** The core is already a library; exposing it as an MCP server multiplies distribution through agent workflows. Cheap relative to its reach.
+2. **Charges pagination and the undocumented limits.** Charges are currently a single unpaginated GET. While you are there, probe the pagination maxima and 429 behavior empirically now that a key exists, and record the findings in DECISIONS.md.
+3. **Cache UX**: a `--refresh` flag, plus commands to print the cache path and clear it. Today a filing that lands is invisible for up to seven days and the cache path is undiscoverable from the CLI.
+4. **Extend the stage-honesty phrase set** from real model phrasing observed in live runs. The mechanical backstop that stops a memo describing a not-run stage as clean uses a deliberately narrow fixed phrase set.
+5. **A hermetic TLS test for SNI preservation** through the pinned network backend, and a plan for the httpx internals coupling in `site.py` (it fails closed if httpx changes shape, but it is coupled).
+6. Registry adapters for other jurisdictions. Design the adapter interface when a second registry forces it, not before.
 
 ## Known open items that are not code
 

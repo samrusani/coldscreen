@@ -94,7 +94,12 @@ CLAIMS = [
 
 def claims_casefile() -> CaseFile:
     """A casefile with two checkable claims, one puffery claim, and a
-    registry finding (REG-002) whose evidence a basis can resolve to."""
+    registry finding (REG-002) whose evidence a basis can resolve to.
+
+    date_of_creation is deliberately absent: these tests cover the R4
+    judgment path (surviving contradicted assessments) without the
+    origin-year floor. dated_claims_casefile() adds the profile date.
+    """
     incorporation = Finding(
         id="REG-002",
         stage="registry",
@@ -107,12 +112,35 @@ def claims_casefile() -> CaseFile:
     return casefile.model_copy(update={"claims": list(CLAIMS)})
 
 
+def dated_claims_casefile() -> CaseFile:
+    """claims_casefile plus the registry incorporation date that makes
+    CLM-001 ('Operating since 2015') a mechanical origin-year hit."""
+    casefile = claims_casefile()
+    return casefile.model_copy(
+        update={
+            "subject": CompanyProfile.model_validate(
+                {
+                    "company_name": "FICTIONAL SUBJECT LTD",
+                    "company_number": "99999903",
+                    "date_of_creation": "2019-05-14",
+                }
+            )
+        }
+    )
+
+
 # -- prompt ---------------------------------------------------------------------
 
 
-def test_prompt_loads_and_carries_version_4() -> None:
+def test_prompt_loads_and_carries_version_5() -> None:
     prompt = load_prompt()
-    assert prompt_version(prompt) == "4"
+    assert prompt_version(prompt) == "5"
+
+
+def test_prompt_carries_the_catalog_r4_condition() -> None:
+    from coldscreen.rubric import TRIGGER_INDEX
+
+    assert TRIGGER_INDEX["R4"].condition in load_prompt()
 
 
 def test_prompt_contains_the_load_bearing_rules() -> None:
@@ -125,7 +153,7 @@ def test_prompt_contains_the_load_bearing_rules() -> None:
     for trigger_id in ("R1", "R2", "R3", "R4", "R5", "A1", "A2", "A3", "A4", "A5", "A6", "A7"):
         assert trigger_id in prompt
     assert "Any RED trigger forces a RED verdict" in prompt
-    # Rubric 0.2: the fires-only-when conditions travel with the table.
+    # Rubric 0.3: the fires-only-when conditions travel with the table.
     assert "Fires only when" in prompt
     # The weekend 3 assessment contract is stated.
     assert "assessments" in prompt
@@ -203,7 +231,7 @@ def test_happy_path_records_metadata_and_uses_the_schema() -> None:
     assert result.verdict.triggered == ["A1"]
     assert result.metadata.provider == "fake"
     assert result.metadata.model == "canned"
-    assert result.metadata.prompt_version == "4"
+    assert result.metadata.prompt_version == "5"
     assert result.metadata.parse_retries == 0
     assert result.metadata.language_retries == 0
     assert result.verdict_enforcement is None
@@ -915,6 +943,89 @@ def test_fabricated_r4_without_surviving_contradiction_is_rejected() -> None:
     notes = " ".join(result.metadata.enforcement_notes)
     assert "downgraded the assessment for CLM-001" in notes
     assert "rejected trigger R4" in notes
+
+
+def test_origin_year_hit_forces_r4_when_the_model_marks_the_claim_supported() -> None:
+    """The floor: CLM-001 is an origin-year contradiction against 2019.
+    The model calls it supported and cites no R4. Code overrides the
+    assessment and forces the trigger."""
+    casefile = dated_claims_casefile()
+    assert [c.id for c in detect_candidates(casefile)] == ["R4"]
+    response = synthesis_json(
+        "green",
+        [],
+        assessments=[
+            assessment_json("CLM-001", "supported", ["REG-002"], "Matches the registry."),
+            assessment_json("CLM-003", "unverified", [], "No public headcount source."),
+        ],
+    )
+    provider = FakeModelProvider([response])
+    result = synthesize(casefile, provider, provider_name="fake", model="canned")
+    assert result.verdict.level == "red"
+    assert "R4" in result.verdict.triggered
+    by_id = {a.claim_id: a for a in result.assessments}
+    assert by_id["CLM-001"].status == "contradicted"
+    assert by_id["CLM-001"].basis
+    assert by_id["CLM-001"].record_note == (
+        "Claimed origin year 2015 is before the registry incorporation date"
+        " of 2019-05-14 (REG-002)."
+    )
+    notes = " ".join(result.metadata.enforcement_notes)
+    assert "overrode the assessment for CLM-001 from supported to contradicted" in notes
+    assert "the model omitted" in notes
+    assert "R4" in notes
+
+
+def test_origin_year_hit_keeps_a_surviving_model_contradiction_note() -> None:
+    """When the model already contradicted CLM-001 on REG-002, the override
+    does not replace its language-gated record note."""
+    casefile = dated_claims_casefile()
+    response = synthesis_json(
+        "red",
+        ["R4"],
+        assessments=[
+            assessment_json(
+                "CLM-001",
+                "contradicted",
+                ["REG-002"],
+                "Incorporated on 2019-05-14 per the registry profile.",
+            ),
+            assessment_json("CLM-003", "unverified", [], "No public headcount source."),
+        ],
+    )
+    provider = FakeModelProvider([response])
+    result = synthesize(casefile, provider, provider_name="fake", model="canned")
+    assert result.verdict.triggered == ["R4"]
+    assert result.assessments[0].record_note == (
+        "Incorporated on 2019-05-14 per the registry profile."
+    )
+    assert not any(
+        "overrode the assessment for CLM-001" in n for n in result.metadata.enforcement_notes
+    )
+
+
+def test_origin_year_override_repairs_an_unresolvable_contradiction() -> None:
+    """The model contradicted CLM-001 on a fake finding id. Without the
+    profile date that downgrades and R4 dies; with it, code restores
+    contradicted on REG-002 and forces R4."""
+    casefile = dated_claims_casefile()
+    response = synthesis_json(
+        "red",
+        ["R4"],
+        assessments=[
+            assessment_json("CLM-001", "contradicted", ["FAKE-001"], "Note one."),
+            assessment_json("CLM-003", "unverified", [], "Note two."),
+        ],
+    )
+    provider = FakeModelProvider([response])
+    result = synthesize(casefile, provider, provider_name="fake", model="canned")
+    assert result.verdict.level == "red"
+    assert "R4" in result.verdict.triggered
+    assert result.assessments[0].status == "contradicted"
+    assert result.assessments[0].basis
+    notes = " ".join(result.metadata.enforcement_notes)
+    assert "downgraded the assessment for CLM-001" in notes
+    assert "overrode the assessment for CLM-001 from unverified to contradicted" in notes
 
 
 # -- the language gate over record notes and the quoted-data exemption -------------

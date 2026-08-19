@@ -8,9 +8,10 @@ against the synthetic routes with a frozen clock:
   output; the memo snapshot is rendered through the canned fake provider.
 - golden/: FABRICATED WIDGETS LTD screened WITH the committed fixture deck
   through a canned model over mocked transport. The deck plants an
-  operating-since year before incorporation and a debt-free claim against
-  the outstanding charge, so R4 fires: the RED case. casefile.json and
-  memo.md are the full final CLI outputs, byte-compared on replay.
+  operating-since year before incorporation (a mechanical R4 candidate)
+  and a debt-free claim against the outstanding charge, so R4 fires: the
+  RED case. casefile.json and memo.md are the full final CLI outputs,
+  byte-compared on replay.
 - green/: PLACID MERIDIAN CONSULTING LTD screened WITH its fictional site;
   its checkable claim is supported and the verdict stays GREEN.
 
@@ -166,7 +167,12 @@ def test_golden_casefile_carries_claims_assessments_and_red_verdict() -> None:
     assert casefile.synthesis.enforcement_notes == []
 
 
-def test_golden_planted_contradictions_match_the_registry() -> None:
+def test_golden_candidates_include_origin_year_r4() -> None:
+    """The planted 'operating since 2015' against 2019-05-14 is a mechanical
+    R4 candidate, so this casefile's red floor no longer depends on the
+    model citing a surviving contradiction."""
+    casefile = load_casefile(GOLDEN_DIR)
+    assert [c.id for c in detect_candidates(casefile)] == ["A1", "A2", "R4"]
     casefile = load_casefile(GOLDEN_DIR)
     assert casefile.subject.date_of_creation is not None
     assert casefile.subject.date_of_creation.isoformat() == "2019-05-14"
@@ -361,8 +367,10 @@ def test_a3_and_a5_on_golden_are_accepted_because_claims_exist() -> None:
     casefile = load_casefile(GOLDEN_DIR)
     provider = FakeModelProvider([synthesis_json("amber", ["A1", "A2", "A3", "A5"])])
     result = synthesize(casefile, provider, provider_name="fake", model="citer")
-    assert result.verdict.level == "amber"
-    assert result.verdict.triggered == ["A1", "A2", "A3", "A5"]
+    # Origin-year R4 is a mechanical candidate on this casefile, so the
+    # level is red even though the model only cited ambers.
+    assert result.verdict.level == "red"
+    assert result.verdict.triggered == ["A1", "A2", "A3", "A5", "R4"]
 
 
 @pytest.mark.parametrize(
@@ -437,14 +445,16 @@ def test_golden_is_red_whenever_the_surviving_contradiction_is_cited(
     [
         ("green", []),
         ("red", ["R1"]),
-        ("red", ["R4"]),  # cited, but no contradiction survives the downgrade
+        ("red", ["R4"]),
+        ("amber", ["A1", "A2"]),
     ],
 )
-def test_golden_floor_holds_at_amber_when_no_contradiction_survives(
+def test_golden_floor_is_red_from_the_origin_year_candidate(
     level: str, triggered: list[str]
 ) -> None:
-    """Without a surviving contradicted assessment the mechanical floor
-    (A1, A2) still holds and no fabricated red can lift the level."""
+    """An origin-year contradiction on CLM-001 forces R4 even when the
+    model's assessments do not survive. The mechanical ambers (A1, A2)
+    still hold; the date-shaped red cannot be dropped."""
     casefile = load_casefile(GOLDEN_DIR)
     unresolvable = [
         assessment_json("CLM-001", "contradicted", ["ZZZ-001"], "Note."),
@@ -453,9 +463,11 @@ def test_golden_floor_holds_at_amber_when_no_contradiction_survives(
     ]
     provider = FakeModelProvider([synthesis_json(level, triggered, assessments=unresolvable)])
     result = synthesize(casefile, provider, provider_name="fake", model="anchor-probe")
-    assert result.verdict.level == "amber"
-    assert {"A1", "A2"} <= set(result.verdict.triggered)
-    assert "R4" not in result.verdict.triggered
+    assert result.verdict.level == "red"
+    assert {"A1", "A2", "R4"} <= set(result.verdict.triggered)
+    clm001 = next(a for a in result.assessments if a.claim_id == "CLM-001")
+    assert clm001.status == "contradicted"
+    assert clm001.basis
 
 
 def test_adversarial_trigger_ids_never_reach_the_memo() -> None:

@@ -147,7 +147,9 @@ class SearchProvider(Protocol):
 
 Implementations: Anthropic, OpenAI, Ollama (local HTTP). Keep core to plain completion plus JSON-constrained output so local models stay first-class. Do not code SDK calls from memory: verify current method names and parameters in each provider's docs at build time.
 
-## 8. Scoring rubric v0 (draft, to be refined against real screens)
+## 8. Scoring rubric
+
+The live verdict logic is `rubric.md`, currently version 0.3, versioned with the code. Changing it is a visible, reviewable act. The "fires only when" column in that file is the contract; the code mirrors it, and a test parses the markdown and asserts the mirror. Summary:
 
 | ID | Trigger | Severity |
 |----|---------|----------|
@@ -162,8 +164,11 @@ Implementations: Anthropic, OpenAI, Ollama (local HTTP). Keep core to plain comp
 | A4 | Central claim unverifiable from any public source | AMBER |
 | A5 | Corporate age or scale inconsistent with stated history | AMBER |
 | A6 | Substantive adverse media (confirmed source) | AMBER |
+| A7 | Company status is not active | AMBER |
 
-Rules: any RED trigger forces a RED verdict. Two or more AMBER triggers cap the verdict at AMBER regardless of narrative tone. The model must cite trigger IDs in the verdict block; a verdict citing no triggers must be GREEN. The rubric lives in `rubric.md`, versioned with the code.
+Rules: any RED trigger forces a RED verdict. Any AMBER trigger yields at least AMBER; AMBER triggers never escalate to RED, however many there are. A verdict citing no triggers must be GREEN. Mechanically detected triggers cannot be dropped by the model, and triggers whose evidence conditions are not met cannot be added by it. The model's judgment operates inside those conditions, never on the level arithmetic.
+
+R4 is hybrid as of version 0.3. A stored claim whose text places the company's origin in a calendar year before the registry incorporation date is a mechanical candidate and cannot be dropped. Other contradictions (for example a debt-free claim against a registered charge) still require a surviving contradicted assessment whose basis includes a registry finding relevant to the claim's category.
 
 ## 9. CLI surface
 
@@ -186,7 +191,7 @@ Keys via environment variables. Optional `coldscreen.toml` for defaults (model, 
 
 - **Unit**: fixture-based, with recorded (fictional or anonymized) registry JSON.
 - **Golden case**: one fully synthetic company with planted contradictions (wrong incorporation date in deck, hidden charge, one sub-threshold sanctions near-match). Snapshot-test the memo.
-- **Rubric anchoring**: run the golden CaseFile through two different models; the verdict level must not differ. If it does, the rubric or prompt is underspecified, not the model.
+- **Rubric anchoring**: run the golden CaseFile through two different models; the verdict level must not differ. If it does, the rubric or prompt is underspecified, not the model. As of rubric 0.3 the golden RED case also has a mechanical R4 candidate (origin year before incorporation), so that class of contradiction no longer depends on the model citing it.
 - **Integration demo (manual, not CI)**: retroactive screen of an adjudicated collapse using period-appropriate public data, as the launch asset. Wirecard is the obvious candidate; verify what remains accessible via UK-visible records and archives before committing to it.
 
 ## 12. Milestones (three weekends)
