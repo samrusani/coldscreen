@@ -179,6 +179,35 @@ def test_cache_hit_skips_the_network(tmp_path: Path, respx_mock: respx.MockRoute
     assert second.retrieved_at == first.retrieved_at
 
 
+def test_refresh_bypasses_cache_read_and_writes_the_new_body(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    route = respx_mock.get(PROFILE_URL)
+    route.side_effect = [
+        httpx.Response(200, json={"company_name": "OLD NAME LTD"}),
+        httpx.Response(200, json={"company_name": "NEW NAME LTD"}),
+    ]
+    cache = HttpCache(tmp_path / "cache.sqlite3")
+    with make_client(cache=cache) as client:
+        first = client.company_profile(COMPANY_NUMBER)
+    assert first.from_cache is False
+    assert first.body == {"company_name": "OLD NAME LTD"}
+    assert route.call_count == 1
+
+    with make_client(cache=cache, refresh=True) as client:
+        refreshed = client.company_profile(COMPANY_NUMBER)
+    assert refreshed.from_cache is False
+    assert refreshed.body == {"company_name": "NEW NAME LTD"}
+    assert route.call_count == 2
+
+    with make_client(cache=cache) as client:
+        later = client.company_profile(COMPANY_NUMBER)
+    cache.close()
+    assert later.from_cache is True
+    assert later.body == {"company_name": "NEW NAME LTD"}
+    assert route.call_count == 2
+
+
 def test_cached_entries_never_contain_the_key(tmp_path: Path, respx_mock: respx.MockRouter) -> None:
     respx_mock.get(PROFILE_URL).respond(200, json=load_fixture("profile.json"))
     cache_path = tmp_path / "cache.sqlite3"

@@ -13,6 +13,7 @@ import shutil
 import sys
 import time
 import types
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -22,6 +23,7 @@ from typer.testing import CliRunner, Result
 
 import coldscreen.cli
 from coldscreen.cli import app
+from coldscreen.http_cache import HttpCache
 from coldscreen.language import find_banned_terms
 from coldscreen.models import CaseFile
 
@@ -1196,3 +1198,123 @@ def test_language_gate_exhaustion_memo_survives_the_backstop(
         (case_dir / "casefile.json").read_text(encoding="utf-8")
     )
     assert casefile.verdict is None
+
+
+def test_screen_help_includes_refresh() -> None:
+    result = runner.invoke(app, ["screen", "--help"])
+    assert result.exit_code == 0
+    assert "--refresh" in result.output
+
+
+def test_rerun_help_does_not_include_refresh() -> None:
+    result = runner.invoke(app, ["rerun", "--help"])
+    assert result.exit_code == 0
+    assert "--refresh" not in result.output
+
+
+def test_screen_refresh_runs_a_mocked_screen(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    mock_company_routes(respx_mock)
+    result = runner.invoke(app, ["screen", "99999999", "--refresh"])
+    assert result.exit_code == 0, result.output
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    assert (case_dir / "casefile.json").is_file()
+
+
+@pytest.fixture
+def cache_cli_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Isolated cache dir, no API key, so captured output cannot contain a home path."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("COMPANIES_HOUSE_API_KEY", raising=False)
+    monkeypatch.setenv("COLDSCREEN_CACHE_DIR", str(tmp_path / "cache"))
+    return tmp_path
+
+
+def test_cache_path_prints_configured_sqlite_without_an_api_key(cache_cli_env: Path) -> None:
+    result = runner.invoke(app, ["cache", "path"])
+    assert result.exit_code == 0, all_output(result)
+    expected = str(cache_cli_env / "cache" / "http_cache.sqlite3")
+    assert result.output.strip() == expected
+    assert "COMPANIES_HOUSE_API_KEY" not in all_output(result)
+
+
+def test_cache_clear_then_stats_shows_zero_entries(cache_cli_env: Path) -> None:
+    cache_path = cache_cli_env / "cache" / "http_cache.sqlite3"
+    cache = HttpCache(cache_path)
+    cache.put(
+        "https://api.company-information.service.gov.uk/company/99999999",
+        None,
+        200,
+        '{"company_name": "FABRICATED WIDGETS LTD"}',
+        datetime(2026, 8, 18, 12, 0, 0, tzinfo=UTC),
+    )
+    cache.close()
+
+    cleared = runner.invoke(app, ["cache", "clear"])
+    assert cleared.exit_code == 0, all_output(cleared)
+    assert "Removed 1 cache entry from" in cleared.output
+    assert str(cache_path) in cleared.output
+
+    stats = runner.invoke(app, ["cache", "stats"])
+    assert stats.exit_code == 0, all_output(stats)
+    output = stats.output
+    assert f"path: {cache_path}" in output
+    assert "exists: true" in output
+    assert "entries: 0" in output
+    assert "size_bytes:" in output
+    assert "ttl_days:" in output
+    assert "99999999" not in output
+    assert "FABRICATED WIDGETS" not in output
+    assert "company-information.service.gov.uk" not in output
+
+
+def test_cache_clear_missing_file_is_success(cache_cli_env: Path) -> None:
+    result = runner.invoke(app, ["cache", "clear"])
+    assert result.exit_code == 0, all_output(result)
+    assert "Nothing to clear" in result.output
+    path = cache_cli_env / "cache" / "http_cache.sqlite3"
+    assert str(path) in result.output
+    assert not path.exists()
+
+
+def test_cache_clear_refuses_symlink(cache_cli_env: Path) -> None:
+    victim = cache_cli_env / "victim.sqlite3"
+    cache = HttpCache(victim)
+    cache.put(
+        "https://api.company-information.service.gov.uk/company/99999999",
+        None,
+        200,
+        '{"keep": true}',
+        datetime(2026, 8, 18, 12, 0, 0, tzinfo=UTC),
+    )
+    cache.close()
+    original = victim.read_bytes()
+
+    cache_dir = cache_cli_env / "cache"
+    cache_dir.mkdir()
+    link = cache_dir / "http_cache.sqlite3"
+    try:
+        link.symlink_to(victim)
+    except OSError as error:
+        pytest.skip(f"symlinks not available: {error}")
+
+    result = runner.invoke(app, ["cache", "clear"])
+    assert result.exit_code == 1
+    combined = all_output(result)
+    assert "symbolic link" in combined
+    assert victim.read_bytes() == original
+    assert link.is_symlink()
+
+
+def test_cache_stats_corrupt_file_is_unreadable(cache_cli_env: Path) -> None:
+    cache_dir = cache_cli_env / "cache"
+    cache_dir.mkdir()
+    path = cache_dir / "http_cache.sqlite3"
+    path.write_bytes(b"this is not a sqlite database at all")
+    result = runner.invoke(app, ["cache", "stats"])
+    assert result.exit_code == 0, all_output(result)
+    combined = all_output(result)
+    assert "unreadable" in combined
+    assert "entries: unreadable" in result.output
+    assert path.read_bytes() == b"this is not a sqlite database at all"

@@ -225,6 +225,7 @@ class CompaniesHouseClient:
         api_key: str,
         base_url: str = DEFAULT_BASE_URL,
         cache: HttpCache | None = None,
+        refresh: bool = False,
         throttle: Throttle | None = None,
         timeout_seconds: float = 30.0,
         now: Callable[[], datetime] | None = None,
@@ -232,6 +233,7 @@ class CompaniesHouseClient:
         sleeper: Callable[[float], None] | None = None,
     ) -> None:
         self._cache = cache
+        self._refresh = refresh
         self._throttle = throttle
         self._now = now or (lambda: datetime.now(UTC))
         self._sleep = sleeper if sleeper is not None else time.sleep
@@ -264,10 +266,15 @@ class CompaniesHouseClient:
         Returns a FetchRecord for HTTP 200. Raises NotFoundError, AuthError,
         or ApiClientError for terminal statuses; each carries a FetchRecord
         of the response so callers can persist it as evidence.
+
+        When the client was constructed with refresh=True, cache reads are
+        skipped. Successful HTTP 200 responses are still written back, so
+        the next unflagged get sees the fresh page. from_cache stays False
+        for a refreshed fetch.
         """
         url = self._base_url + path
         str_params = {k: str(v) for k, v in (params or {}).items()}
-        if self._cache is not None:
+        if self._cache is not None and not self._refresh:
             hit = self._cache.get(url, str_params)
             if hit is not None:
                 try:

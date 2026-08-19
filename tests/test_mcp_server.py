@@ -141,6 +141,7 @@ def test_both_tools_are_listed() -> None:
         "site_url",
         "model",
         "overwrite",
+        "refresh",
     }
     assert set(schemas["rerun_case"]["properties"]) == {"case_dir", "model", "render_only"}
 

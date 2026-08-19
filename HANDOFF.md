@@ -8,7 +8,7 @@ The repository is at github.com/samrusani/coldscreen. Branch `main` is current a
 
 A CLI that turns a UK company name into a first-pass screening memo built entirely from public sources, with every finding traceable to evidence. It is not due diligence. It is the screen that decides whether due diligence is worth anyone's time. The same pipeline is also an MCP stdio server, so the screen runs inside agent workflows without a second implementation of it.
 
-Current state: 695 tests, 28 modules, roughly 9,600 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI. Rubric 0.3 adds a mechanical R4 floor for origin-year contradictions ("operating since 2015" against incorporation in 2019), so that class of claims-bearing case now anchors unconditionally.
+Current state: 710 tests, 28 modules, roughly 9,600 lines of source, green on Python 3.11 through 3.13. All three milestone success tests passed, two of them against the live Companies House API. Feature-complete for v0.1; not yet published to PyPI. Rubric 0.3 adds a mechanical R4 floor for origin-year contradictions ("operating since 2015" against incorporation in 2019), so that class of claims-bearing case now anchors unconditionally. Cache UX (`--refresh`, `coldscreen cache path|clear|stats`) landed after charges pagination.
 
 ## The five non-negotiables
 
@@ -68,7 +68,9 @@ Findings this loop caught that the test suite did not: pagination that silently 
 
 **Local models.** Synthesis runs against Ollama with no cloud key. On the machine this was built on, `qwen3-coder:30b` and `qwen3.8:27b-mlx` both work and produce identical verdict levels. Reasoning-family models corrupt schema-constrained output when thinking is active: set `COLDSCREEN_OLLAMA_THINK=false` for those. `qwen2.5:7b` fails the language discipline (it writes accusatory vocabulary the gate then rejects), which is the gate working, not a bug to route around. `scripts/anchor_check.py` runs the cross-model anchoring test; `scripts/ollama_smoke.py` runs a single-model synthesis smoke.
 
-**Reruns are cheap.** `coldscreen rerun <case-dir> --model <provider:model>` re-synthesizes from cached evidence without refetching, which is how prompt iteration and model comparison are done without spending API calls.
+**Reruns are cheap.** `coldscreen rerun <case-dir> --model <provider:model>` re-synthesizes from cached evidence without refetching, which is how prompt iteration and model comparison are done without spending API calls. That is the case-directory evidence, not the HTTP cache: `rerun` has no `--refresh` flag.
+
+**HTTP cache.** Registry pages sit in SQLite for up to seven days. `coldscreen screen ... --refresh` skips cache reads and still writes successful 200s back, so the next ordinary screen sees the new pages. `coldscreen cache path`, `cache stats`, and `cache clear` inspect or erase that file and need no API key. `cache clear` refuses if the sqlite path is a symbolic link, so it cannot follow a link to wipe another file. Point operators at `cache path` rather than baking in a machine-local absolute path.
 
 **MCP.** `pip install '.[mcp]'` then `coldscreen mcp` serves `screen_company` and `rerun_case` over stdio. The `mcp` package is imported lazily so a plain install still works and the command tells you what to install. Two things surprise people: stdout is JSON-RPC only, so anything you print for a human on that path must go to stderr; and `rerun_case` refuses a `case_dir` outside the configured output directory, which the CLI does not, because a host chooses that path rather than a person. Note what that confinement does and does not do, because the first version of it got this wrong: validating the directory does nothing about a symbolic link left at `memo.md` inside it, since the kernel resolves that name again when the file is opened. Every case write therefore goes through `casedir.write_case_text`, which opens with `O_NOFOLLOW` and refuses a link at the final name, and the case and `evidence` directories are refused if they are links. If you add a file to the case directory, write it with that function, not with `Path.write_text`. Tests drive the server through the SDK's in-memory client, which works under `pytest-socket --disable-socket` only because `tests/test_mcp_server.py` builds its event loop at import time, before the socket guard is installed. That line has a comment on it; do not move it into a fixture.
 
@@ -76,10 +78,9 @@ Findings this loop caught that the test suite did not: pagination that silently 
 
 FUTURE.md holds remaining items. My recommended ordering:
 
-1. **Cache UX**: a `--refresh` flag, plus commands to print the cache path and clear it. Today a filing that lands is invisible for up to seven days and the cache path is undiscoverable from the CLI.
-2. **Extend the stage-honesty phrase set** from real model phrasing observed in live runs. The mechanical backstop that stops a memo describing a not-run stage as clean uses a deliberately narrow fixed phrase set.
-3. **A hermetic TLS test for SNI preservation** through the pinned network backend, and a plan for the httpx internals coupling in `site.py` (it fails closed if httpx changes shape, but it is coupled).
-4. Registry adapters for other jurisdictions. Design the adapter interface when a second registry forces it, not before.
+1. **Extend the stage-honesty phrase set** from real model phrasing observed in live runs. The mechanical backstop that stops a memo describing a not-run stage as clean uses a deliberately narrow fixed phrase set.
+2. **A hermetic TLS test for SNI preservation** through the pinned network backend, and a plan for the httpx internals coupling in `site.py` (it fails closed if httpx changes shape, but it is coupled).
+3. Registry adapters for other jurisdictions. Design the adapter interface when a second registry forces it, not before.
 
 ## Known open items that are not code
 

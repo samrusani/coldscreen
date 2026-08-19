@@ -1,10 +1,11 @@
-"""Typer CLI: `coldscreen screen`, `coldscreen rerun`, `coldscreen mcp`.
+"""Typer CLI: `coldscreen screen`, `coldscreen rerun`, `coldscreen cache`, `coldscreen mcp`.
 
 The flows themselves live in `coldscreen.pipeline`, which is interface-free
 and returns structured results. This module is the adapter: it parses
 options, loads settings, resolves the provider, calls the pipeline, and maps
 the result to exit codes and to stdout or stderr. `coldscreen mcp` hands the
-same pipeline to an MCP stdio server (optional extra).
+same pipeline to an MCP stdio server (optional extra). `coldscreen cache`
+prints, stats, or clears the local HTTP cache and needs no API key.
 
 screen resolves the input to one company, runs the deterministic stages
 (registry, network expansion, sanctions, adverse media), extracts claims
@@ -12,7 +13,8 @@ from an optional deck PDF and site URL (model required for that), runs
 synthesis when a model is configured, and writes the case directory. rerun
 re-runs synthesis, including re-assessment of the STORED claims, from the
 stored casefile with no refetching and no re-extraction, or just re-renders
-with --render-only.
+with --render-only. screen --refresh skips HTTP cache reads and still writes
+successful 200 responses back; rerun does not fetch and has no --refresh.
 
 Stage failure posture: a sanctions or media stage that fails after retries
 does not abort the run. The case directory is written with everything
@@ -35,6 +37,7 @@ import typer
 
 from . import __version__
 from .config import API_KEY_ENV, Settings, api_key_from_env, load_dotenv_if_present, load_settings
+from .http_cache import CacheClearRefused, clear_http_cache, http_cache_stats
 from .pipeline import (
     PreparedProvider,
     close_provider,
@@ -55,6 +58,14 @@ app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
 )
+
+cache_app = typer.Typer(
+    name="cache",
+    help="Inspect or clear the local HTTP cache. No API key required.",
+    add_completion=False,
+    no_args_is_help=True,
+)
+app.add_typer(cache_app, name="cache")
 
 AMBIGUOUS_EXIT_CODE = 3
 
@@ -216,6 +227,17 @@ def screen(
             ),
         ),
     ] = False,
+    refresh: Annotated[
+        bool,
+        typer.Option(
+            "--refresh",
+            help=(
+                "Bypass the HTTP cache for this screen and write fresh 200"
+                " responses back into it. A later unflagged screen then sees"
+                " the new pages. Does not apply to rerun."
+            ),
+        ),
+    ] = False,
     config_file: Annotated[
         Path | None,
         typer.Option(
@@ -258,6 +280,7 @@ def screen(
             site=site,
             overwrite=overwrite,
             chooser=_pick_candidate,
+            refresh=refresh,
         )
     finally:
         _close_provider(prepared)
@@ -410,6 +433,102 @@ def mcp() -> None:
     # run() is synchronous and owns the transport; stdio is the only mode
     # this project ships.
     server.run("stdio")
+
+
+def _cache_settings(config_file: Path | None) -> Settings:
+    load_dotenv_if_present()
+    return _load_settings_or_exit(config_file, None)
+
+
+@cache_app.command("path")
+def cache_show_path(
+    config_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            help="Path to a coldscreen.toml configuration file. Must exist.",
+        ),
+    ] = None,
+) -> None:
+    """Print the HTTP cache sqlite path and exit. No API key required."""
+    settings = _cache_settings(config_file)
+    typer.echo(str(settings.cache_path))
+
+
+@cache_app.command("clear")
+def cache_clear(
+    config_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            help="Path to a coldscreen.toml configuration file. Must exist.",
+        ),
+    ] = None,
+) -> None:
+    """Delete cached HTTP pages at the configured path. No API key required.
+
+    Missing file is success. A symbolic link at the sqlite name is refused,
+    so this cannot follow a link to wipe another file. The command name is
+    the confirmation; there is no prompt.
+    """
+    settings = _cache_settings(config_file)
+    path = settings.cache_path
+    try:
+        result = clear_http_cache(path)
+    except CacheClearRefused as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(code=1) from None
+    if result.missing:
+        typer.echo(f"Nothing to clear (no cache file at {path})")
+        return
+    if result.unreadable_removed:
+        typer.echo(f"Removed unreadable cache file at {path}")
+        return
+    if result.entries_removed == 0:
+        typer.echo(f"Nothing to clear (0 entries at {path})")
+        return
+    noun = "entry" if result.entries_removed == 1 else "entries"
+    typer.echo(f"Removed {result.entries_removed} cache {noun} from {path}")
+
+
+@cache_app.command("stats")
+def cache_show_stats(
+    config_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--config",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            help="Path to a coldscreen.toml configuration file. Must exist.",
+        ),
+    ] = None,
+) -> None:
+    """Print cache path, existence, entry count, size, and TTL. No API key required.
+
+    Does not print URLs, query params, or response bodies.
+    """
+    settings = _cache_settings(config_file)
+    stats = http_cache_stats(settings.cache_path, settings.cache_ttl_days)
+    if stats.unreadable:
+        typer.echo(
+            f"warning: HTTP cache at {stats.path} is unreadable",
+            err=True,
+        )
+    typer.echo(f"path: {stats.path}")
+    typer.echo(f"exists: {'true' if stats.exists else 'false'}")
+    if stats.unreadable or stats.entry_count is None:
+        typer.echo("entries: unreadable")
+    else:
+        typer.echo(f"entries: {stats.entry_count}")
+    typer.echo(f"size_bytes: {stats.size_bytes}")
+    typer.echo(f"ttl_days: {stats.ttl_days}")
 
 
 def main() -> None:
