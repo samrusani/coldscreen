@@ -65,8 +65,9 @@ class Claim(BaseModel):
     (CLM-001 style), text is the company's own words as extracted from the
     deck or site, source names where they appeared ("deck p.4", "site
     /about"). Unfalsifiable puffery is kept with checkable False, never
-    dropped. Because text is quoted data, it is the one kind of string the
-    language gate exempts (span-level, exact match); see coldscreen.language.
+    dropped. Because text is quoted data, the whole-memo backstop exempts
+    it (span-level, exact match) only inside the rendered claims-table
+    region; see coldscreen.language.
     """
 
     id: str

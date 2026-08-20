@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 
 from coldscreen.casedir import load_casefile
-from coldscreen.language import find_banned_terms, normalize_for_match
+from coldscreen.language import find_banned_terms, find_banned_terms_in_memo, normalize_for_match
 from coldscreen.models import MediaItem, MediaScreening
 from coldscreen.render import render_memo
 
@@ -169,6 +169,32 @@ def test_exemption_only_covers_the_named_terms_span() -> None:
     two_claims = ("we stop fraud", "no scam here")
     text = "we stop fraud but also a sham entirely outside any quote"
     assert find_banned_terms(text, two_claims) == ["sham"]
+
+
+# -- claims-table region scope on the whole-memo helper -------------------------
+
+
+def test_memo_helper_hits_when_the_claims_table_heading_is_missing() -> None:
+    memo = "The filing pattern is fraud.\n"
+    assert find_banned_terms_in_memo(memo, claim_texts=("fraud",)) == ["fraud"]
+
+
+def test_memo_helper_hits_when_the_claims_table_heading_has_no_closer() -> None:
+    memo = '## Claims vs evidence\n| "fraud" |\nNo following heading.\n'
+    assert find_banned_terms_in_memo(memo, claim_texts=("fraud",)) == ["fraud"]
+
+
+def test_memo_helper_exempts_a_claim_only_inside_the_table_region() -> None:
+    memo = '## Claims vs evidence\n| "fraud" |\n## Findings\nThe filing pattern is fraud.\n'
+    assert find_banned_terms_in_memo(memo, claim_texts=("fraud",)) == ["fraud"]
+
+
+def test_memo_helper_uses_only_the_first_heading_pair() -> None:
+    memo = (
+        '## Claims vs evidence\n| "fraud" |\n## Narrative\nclean\n'
+        '## Claims vs evidence\n| "fraud" |\n## Findings\n'
+    )
+    assert find_banned_terms_in_memo(memo, claim_texts=("fraud",)) == ["fraud"]
 
 
 def _write_evidence(case_dir: Path, deck_pages: dict[str, str]) -> None:

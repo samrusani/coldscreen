@@ -40,13 +40,15 @@ is not a hit. Extra unknown keys are ignored.
 Quoted-data exemption (memos only): a memo's claims table quotes the
 company's own deck and site words verbatim, and those may legitimately
 contain banned vocabulary. When a memo.md has a sibling casefile.json, its
-stored claim texts are candidates for span-level exemption, the same
-exemption the whole-memo backstop applies. But casefile.json is an
-editable file, so a claim text is honored ONLY after re-verification
-against the sibling evidence: normalized (whitespace, case, unicode quotes
-and dashes), it must be a substring of the extracted source text persisted
-in evidence/deck_text.json or the evidence/site_*.json records. No
-evidence, no exemption: a hand-tampered casefile cannot widen this scan.
+stored claim texts are candidates for span-level exemption on this
+line-by-line memo scan. The in-process backstop scopes those same
+claim texts to the claims-table region; this script does not. But
+casefile.json is an editable file, so a claim text is honored ONLY
+after re-verification against the sibling evidence: normalized
+(whitespace, case, unicode quotes and dashes), it must be a substring
+of the extracted source text persisted in evidence/deck_text.json or
+the evidence/site_*.json records. No evidence, no exemption: a
+hand-tampered casefile cannot widen this scan.
 Prose outside the exact verified quoted strings stays fully gated.
 
 That claim-quote exemption does not apply to the casefile fields above.

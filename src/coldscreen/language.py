@@ -5,7 +5,7 @@ never state or imply intent, dishonesty, or criminality. This module is the
 one place the banned list and the matching rules live. Every enforcement
 point imports find_banned_terms, so none of them can drift: the mechanical
 gate over model output (coldscreen.synthesis), the whole-memo backstop that
-runs before any memo reaches disk (coldscreen.cli), and the CI gate over
+runs before any memo reaches disk (coldscreen.pipeline), and the CI gate over
 rendered memos and the tool-authored fields of casefile.json
 (scripts/check_language.py).
 
@@ -29,17 +29,23 @@ rationale, questions, record notes) get NO claim-quote exemption at the
 per-field gate in coldscreen.synthesis: the model references claims by id
 and never repeats their wording. That gate does apply the registry
 identity set, because prose has to be able to name the company and its
-people. Only the whole-memo backstop and the CI memo scan take claim
-texts, because the code-rendered claims table quotes the stored claim
-strings verbatim. The CI casefile-field scan does not: those fields are
-tool prose, same polarity as the synthesis per-field gate. Claim texts
-themselves are trustworthy only because the claims stage verifies each
-one is a real substring of its declared source section (after
-normalize_for_match on both sides) before storing it, and
-scripts/check_language.py re-verifies stored claims against the sibling
-evidence files before honoring them on a memo; the script re-verifies
-identity names against the registry evidence files the same way, and
-that identity set is the one exemption the casefile-field scan applies.
+people. The whole-memo backstop takes claim texts but applies those
+exemptions only inside the rendered claims-table region: the first line
+that is exactly `## Claims vs evidence` through the next ATX heading
+that starts with `## ` (the closer is not part of the region). A missing
+start or a missing closer leaves the region empty, so claim-quote
+exemptions apply nowhere and identity exemptions still apply to the
+whole memo. The CI memo scan still applies claim-quote exemptions
+line-by-line across the file. The CI casefile-field scan does not take
+claim texts: those fields are tool prose, same polarity as the synthesis
+per-field gate. Claim texts themselves are trustworthy only because the
+claims stage verifies each one is a real substring of its declared
+source section (after normalize_for_match on both sides) before storing
+it, and scripts/check_language.py re-verifies stored claims against the
+sibling evidence files before honoring them on a memo; the script
+re-verifies identity names against the registry evidence files the same
+way, and that identity set is the one exemption the casefile-field scan
+applies.
 Occurrence discovery advances by the full match length, so overlapping
 occurrences of a self-similar quote can never union into coverage of
 text that was never quoted as a whole.
@@ -184,3 +190,56 @@ def find_banned_terms(text: str, exempt_texts: Iterable[str] = ()) -> list[str]:
             continue
         hits.append(match.group(0).lower())
     return hits
+
+
+# The template heading that opens the claims-vs-evidence table. Exact line
+# match only: do not invent markers or HTML comments.
+_CLAIMS_TABLE_HEADING = "## Claims vs evidence"
+
+
+def _claims_table_region(memo: str) -> tuple[int, int] | None:
+    """Character offsets [start, end) of the claims-table region, or None.
+
+    Start is the first line that is exactly the template heading. End is
+    the next line that starts with `## ` (that closer is excluded). A
+    missing start or a missing closer yields None: claim-quote exemptions
+    then apply nowhere. Only the first start/closer pair is used.
+    """
+    start: int | None = None
+    offset = 0
+    for line in memo.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        if start is None:
+            if content == _CLAIMS_TABLE_HEADING:
+                start = offset
+        elif content.startswith("## "):
+            return start, offset
+        offset += len(line)
+    return None
+
+
+def find_banned_terms_in_memo(
+    memo: str,
+    *,
+    claim_texts: Iterable[str] = (),
+    identity_names: Iterable[str] = (),
+) -> list[str]:
+    """Banned terms in a rendered memo, with claim quotes region-scoped.
+
+    The memo is scanned as three pieces. Before and after the claims-table
+    region, only identity_names are exempt. Inside the region, claim_texts
+    and identity_names are both exempt. Matching rules are find_banned_terms
+    unchanged. If the region cannot be bounded, the whole memo is scanned
+    with identity_names only.
+    """
+    identity = tuple(identity_names)
+    bounds = _claims_table_region(memo)
+    if bounds is None:
+        return find_banned_terms(memo, identity)
+    start, end = bounds
+    claims_and_identity = (*claim_texts, *identity)
+    return (
+        find_banned_terms(memo[:start], identity)
+        + find_banned_terms(memo[start:end], claims_and_identity)
+        + find_banned_terms(memo[end:], identity)
+    )

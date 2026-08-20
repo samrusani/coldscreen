@@ -35,6 +35,7 @@ from coldscreen.casedir import load_casefile
 from coldscreen.cli import app
 from coldscreen.language import find_banned_terms
 from coldscreen.models import CaseFile
+from coldscreen.pipeline import language_backstop_failure
 from coldscreen.render import render_memo
 from coldscreen.rubric import detect_candidates
 from coldscreen.synthesis import (
@@ -226,6 +227,16 @@ def test_direction_three_same_word_in_a_record_note_fails() -> None:
     poisoned = casefile.model_copy(update={"assessments": assessments})
     memo = render_memo(poisoned)
     assert "fraud" in find_banned_terms(memo, claim_texts(poisoned))
+
+
+def test_golden_memo_passes_the_region_scoped_language_backstop() -> None:
+    """The committed golden memo (and a fresh render) stay backstop-clean."""
+    casefile = load_casefile(GOLDEN_DIR)
+    memo = (GOLDEN_DIR / "memo.md").read_text(encoding="utf-8")
+    quoted = "Our platform eliminates fraud in widget procurement"
+    assert quoted in memo
+    assert language_backstop_failure(memo, casefile) is None
+    assert language_backstop_failure(render_memo(casefile), casefile) is None
 
 
 # -- green: GREEN with a supported claim ----------------------------------------
