@@ -267,6 +267,13 @@ AUD-004 (`uv.lock`) and AUD-005 (CI memo region-scope / line-split) were not sta
 
 No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Committed fixture casefiles and snapshot memos were not edited.
 
+### 2026-08-20: CI memo scan uses the same claims-table region as the backstop
+`scan_file` applied verified claim texts as exemption spans line by line across the whole memo. A narrative line that copied a stored quote was span-exempt in CI even though the in-process backstop would reject it. The same line-by-line scan missed a multiword banned term split across a newline (`con artist`).
+
+`scan_file` (memo.md and templates, not casefile.json) now calls `find_banned_terms_in_memo` with `claim_exemptions` and `code_fetched_exemptions`. There is not a second region splitter. Each piece is scanned as a string, so a line-split `con artist` is a hit. Casefile field scanning is unchanged: tool-authored fields, code-fetched only, no claim-quote. AUD-004 (`uv.lock`) was not started.
+
+No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Committed fixture casefiles and snapshot memos were not edited.
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.

@@ -43,11 +43,11 @@ region). A heading without an opener is skipped. A missing start or a
 missing closer leaves the region empty, so claim-quote exemptions apply
 nowhere and code-fetched exemptions still apply to the whole memo.
 Pre-table model fields (rationale, verdict_enforcement, enforcement
-notes) are collapsed to one line at synthesis store and at render so a
-multiline rationale cannot mint that heading. The CI memo scan still
-applies claim-quote exemptions line-by-line across the file. The CI
-casefile-field scan does not take claim texts: those fields are tool
-prose, same polarity as the synthesis per-field gate. Claim texts
+    notes) are collapsed to one line at synthesis store and at render so a
+    multiline rationale cannot mint that heading. The CI memo scan uses
+    the same helper. The CI casefile-field scan does not take claim
+    texts: those fields are tool prose, same polarity as the synthesis
+    per-field gate. Claim texts
 themselves are trustworthy only because the claims stage verifies each
 one is a real substring of its declared source section (after
 normalize_for_match on both sides) and has substance (two or more

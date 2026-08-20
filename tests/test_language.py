@@ -55,6 +55,15 @@ GOLDEN_DIR = FIXTURES_DIR / "golden"
 CLAIMS_TABLE_HEADER = "| # | Claim (source) | Public record | Status |"
 
 
+def _bounded_claims_memo(body: str, after: str = "") -> str:
+    """A memo with heading, template opener, and a ## closer.
+
+    Claim-quote exemptions apply only inside this region. `body` sits
+    inside the region; `after` sits after the closer (usually narrative).
+    """
+    return f"## Claims vs evidence\n{CLAIMS_TABLE_HEADER}\n{body}## Narrative\n{after}"
+
+
 def load_script() -> ModuleType:
     from coldscreen import check_language
 
@@ -304,7 +313,8 @@ def test_check_language_honors_only_evidence_verified_claim_exemptions(tmp_path:
     case_dir = tmp_path / "case"
     case_dir.mkdir()
     memo = case_dir / "memo.md"
-    memo.write_text(f'| 1 | "{QUOTED}" (deck p.2) |  | not checkable |\n', encoding="utf-8")
+    quoted_row = f'| 1 | "{QUOTED}" (deck p.2) |  | not checkable |\n'
+    memo.write_text(_bounded_claims_memo(quoted_row), encoding="utf-8")
     # Without a casefile: full strictness, the quote is a hit.
     assert module.main([str(memo)]) == 1
     # Casefile alone is NOT enough: it is an editable file, so with no
@@ -319,7 +329,7 @@ def test_check_language_honors_only_evidence_verified_claim_exemptions(tmp_path:
     assert module.main([str(memo)]) == 0
     # The exemption never covers prose outside the quotation.
     memo.write_text(
-        f'| 1 | "{QUOTED}" (deck p.2) |  | not checkable |\nPlain fraud in prose.\n',
+        _bounded_claims_memo(f"{quoted_row}Plain fraud in prose.\n"),
         encoding="utf-8",
     )
     assert module.main([str(memo)]) == 1
@@ -371,7 +381,10 @@ def test_check_language_site_text_records_also_verify(tmp_path: Path) -> None:
     case_dir = tmp_path / "case"
     case_dir.mkdir()
     memo = case_dir / "memo.md"
-    memo.write_text(f'| 1 | "{QUOTED}" (site /about) |  | not checkable |\n', encoding="utf-8")
+    memo.write_text(
+        _bounded_claims_memo(f'| 1 | "{QUOTED}" (site /about) |  | not checkable |\n'),
+        encoding="utf-8",
+    )
     (case_dir / "casefile.json").write_text(
         json.dumps({"claims": [{"id": "CLM-001", "text": QUOTED, "source": "site /about"}]}),
         encoding="utf-8",
@@ -548,6 +561,66 @@ def test_check_language_ignores_a_corrupt_sibling_casefile(tmp_path: Path) -> No
     memo.write_text(f'"{QUOTED}"\n', encoding="utf-8")
     (case_dir / "casefile.json").write_text("{ not json", encoding="utf-8")
     assert module.main([str(memo)]) == 1
+
+
+def test_check_language_verified_quote_in_narrative_is_a_hit(tmp_path: Path) -> None:
+    """A verified puffery quote is exempt in the claims table, not after
+    ## Narrative."""
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    quoted_row = f'| 1 | "{QUOTED}" (deck p.2) |  | not checkable |\n'
+    memo.write_text(_bounded_claims_memo(quoted_row, f"{QUOTED}\n"), encoding="utf-8")
+    (case_dir / "casefile.json").write_text(
+        json.dumps({"claims": [{"id": "CLM-001", "text": QUOTED, "source": "deck p.2"}]}),
+        encoding="utf-8",
+    )
+    _write_evidence(case_dir, {"2": f"Slide two. {QUOTED}. More slide two."})
+    assert module.main([str(memo)]) == 1
+
+
+def test_check_language_claim_quote_needs_heading_opener_and_closer(
+    tmp_path: Path,
+) -> None:
+    """Missing heading, heading without opener, or missing closer: no
+    claim-quote exemption, even when sibling evidence verifies the claim."""
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    (case_dir / "casefile.json").write_text(
+        json.dumps({"claims": [{"id": "CLM-001", "text": QUOTED, "source": "deck p.2"}]}),
+        encoding="utf-8",
+    )
+    _write_evidence(case_dir, {"2": f"Slide two. {QUOTED}. More slide two."})
+    quoted_row = f'| 1 | "{QUOTED}" (deck p.2) |  | not checkable |\n'
+    memo.write_text(quoted_row, encoding="utf-8")
+    assert module.main([str(memo)]) == 1
+    memo.write_text(
+        f"## Claims vs evidence\nThis is model prose, not an opener.\n{quoted_row}## Narrative\n",
+        encoding="utf-8",
+    )
+    assert module.main([str(memo)]) == 1
+    memo.write_text(
+        f"## Claims vs evidence\n{CLAIMS_TABLE_HEADER}\n{quoted_row}",
+        encoding="utf-8",
+    )
+    assert module.main([str(memo)]) == 1
+
+
+def test_check_language_catches_con_artist_split_across_a_newline(
+    tmp_path: Path,
+) -> None:
+    """A multiword banned term split across a newline is a hit. The same
+    words as a substring of longer tokens on one line still do not hit."""
+    module = load_script()
+    split = tmp_path / "memo.md"
+    split.write_text("He is a con\nartist, allegedly.\n", encoding="utf-8")
+    assert module.main([str(split)]) == 1
+    fine = tmp_path / "fine.md"
+    fine.write_text("Scampi, shambolic spreadsheets, and crooked columns.\n", encoding="utf-8")
+    assert module.main([str(fine)]) == 0
 
 
 # -- the registry identity exemption ----------------------------------------------
