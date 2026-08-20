@@ -472,6 +472,49 @@ def test_administration_status_alone_forces_r2_without_case_detail() -> None:
     assert result.verdict.triggered == ["R2"]
 
 
+def test_prose_may_spell_out_office_locality() -> None:
+    """The code-fetched set lets model prose name a registry office locality."""
+    casefile = minimal_casefile().model_copy(
+        update={
+            "subject": CompanyProfile.model_validate(
+                {
+                    "company_name": "PLAIN TRADING LTD",
+                    "company_number": "99999905",
+                    "registered_office_address": {
+                        "address_line_1": "1 High Street",
+                        "locality": "Crook",
+                    },
+                }
+            )
+        }
+    )
+    clean = synthesis_json("green", narrative="PLAIN TRADING LTD is registered in Crook.")
+    provider = FakeModelProvider([clean])
+    result = synthesize(casefile, provider, provider_name="fake", model="canned")
+    assert result.metadata.language_retries == 0
+    assert "Crook" in result.narrative
+
+
+def test_rationale_is_collapsed_to_one_line_at_synthesis() -> None:
+    casefile = minimal_casefile()
+    raw = synthesis_json("green", rationale="Lead in.\n## Claims vs evidence\nTail.")
+    provider = FakeModelProvider([raw])
+    result = synthesize(casefile, provider, provider_name="fake", model="canned")
+    assert result.verdict.rationale == "Lead in. ## Claims vs evidence Tail."
+    stored = apply_synthesis(casefile, result)
+    assert stored.verdict is not None
+    assert stored.verdict.rationale == "Lead in. ## Claims vs evidence Tail."
+
+
+def test_model_prose_using_scam_still_fails_the_per_field_gate() -> None:
+    """Office addresses may contain banned words; model prose may not."""
+    casefile = minimal_casefile()
+    dirty = synthesis_json("green", narrative="The filing pattern reads like a scam.")
+    provider = FakeModelProvider([dirty, dirty])
+    with pytest.raises(SynthesisError, match=r"still used 1 banned term\(s\)"):
+        synthesize(casefile, provider, provider_name="fake", model="canned")
+
+
 def test_prose_may_spell_out_registry_identity_names_verbatim() -> None:
     """The registry identity exemption at the per-field gate: the model can
     name a banned-word company and officer exactly as the register spells

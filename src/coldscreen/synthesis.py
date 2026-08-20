@@ -32,10 +32,12 @@ exemption exists only for the code-rendered claims table (the whole-memo
 backstop and the CI scan apply it); model prose never benefits from it, so
 a narrative or record note that repeats a claim's wording fails the field
 gate even though the table quotes the same words legitimately. The prompt
-tells the model to reference claims by id instead. The registry identity
-set (registered name, previous names, officer and PSC names) is the one
-exemption model prose gets, because those strings are code-verified
-registry data the memo must be able to spell out.
+tells the model to reference claims by id instead. The code-fetched set
+(identity names plus office, network names, media domains, and claim
+source labels) is the exemption model prose gets, because those strings
+are code-fetched data the memo must be able to spell out. Rationale,
+verdict_enforcement, and enforcement notes are collapsed to one line
+before they are stored.
 """
 
 from __future__ import annotations
@@ -50,7 +52,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .date_contradictions import assessment_note, origin_year_contradictions
-from .language import find_banned_terms, registry_identity_names
+from .language import (
+    code_fetched_exemption_texts,
+    collapse_whitespace,
+    find_banned_terms,
+)
 from .models import CaseFile, ClaimAssessment, Evidence, Finding, SynthesisMetadata, Verdict
 from .providers import Message, ModelProvider
 from .rubric import (
@@ -679,11 +685,11 @@ def synthesize(
         # laundering channel (reviewer attack shapes 2 through 4): a
         # single-word claim would whitelist that token everywhere, and any
         # prose embedding a claim substring would carry its vocabulary
-        # through the gate. The one exemption is the registry identity set
-        # (the subject's registered name, previous names, officer and PSC
-        # names): those are code-verified registry data the prose must be
+        # through the gate. The one exemption is the code-fetched set
+        # (identity names plus office, network names, media domains, and
+        # claim source labels): those are fetched data the prose must be
         # able to spell out, and the model cannot mint them.
-        identity_names = registry_identity_names(casefile)
+        fetched_texts = code_fetched_exemption_texts(casefile)
         rendered_fields = [
             parsed.narrative,
             parsed.verdict.rationale,
@@ -691,7 +697,7 @@ def synthesize(
             *(a.record_note for a in parsed.assessments),
         ]
         banned = sorted(
-            set().union(*(find_banned_terms(f, identity_names) for f in rendered_fields))
+            set().union(*(find_banned_terms(f, fetched_texts) for f in rendered_fields))
         )
         # The stage-honesty gate runs in the same corrective loop: a stage
         # recorded as not run or failed must never be described as clean.
@@ -760,7 +766,7 @@ def synthesize(
     verdict = Verdict(
         level=result.level,
         triggered=result.triggered,
-        rationale=parsed.verdict.rationale,
+        rationale=collapse_whitespace(parsed.verdict.rationale),
         questions=result.questions,
     )
     metadata = SynthesisMetadata(
@@ -769,26 +775,40 @@ def synthesize(
         prompt_version=version,
         parse_retries=parse_retries,
         language_retries=language_retries,
-        enforcement_notes=assessment_result.notes + result.notes,
+        enforcement_notes=[
+            collapse_whitespace(note) for note in assessment_result.notes + result.notes
+        ],
         model_level=result.model_level,
     )
+    enforcement = result.level_note
     return SynthesisResult(
         verdict=verdict,
         narrative=parsed.narrative,
         assessments=assessment_result.assessments,
         metadata=metadata,
-        verdict_enforcement=result.level_note,
+        verdict_enforcement=collapse_whitespace(enforcement) if enforcement else None,
     )
 
 
 def apply_synthesis(casefile: CaseFile, result: SynthesisResult) -> CaseFile:
     """A new CaseFile carrying the enforced verdict and synthesis metadata."""
+    verdict = result.verdict.model_copy(
+        update={"rationale": collapse_whitespace(result.verdict.rationale)}
+    )
+    metadata = result.metadata.model_copy(
+        update={
+            "enforcement_notes": [
+                collapse_whitespace(note) for note in result.metadata.enforcement_notes
+            ]
+        }
+    )
+    enforcement = result.verdict_enforcement
     return casefile.model_copy(
         update={
-            "verdict": result.verdict,
+            "verdict": verdict,
             "narrative": result.narrative,
             "assessments": result.assessments,
-            "synthesis": result.metadata,
-            "verdict_enforcement": result.verdict_enforcement,
+            "synthesis": metadata,
+            "verdict_enforcement": collapse_whitespace(enforcement) if enforcement else None,
         }
     )

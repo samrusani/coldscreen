@@ -73,6 +73,23 @@ def test_memo_states_no_synthesis_when_no_verdict() -> None:
     assert "No synthesis: no model configured" in memo
 
 
+def test_render_collapses_multiline_rationale_so_heading_is_not_its_own_line() -> None:
+    casefile = minimal_casefile().model_copy(
+        update={
+            "verdict": Verdict(
+                level="green",
+                triggered=[],
+                rationale="Lead in.\n## Claims vs evidence\nTail.",
+                questions=["Q one?", "Q two?", "Q three?"],
+            )
+        }
+    )
+    memo = render_memo(casefile)
+    heading_lines = [line for line in memo.splitlines() if line == "## Claims vs evidence"]
+    assert heading_lines == ["## Claims vs evidence"]
+    assert "Lead in. ## Claims vs evidence Tail." in memo
+
+
 def test_memo_renders_the_verdict_block_with_rubric_lines() -> None:
     casefile = minimal_casefile().model_copy(
         update={

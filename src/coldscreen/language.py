@@ -18,41 +18,49 @@ Three exemptions, all narrow and all span-level:
   one of the caller-supplied exempt_texts built from the casefile's stored
   claim texts: a company's own deck or site words may say it "fights
   fraud", and the memo's claims table quotes those words verbatim.
-- Registry identity: the subject's registered name, previous names, and
-  officer and PSC names (registry_identity_names below) also act as
-  caller-supplied exempt_texts. They are code-verified registry data, not
-  model output, and a company whose registered name contains a banned word
-  must still be screenable honestly.
+- Code-fetched rendered strings: registry identity names
+  (registry_identity_names) plus the other strings the template prints
+  from fetched data (code_fetched_exemption_texts): the registered-office
+  display and its address parts, network overlap company names,
+  appointment display strings, media source domains, stored claim source
+  labels, and disqualification detail when present. They are code-fetched
+  data, not model output. A company whose office locality or an overlap
+  name contains a banned word must still be screenable honestly. Media
+  query-category search terms are not in this set.
 
 Exemption scope is deliberately narrow. Model prose fields (narrative,
 rationale, questions, record notes) get NO claim-quote exemption at the
 per-field gate in coldscreen.synthesis: the model references claims by id
-and never repeats their wording. That gate does apply the registry
-identity set, because prose has to be able to name the company and its
-people. The whole-memo backstop takes claim texts but applies those
-exemptions only inside the rendered claims-table region: the first line
-that is exactly `## Claims vs evidence` through the next ATX heading
-that starts with `## ` (the closer is not part of the region). A missing
-start or a missing closer leaves the region empty, so claim-quote
-exemptions apply nowhere and identity exemptions still apply to the
-whole memo. The CI memo scan still applies claim-quote exemptions
-line-by-line across the file. The CI casefile-field scan does not take
-claim texts: those fields are tool prose, same polarity as the synthesis
-per-field gate. Claim texts themselves are trustworthy only because the
-claims stage verifies each one is a real substring of its declared
-source section (after normalize_for_match on both sides) and has
-substance (two or more whitespace tokens after that same normalize)
-before storing it, and scripts/check_language.py re-verifies stored
-claims against the sibling evidence files, each against its declared
-source label, before honoring them on a memo. Single-token claim
-texts are never exemption spans: the in-process backstop and the CI
-claim_exemptions helper ignore them even if a hand-edited casefile
-still contains them. The script re-verifies
-identity names against the registry evidence files the same way, and
-that identity set is the one exemption the casefile-field scan applies.
-Occurrence discovery advances by the full match length, so overlapping
-occurrences of a self-similar quote can never union into coverage of
-text that was never quoted as a whole.
+and never repeats their wording. That gate does apply the code-fetched
+set, because prose has to be able to name the company, its people, the
+office, and an overlap company. The whole-memo backstop takes claim texts
+but applies those exemptions only inside the rendered claims-table
+region: the first line that is exactly `## Claims vs evidence` AND whose
+next non-blank line is a template-controlled opener, through the next
+ATX heading that starts with `## ` (the closer is not part of the
+region). A heading without an opener is skipped. A missing start or a
+missing closer leaves the region empty, so claim-quote exemptions apply
+nowhere and code-fetched exemptions still apply to the whole memo.
+Pre-table model fields (rationale, verdict_enforcement, enforcement
+notes) are collapsed to one line at synthesis store and at render so a
+multiline rationale cannot mint that heading. The CI memo scan still
+applies claim-quote exemptions line-by-line across the file. The CI
+casefile-field scan does not take claim texts: those fields are tool
+prose, same polarity as the synthesis per-field gate. Claim texts
+themselves are trustworthy only because the claims stage verifies each
+one is a real substring of its declared source section (after
+normalize_for_match on both sides) and has substance (two or more
+whitespace tokens after that same normalize) before storing it, and
+scripts/check_language.py re-verifies stored claims against the sibling
+evidence files, each against its declared source label, before honoring
+them on a memo. Single-token claim texts are never exemption spans: the
+in-process backstop and the CI claim_exemptions helper ignore them even
+if a hand-edited casefile still contains them. The script re-verifies
+identity names and the other code-fetched classes against sibling
+evidence the same way, and that re-verified set is the exemption the
+casefile-field scan applies. Occurrence discovery advances by the full
+match length, so overlapping occurrences of a self-similar quote can
+never union into coverage of text that was never quoted as a whole.
 """
 
 from __future__ import annotations
@@ -149,6 +157,31 @@ def claim_text_has_substance(text: str) -> bool:
     return len(normalize_for_match(text).split()) >= 2
 
 
+def collapse_whitespace(text: str) -> str:
+    """Collapse any whitespace run, including newlines, to a single space.
+
+    Same rule as stored record_note. Applied to pre-table model and tool
+    fields (rationale, verdict_enforcement, enforcement notes) at synthesis
+    store and at render so those fields cannot mint a claims-table heading
+    line. Do not use this on claim texts.
+    """
+    return " ".join(text.split())
+
+
+# Copied from CompanyProfile.registered_office_display. A pin test keeps
+# this list aligned with the model property.
+REGISTERED_OFFICE_ADDRESS_KEYS: tuple[str, ...] = (
+    "care_of",
+    "premises",
+    "address_line_1",
+    "address_line_2",
+    "locality",
+    "region",
+    "postal_code",
+    "country",
+)
+
+
 def registry_identity_names(casefile: CaseFile) -> tuple[str, ...]:
     """The registry identity exemption set for one casefile.
 
@@ -157,13 +190,72 @@ def registry_identity_names(casefile: CaseFile) -> tuple[str, ...]:
     from the registry by code (and re-validated on every casefile load), so
     exempting their exact rendered spans cannot launder model output; the
     CI scan additionally re-verifies them against the persisted registry
-    evidence before honoring them.
+    evidence before honoring them. This is the name subset;
+    code_fetched_exemption_texts adds the other rendered fetched strings.
     """
     names: list[str] = [casefile.subject.company_name]
     names.extend(p.name for p in casefile.subject.previous_company_names if p.name)
     names.extend(o.name for o in casefile.officers)
     names.extend(p.name for p in casefile.pscs if p.name)
     return tuple(dict.fromkeys(name for name in names if name and name.strip()))
+
+
+def _appointment_name_portion(display: str) -> str | None:
+    """Company-name side of an appointment display `{name} ({number})`."""
+    if display.endswith(")") and " (" in display:
+        name, _number = display.rsplit(" (", 1)
+        return name or None
+    return None
+
+
+def code_fetched_exemption_texts(casefile: CaseFile) -> tuple[str, ...]:
+    """Code-fetched strings the memo template prints, plus identity names.
+
+    Deduplicated in first-seen order. Includes registry_identity_names,
+    the registered-office display and each non-empty office address string
+    for the keys that display uses, network overlap company names,
+    appointment display strings and their company-name portion,
+    media source domains, stored claim source labels, and disqualification
+    detail when present. This is not a claim-quote exemption: claim texts
+    stay region-scoped on the backstop and zero on the per-field gate.
+    Media query-category search terms, media titles and snippets, finding
+    statements, and filing descriptions are not in this set.
+    """
+    texts: list[str] = list(registry_identity_names(casefile))
+    display = casefile.subject.registered_office_display
+    if display:
+        texts.append(display)
+    address = casefile.subject.registered_office_address
+    if isinstance(address, dict):
+        for key in REGISTERED_OFFICE_ADDRESS_KEYS:
+            value = address.get(key)
+            if isinstance(value, str) and value.strip():
+                texts.append(value)
+    network = casefile.network
+    if network is not None:
+        for overlap in network.overlaps:
+            if overlap.company_name and overlap.company_name.strip():
+                texts.append(overlap.company_name)
+        for appointment in network.appointments:
+            for company in appointment.companies:
+                if not company or not company.strip():
+                    continue
+                texts.append(company)
+                name = _appointment_name_portion(company)
+                if name and name.strip():
+                    texts.append(name)
+        for check in network.disqualification_checks:
+            if check.detail and check.detail.strip():
+                texts.append(check.detail)
+    media = casefile.media
+    if media is not None:
+        for item in media.items:
+            if item.source_domain and item.source_domain.strip():
+                texts.append(item.source_domain)
+    for claim in casefile.claims:
+        if claim.source and claim.source.strip():
+            texts.append(claim.source)
+    return tuple(dict.fromkeys(text for text in texts if text and text.strip()))
 
 
 def _exempt_spans(prose: str, exempt_texts: Iterable[str]) -> list[tuple[int, int]]:
@@ -211,22 +303,56 @@ def find_banned_terms(text: str, exempt_texts: Iterable[str] = ()) -> list[str]:
 # match only: do not invent markers or HTML comments.
 _CLAIMS_TABLE_HEADING = "## Claims vs evidence"
 
+# Next-non-blank lines the template itself writes after that heading.
+# A heading whose next non-blank line is not one of these is ignored.
+_CLAIMS_TABLE_OPENERS: frozenset[str] = frozenset(
+    {
+        "What the company says about itself, against the public record. "
+        "Claim text is quoted verbatim from the deck or site named in the "
+        "source; the status column is the enforced assessment.",
+        "| # | Claim (source) | Public record | Status |",
+        "Claims extraction ran but produced no discrete claims from the "
+        "provided deck or site text. See finding EXT-006.",
+        "Claims extraction was not part of this casefile.",
+    }
+)
+_CLAIMS_TABLE_OPENER_PREFIX = "Not performed:"
+
+
+def _next_nonblank_content(lines: list[str], start_index: int) -> str | None:
+    for line in lines[start_index:]:
+        content = line.rstrip("\r\n")
+        if content.strip():
+            return content
+    return None
+
+
+def _is_claims_table_opener(content: str) -> bool:
+    return content in _CLAIMS_TABLE_OPENERS or content.startswith(_CLAIMS_TABLE_OPENER_PREFIX)
+
 
 def _claims_table_region(memo: str) -> tuple[int, int] | None:
     """Character offsets [start, end) of the claims-table region, or None.
 
-    Start is the first line that is exactly the template heading. End is
-    the next line that starts with `## ` (that closer is excluded). A
-    missing start or a missing closer yields None: claim-quote exemptions
-    then apply nowhere. Only the first start/closer pair is used.
+    Start is the first line that is exactly the template heading whose next
+    non-blank line is a template-controlled opener (the stock intro
+    sentence, the table header, a `Not performed:` prefix, or one of the
+    two empty-claims sentences). A heading without that opener is skipped.
+    End is the next line that starts with `## ` (that closer is excluded).
+    A missing start or a missing closer yields None: claim-quote
+    exemptions then apply nowhere. Only the first accepted start/closer
+    pair is used.
     """
+    lines = memo.splitlines(keepends=True)
     start: int | None = None
     offset = 0
-    for line in memo.splitlines(keepends=True):
+    for index, line in enumerate(lines):
         content = line.rstrip("\r\n")
         if start is None:
             if content == _CLAIMS_TABLE_HEADING:
-                start = offset
+                nxt = _next_nonblank_content(lines, index + 1)
+                if nxt is not None and _is_claims_table_opener(nxt):
+                    start = offset
         elif content.startswith("## "):
             return start, offset
         offset += len(line)
@@ -242,8 +368,9 @@ def find_banned_terms_in_memo(
     """Banned terms in a rendered memo, with claim quotes region-scoped.
 
     The memo is scanned as three pieces. Before and after the claims-table
-    region, only identity_names are exempt. Inside the region, claim_texts
-    and identity_names are both exempt. Matching rules are find_banned_terms
+    region, only identity_names are exempt (callers pass
+    code_fetched_exemption_texts). Inside the region, claim_texts and
+    identity_names are both exempt. Matching rules are find_banned_terms
     unchanged. If the region cannot be bounded, the whole memo is scanned
     with identity_names only.
     """

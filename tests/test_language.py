@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -24,12 +25,22 @@ import pytest
 
 from coldscreen.casedir import load_casefile
 from coldscreen.language import (
+    REGISTERED_OFFICE_ADDRESS_KEYS,
     claim_text_has_substance,
+    code_fetched_exemption_texts,
     find_banned_terms,
     find_banned_terms_in_memo,
     normalize_for_match,
 )
-from coldscreen.models import MediaItem, MediaScreening
+from coldscreen.media import QUERY_CATEGORIES, source_domain
+from coldscreen.models import REGISTERED_OFFICE_ADDRESS_KEYS as MODEL_OFFICE_KEYS
+from coldscreen.models import (
+    CoAppointmentOverlap,
+    CompanyProfile,
+    MediaItem,
+    MediaScreening,
+)
+from coldscreen.pipeline import language_backstop_failure
 from coldscreen.render import render_memo
 from coldscreen.site import SitePage, _display_path
 
@@ -38,6 +49,8 @@ from .conftest import FIXTURES_DIR
 REPO_ROOT = Path(__file__).parent.parent
 SCRIPT_PATH = REPO_ROOT / "scripts" / "check_language.py"
 FIXTURE_CASE_DIR = FIXTURES_DIR / "case-fabricated-widgets-ltd-99999999"
+GOLDEN_DIR = FIXTURES_DIR / "golden"
+CLAIMS_TABLE_HEADER = "| # | Claim (source) | Public record | Status |"
 
 
 def load_script() -> ModuleType:
@@ -197,19 +210,44 @@ def test_memo_helper_hits_when_the_claims_table_heading_is_missing() -> None:
 
 
 def test_memo_helper_hits_when_the_claims_table_heading_has_no_closer() -> None:
-    memo = '## Claims vs evidence\n| "fraud" |\nNo following heading.\n'
+    memo = f'## Claims vs evidence\n{CLAIMS_TABLE_HEADER}\n| "fraud" |\nNo following heading.\n'
     assert find_banned_terms_in_memo(memo, claim_texts=("fraud",)) == ["fraud"]
 
 
 def test_memo_helper_exempts_a_claim_only_inside_the_table_region() -> None:
-    memo = '## Claims vs evidence\n| "fraud" |\n## Findings\nThe filing pattern is fraud.\n'
+    memo = (
+        f'## Claims vs evidence\n{CLAIMS_TABLE_HEADER}\n| "fraud" |\n'
+        "## Findings\nThe filing pattern is fraud.\n"
+    )
     assert find_banned_terms_in_memo(memo, claim_texts=("fraud",)) == ["fraud"]
 
 
 def test_memo_helper_uses_only_the_first_heading_pair() -> None:
     memo = (
-        '## Claims vs evidence\n| "fraud" |\n## Narrative\nclean\n'
-        '## Claims vs evidence\n| "fraud" |\n## Findings\n'
+        f'## Claims vs evidence\n{CLAIMS_TABLE_HEADER}\n| "fraud" |\n## Narrative\nclean\n'
+        f'## Claims vs evidence\n| "fraud" |\n## Findings\n'
+    )
+    assert find_banned_terms_in_memo(memo, claim_texts=("fraud",)) == ["fraud"]
+
+
+def test_memo_helper_h3_does_not_close_the_region() -> None:
+    memo = (
+        f'## Claims vs evidence\n{CLAIMS_TABLE_HEADER}\n| "fraud" |\n'
+        "### Red\nstill in the region\n## Findings\n"
+    )
+    assert find_banned_terms_in_memo(memo, claim_texts=("fraud",)) == []
+
+
+def test_memo_helper_trailing_space_on_heading_fails_closed() -> None:
+    memo = f'## Claims vs evidence \n{CLAIMS_TABLE_HEADER}\n| "fraud" |\n## Findings\n'
+    assert find_banned_terms_in_memo(memo, claim_texts=("fraud",)) == ["fraud"]
+
+
+def test_memo_helper_heading_without_opener_is_skipped() -> None:
+    memo = (
+        "## Claims vs evidence\nThis is model prose, not an opener.\n"
+        f'## Claims vs evidence\n{CLAIMS_TABLE_HEADER}\n| "fraud" |\n'
+        "## Findings\nThe filing pattern is fraud.\n"
     )
     assert find_banned_terms_in_memo(memo, claim_texts=("fraud",)) == ["fraud"]
 
@@ -835,3 +873,626 @@ def test_check_language_corrupt_casefile_target_fails(tmp_path: Path) -> None:
     path = tmp_path / "casefile.json"
     path.write_text("{ not json", encoding="utf-8")
     assert module.main([str(path)]) == 1
+
+
+# -- AUD-001: collapse pre-table fields; opener-pin the region start --------------
+
+
+def test_multiline_rationale_heading_does_not_steal_the_claims_region() -> None:
+    """A rationale whose middle line is the claims heading still leaves the
+    real table as the region: puffery stays exempt and the heading is not
+    its own line after collapse."""
+    casefile = load_casefile(GOLDEN_DIR)
+    assert casefile.verdict is not None
+    rationale = (
+        "The record supports a red verdict.\n"
+        "## Claims vs evidence\n"
+        "Those lines are model prose, not the table."
+    )
+    casefile = casefile.model_copy(
+        update={"verdict": casefile.verdict.model_copy(update={"rationale": rationale})}
+    )
+    memo = render_memo(casefile)
+    heading_lines = [line for line in memo.splitlines() if line == "## Claims vs evidence"]
+    assert heading_lines == ["## Claims vs evidence"]
+    quoted = "Our platform eliminates fraud in widget procurement"
+    assert quoted in memo
+    assert "The record supports a red verdict. ## Claims vs evidence Those lines" in memo
+    assert language_backstop_failure(memo, casefile) is None
+
+
+def test_rationale_that_is_exactly_the_heading_does_not_steal_the_region() -> None:
+    """Opener-pin: a rationale that is exactly the heading is skipped.
+    Puffery in the real table stays exempt; the same word in narrative hits."""
+    casefile = load_casefile(GOLDEN_DIR)
+    assert casefile.verdict is not None
+    stolen = casefile.model_copy(
+        update={
+            "verdict": casefile.verdict.model_copy(update={"rationale": "## Claims vs evidence"}),
+            "narrative": "This one is a fraud, whatever the deck says.",
+        }
+    )
+    memo = render_memo(stolen)
+    quoted = "Our platform eliminates fraud in widget procurement"
+    assert quoted in memo
+    assert language_backstop_failure(memo, stolen) is not None
+    clean = stolen.model_copy(update={"narrative": "See CLM-001."})
+    assert language_backstop_failure(render_memo(clean), clean) is None
+
+
+# -- AUD-002: code-fetched rendered strings ---------------------------------------
+
+
+def test_office_locality_crook_is_exempt_on_the_backstop() -> None:
+    casefile = load_casefile(GOLDEN_DIR)
+    address = dict(casefile.subject.registered_office_address)
+    address["locality"] = "Crook"
+    casefile = casefile.model_copy(
+        update={
+            "subject": casefile.subject.model_copy(update={"registered_office_address": address})
+        }
+    )
+    memo = render_memo(casefile)
+    assert "Crook" in memo
+    assert language_backstop_failure(memo, casefile) is None
+    assert language_backstop_failure(memo + "\nA crook by any other name.\n", casefile) is not None
+
+
+def test_network_overlap_crook_name_is_exempt_on_the_backstop() -> None:
+    casefile = load_casefile(GOLDEN_DIR)
+    assert casefile.network is not None
+    overlap = CoAppointmentOverlap(
+        company_number="99999701",
+        company_name="CROOK HALL FARM LTD",
+        officer_names=["WIDGETSMITH, Wanda"],
+    )
+    network = casefile.network.model_copy(
+        update={"overlaps": list(casefile.network.overlaps) + [overlap]}
+    )
+    casefile = casefile.model_copy(update={"network": network})
+    memo = render_memo(casefile)
+    assert "CROOK HALL FARM LTD" in memo
+    assert language_backstop_failure(memo, casefile) is None
+    assert language_backstop_failure(memo + "\nA crook by any other name.\n", casefile) is not None
+
+
+def test_media_source_domain_fraud_org_is_exempt_on_the_backstop() -> None:
+    casefile = load_casefile(GOLDEN_DIR)
+    item = MediaItem(
+        title="A fictional headline that stays out of the memo",
+        url="https://fraud.org/widget-note",
+        source_domain="fraud.org",
+        published="2026-05-14",
+        query_category="misconduct",
+    )
+    casefile = casefile.model_copy(
+        update={
+            "media": MediaScreening(
+                performed=True, provider="tavily", results_per_query=5, items=[item]
+            )
+        }
+    )
+    memo = render_memo(casefile)
+    assert "fraud.org" in memo
+    assert find_banned_terms("fraud.org") == ["fraud"]
+    assert language_backstop_failure(memo, casefile) is None
+    assert language_backstop_failure(memo + "\nA fraud inquiry is open.\n", casefile) is not None
+
+
+def test_claim_source_about_fraud_prevention_is_exempt_on_the_backstop() -> None:
+    casefile = load_casefile(GOLDEN_DIR)
+    claims = [
+        claim.model_copy(update={"source": "site /about-fraud-prevention"}) if index == 0 else claim
+        for index, claim in enumerate(casefile.claims)
+    ]
+    casefile = casefile.model_copy(update={"claims": claims})
+    memo = render_memo(casefile)
+    assert "site /about-fraud-prevention" in memo
+    assert language_backstop_failure(memo, casefile) is None
+    dirty = casefile.model_copy(
+        update={"narrative": "This one is a fraud, whatever the deck says."}
+    )
+    assert language_backstop_failure(render_memo(dirty), dirty) is not None
+
+
+def test_query_category_search_terms_are_not_in_the_collector() -> None:
+    casefile = load_casefile(GOLDEN_DIR)
+    item = MediaItem(
+        title="stays out",
+        url="https://news.example/story",
+        source_domain="news.example",
+        query_category="misconduct",
+    )
+    casefile = casefile.model_copy(
+        update={
+            "media": MediaScreening(
+                performed=True, provider="tavily", results_per_query=5, items=[item]
+            )
+        }
+    )
+    texts = {text.casefold() for text in code_fetched_exemption_texts(casefile)}
+    for _label, term in QUERY_CATEGORIES:
+        assert term.casefold() not in texts
+    assert "news.example" in texts
+
+
+def test_office_display_join_matches_company_profile() -> None:
+    """The script copies the office join; it must match the model property."""
+    module = load_script()
+    assert REGISTERED_OFFICE_ADDRESS_KEYS == MODEL_OFFICE_KEYS
+    assert module.REGISTERED_OFFICE_ADDRESS_KEYS == MODEL_OFFICE_KEYS
+    address = {key: f"part-{key}" for key in MODEL_OFFICE_KEYS}
+    profile = CompanyProfile.model_validate(
+        {
+            "company_name": "PIN LTD",
+            "company_number": "99999901",
+            "registered_office_address": address,
+        }
+    )
+    assert module._office_display(address) == profile.registered_office_display
+
+
+def test_media_domain_rule_matches_source_domain() -> None:
+    module = load_script()
+    url = "https://www.Fraud.org/path?q=1"
+    assert module._source_domain_from_url(url) == source_domain(url)
+    assert source_domain(url) == "fraud.org"
+
+
+def _write_office_evidence(case_dir: Path, address: dict[str, str]) -> None:
+    evidence_dir = case_dir / "evidence"
+    evidence_dir.mkdir(exist_ok=True)
+    (evidence_dir / "registry_profile.json").write_text(
+        json.dumps(
+            {
+                "name": "registry_profile",
+                "url": "https://api.company-information.service.gov.uk/company/99999998",
+                "body": {
+                    "company_name": "PLAIN TRADING LTD",
+                    "registered_office_address": address,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_ci_ignores_invented_office_locality(tmp_path: Path) -> None:
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text("Registered office: 1 High Street, Crook\n", encoding="utf-8")
+    invented = {"address_line_1": "1 High Street", "locality": "Crook"}
+    (case_dir / "casefile.json").write_text(
+        json.dumps(
+            {
+                "subject": {
+                    "company_name": "PLAIN TRADING LTD",
+                    "registered_office_address": invented,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_office_evidence(case_dir, {"address_line_1": "1 High Street", "locality": "Faketown"})
+    exempt = module.code_fetched_exemptions(memo)
+    assert not any("crook" in text.casefold() for text in exempt)
+    assert module.main([str(memo)]) == 1
+
+
+def test_ci_honors_evidence_verified_office(tmp_path: Path) -> None:
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text("Registered office: 1 High Street, Crook\n", encoding="utf-8")
+    address = {"address_line_1": "1 High Street", "locality": "Crook"}
+    (case_dir / "casefile.json").write_text(
+        json.dumps(
+            {
+                "subject": {
+                    "company_name": "PLAIN TRADING LTD",
+                    "registered_office_address": address,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_office_evidence(case_dir, address)
+    assert module.main([str(memo)]) == 0
+    memo.write_text("Registered office: 1 High Street, Crook\nA crook outside.\n", encoding="utf-8")
+    assert module.main([str(memo)]) == 1
+
+
+def test_ci_ignores_invented_overlap_name(tmp_path: Path) -> None:
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text("- CROOK HALL FARM LTD (99999701): WIDGETSMITH, Wanda\n", encoding="utf-8")
+    (case_dir / "casefile.json").write_text(
+        json.dumps(
+            {
+                "subject": {"company_name": "PLAIN TRADING LTD"},
+                "network": {
+                    "overlaps": [
+                        {"company_number": "99999701", "company_name": "CROOK HALL FARM LTD"}
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    evidence_dir = case_dir / "evidence"
+    evidence_dir.mkdir()
+    (evidence_dir / "appointments_p1.json").write_text(
+        json.dumps(
+            {
+                "name": "appointments_p1",
+                "body": {
+                    "items": [
+                        {
+                            "appointed_to": {
+                                "company_name": "IMAGINARY COMPONENTS LTD",
+                                "company_number": "99999801",
+                            }
+                        }
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    exempt = module.code_fetched_exemptions(memo)
+    assert not any("crook" in text.casefold() for text in exempt)
+    assert module.main([str(memo)]) == 1
+
+
+def test_ci_honors_evidence_verified_network_name(tmp_path: Path) -> None:
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text("- CROOK HALL FARM LTD (99999701): an officer\n", encoding="utf-8")
+    (case_dir / "casefile.json").write_text(
+        json.dumps(
+            {
+                "subject": {"company_name": "PLAIN TRADING LTD"},
+                "network": {
+                    "overlaps": [
+                        {"company_number": "99999701", "company_name": "CROOK HALL FARM LTD"}
+                    ],
+                    "appointments": [{"companies": ["CROOK HALL FARM LTD (99999701)"]}],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    evidence_dir = case_dir / "evidence"
+    evidence_dir.mkdir()
+    (evidence_dir / "appointments_p1.json").write_text(
+        json.dumps(
+            {
+                "name": "appointments_p1",
+                "body": {
+                    "items": [
+                        {
+                            "appointed_to": {
+                                "company_name": "CROOK HALL FARM LTD",
+                                "company_number": "99999701",
+                            }
+                        }
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert module.main([str(memo)]) == 0
+    memo.write_text("- CROOK HALL FARM LTD (99999701)\nA crook outside.\n", encoding="utf-8")
+    assert module.main([str(memo)]) == 1
+
+
+def test_ci_ignores_invented_media_domain(tmp_path: Path) -> None:
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text(
+        "| fraud.org | 2026-05-14 | misconduct | https://news.example/story |\n",
+        encoding="utf-8",
+    )
+    (case_dir / "casefile.json").write_text(
+        json.dumps(
+            {
+                "subject": {"company_name": "PLAIN TRADING LTD"},
+                "media": {"items": [{"source_domain": "fraud.org", "url": "https://fraud.org/x"}]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    evidence_dir = case_dir / "evidence"
+    evidence_dir.mkdir()
+    (evidence_dir / "media_search.json").write_text(
+        json.dumps(
+            {
+                "name": "media_search",
+                "body": {
+                    "kind": "search_results",
+                    "results": [
+                        {"source_domain": "news.example", "url": "https://news.example/story"}
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    exempt = module.code_fetched_exemptions(memo)
+    assert not any("fraud" in text.casefold() for text in exempt)
+    assert module.main([str(memo)]) == 1
+
+
+def test_ci_honors_evidence_verified_media_domain(tmp_path: Path) -> None:
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text(
+        "| fraud.org | 2026-05-14 | misconduct | https://fraud.org/widget-note |\n",
+        encoding="utf-8",
+    )
+    (case_dir / "casefile.json").write_text(
+        json.dumps(
+            {
+                "subject": {"company_name": "PLAIN TRADING LTD"},
+                "media": {
+                    "items": [
+                        {"source_domain": "fraud.org", "url": "https://fraud.org/widget-note"}
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    evidence_dir = case_dir / "evidence"
+    evidence_dir.mkdir()
+    (evidence_dir / "media_search.json").write_text(
+        json.dumps(
+            {
+                "name": "media_search",
+                "body": {
+                    "kind": "search_results",
+                    "results": [
+                        {"source_domain": "fraud.org", "url": "https://fraud.org/widget-note"}
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert module.main([str(memo)]) == 0
+    memo.write_text("| fraud.org |\nA fraud inquiry is open.\n", encoding="utf-8")
+    assert module.main([str(memo)]) == 1
+
+
+def test_ci_ignores_invented_claim_source_label(tmp_path: Path) -> None:
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text(
+        '| 1 | "Founded in 2018" (site /about-fraud-prevention) |  | not checkable |\n',
+        encoding="utf-8",
+    )
+    (case_dir / "casefile.json").write_text(
+        json.dumps(
+            {
+                "subject": {"company_name": "PLAIN TRADING LTD"},
+                "claims": [
+                    {
+                        "id": "CLM-001",
+                        "text": "Founded in 2018",
+                        "source": "site /about-fraud-prevention",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    evidence_dir = case_dir / "evidence"
+    evidence_dir.mkdir()
+    (evidence_dir / "site_001.json").write_text(
+        json.dumps(
+            {
+                "name": "site_001",
+                "url": "https://widgets.example/about",
+                "body": {
+                    "kind": "site_text",
+                    "url": "https://widgets.example/about",
+                    "text": "About us. Founded in 2018.",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    exempt = module.code_fetched_exemptions(memo)
+    assert not any("fraud" in text.casefold() for text in exempt)
+    assert module.main([str(memo)]) == 1
+
+
+def test_ci_honors_evidence_verified_claim_source(tmp_path: Path) -> None:
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text(
+        '| 1 | "Founded in 2018" (site /about-fraud-prevention) |  | not checkable |\n',
+        encoding="utf-8",
+    )
+    (case_dir / "casefile.json").write_text(
+        json.dumps(
+            {
+                "subject": {"company_name": "PLAIN TRADING LTD"},
+                "claims": [
+                    {
+                        "id": "CLM-001",
+                        "text": "Founded in 2018",
+                        "source": "site /about-fraud-prevention",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    evidence_dir = case_dir / "evidence"
+    evidence_dir.mkdir()
+    (evidence_dir / "site_001.json").write_text(
+        json.dumps(
+            {
+                "name": "site_001",
+                "url": "https://widgets.example/about-fraud-prevention",
+                "body": {
+                    "kind": "site_text",
+                    "url": "https://widgets.example/about-fraud-prevention",
+                    "text": "About us. Founded in 2018.",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert module.main([str(memo)]) == 0
+    memo.write_text(
+        '| 1 | "Founded in 2018" (site /about-fraud-prevention) |\nA fraud inquiry.\n',
+        encoding="utf-8",
+    )
+    assert module.main([str(memo)]) == 1
+
+
+def test_finding_statement_naming_crook_passes_when_office_evidence_carries_it(
+    tmp_path: Path,
+) -> None:
+    """Casefile-field scan uses the widened re-verified set."""
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    address = {"address_line_1": "1 High Street", "locality": "Crook"}
+    path = case_dir / "casefile.json"
+    path.write_text(
+        json.dumps(
+            {
+                "subject": {
+                    "company_name": "PLAIN TRADING LTD",
+                    "registered_office_address": address,
+                },
+                "findings": [_finding("The registered office locality is Crook.")],
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert module.main([str(path)]) == 1
+    _write_office_evidence(case_dir, address)
+    assert module.main([str(path)]) == 0
+
+
+# -- template interpolation inventory ---------------------------------------------
+
+
+_INTERPOLATION_RE = re.compile(r"\{\{(.*?)\}\}", re.DOTALL)
+
+# Every {{ }} in memo.md.j2. A new unclassified expression fails this test.
+# Residuals this sprint: filing descriptions only.
+_MEMO_INTERPOLATION_CLASS: dict[str, str] = {
+    "c.subject.company_name": "covered",
+    "c.subject.company_number": "safe",
+    "c.subject.jurisdiction": "safe",
+    "c.screened_at|fmt_datetime": "safe",
+    "c.tool_version": "safe",
+    "c.subject.registered_office_display": "covered",
+    'c.subject.sic_codes|join(", ")': "safe",
+    "c.verdict.level|upper": "safe",
+    "t.id": "safe",
+    "t.severity": "safe",
+    "t.text": "safe",
+    "c.verdict.rationale": "prose",
+    "c.verdict_enforcement": "prose",
+    "c.synthesis.provider": "safe",
+    "c.synthesis.model": "safe",
+    "c.synthesis.prompt_version": "safe",
+    "note": "prose",
+    "synthesis_failure": "prose",
+    "no_synthesis_text": "safe",
+    "c.disclaimer": "safe",
+    "r.number": "safe",
+    "r.text": "prose",
+    "r.source": "covered",
+    "r.record": "prose",
+    "r.status": "safe",
+    "c.claims_extraction.skipped_reason": "prose",
+    'c.narrative or "No narrative was produced."': "prose",
+    "loop.index": "safe",
+    "q": "prose",
+    "f.id": "safe",
+    "f.confidence": "safe",
+    "f.statement": "prose",
+    "e.source_url": "url",
+    "e.retrieved_at|fmt_date": "safe",
+    "o.name": "covered",
+    'o.officer_role or ""': "safe",
+    "o.appointed_on|fmt_date": "safe",
+    "o.resigned_on|fmt_date": "safe",
+    'p.name or ""': "covered",
+    'p.kind or ""': "safe",
+    'p.natures_of_control|join("; ")': "safe",
+    "p.notified_on|fmt_date": "safe",
+    "p.ceased_on|fmt_date": "safe",
+    "c.sanctions.dataset": "safe",
+    "c.sanctions.threshold": "safe",
+    "c.sanctions.algorithm_requested": "safe",
+    "c.sanctions.algorithm_resolved": "safe",
+    "r.subject": "covered",
+    "r.kind": "safe",
+    '"%.2f"|format(r.top_score) if r.top_score is not none else "no candidates"': "safe",
+    '"match at or above threshold" if r.matched else "below threshold"': "safe",
+    "c.sanctions.skipped_reason": "prose",
+    "a.officer_name": "covered",
+    "a.other_current_appointments": "safe",
+    '": " + a.companies|join("; ") if a.companies else ""': "covered",
+    '" (list truncated)" if a.truncated else ""': "safe",
+    'o.company_name or "unnamed company"': "covered",
+    "o.company_number": "safe",
+    'o.officer_names|join(", ")': "covered",
+    "line": "prose",
+    "c.media.items|length": "safe",
+    "m.source_domain": "covered",
+    'm.published or "undated"': "safe",
+    "m.query_category": "safe",
+    "m.url": "url",
+    "c.media.skipped_reason": "prose",
+    "c.filings|length": "safe",
+    "c.filings_total": "safe",
+    "f.date|fmt_date": "safe",
+    'f.category or ""': "safe",
+    'f.description or ""': "residual",
+    'ch.charge_code or ""': "safe",
+    'ch.status or ""': "safe",
+    "ch.created_on|fmt_date": "safe",
+    "ch.satisfied_on|fmt_date": "safe",
+    "c.insolvency_cases|length": "safe",
+    "ogl_attribution": "safe",
+}
+
+
+def test_every_memo_interpolation_is_classified() -> None:
+    template = (REPO_ROOT / "src" / "coldscreen" / "templates" / "memo.md.j2").read_text(
+        encoding="utf-8"
+    )
+    found = {" ".join(match.group(1).split()) for match in _INTERPOLATION_RE.finditer(template)}
+    unknown = sorted(found - set(_MEMO_INTERPOLATION_CLASS))
+    unused = sorted(set(_MEMO_INTERPOLATION_CLASS) - found)
+    assert unknown == []
+    assert unused == []
+    residuals = {expr for expr, kind in _MEMO_INTERPOLATION_CLASS.items() if kind == "residual"}
+    assert residuals == {'f.description or ""'}
+    kinds = set(_MEMO_INTERPOLATION_CLASS.values())
+    assert kinds <= {"covered", "url", "safe", "prose", "residual"}

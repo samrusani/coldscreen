@@ -65,8 +65,8 @@ from .findings import build_findings
 from .http_cache import HttpCache
 from .language import (
     claim_text_has_substance,
+    code_fetched_exemption_texts,
     find_banned_terms_in_memo,
-    registry_identity_names,
 )
 from .media import MediaStageResult, TavilyProvider, run_media
 from .models import CaseFile, CompanyCandidate, Officer
@@ -210,11 +210,12 @@ def language_backstop_failure(memo: str, casefile: CaseFile) -> str | None:
     Every rendered memo passes through here on every path (screen, rerun,
     and the synthesis-failure memo). The per-field gate on model output
     already ran; this catches banned vocabulary arriving through any other
-    channel. Two exemptions, both spans of code-verified data: the
+    channel. Two exemptions, both spans of code-fetched data: the
     casefile's stored claim texts (the company's own quoted words, exempt
-    only inside the rendered claims-table region) and the registry
-    identity names (registered name, previous names, officer and PSC
-    names), which are registry data the memo must be able to spell out
+    only inside the rendered claims-table region) and the code-fetched
+    rendered strings (identity names, office, network names, media
+    domains, claim source labels, and disqualification detail when
+    present), which are fetched data the memo must be able to spell out
     anywhere. Single-token claim texts are ignored even if a hand-edited
     casefile still contains them: they are not exemption spans. On a hit
     the caller writes nothing and the returned message reports a count
@@ -226,7 +227,7 @@ def language_backstop_failure(memo: str, casefile: CaseFile) -> str | None:
             claim_texts=tuple(
                 claim.text for claim in casefile.claims if claim_text_has_substance(claim.text)
             ),
-            identity_names=registry_identity_names(casefile),
+            identity_names=code_fetched_exemption_texts(casefile),
         )
     )
     if not count:

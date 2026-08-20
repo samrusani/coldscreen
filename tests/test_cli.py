@@ -1254,12 +1254,12 @@ def test_registered_name_with_banned_word_screens_honestly(
     assert module.main([str(case_dir / "memo.md")]) == 0
 
 
-def test_language_backstop_blocks_a_poisoned_memo_on_screen(
+def test_registered_office_with_banned_word_screens_honestly(
     screen_env: Path, respx_mock: respx.MockRouter
 ) -> None:
-    """A banned word arriving through a NON-identity source channel (the
-    registered office address) still trips the backstop on the screen path:
-    no case directory at all. The identity exemption covers names only."""
+    """A registry-fetched office address containing a banned word must
+    screen, write the memo, pass the backstop, and pass check_language.
+    Evidence carries the address, so CI re-verifies it."""
     profile = load_fixture("profile.json")
     profile["registered_office_address"] = {
         "address_line_1": "1 Scam Passage",
@@ -1267,11 +1267,17 @@ def test_language_backstop_blocks_a_poisoned_memo_on_screen(
     }
     _mock_routes_with_profile(respx_mock, profile)
     result = runner.invoke(app, ["screen", "99999999"])
-    assert result.exit_code == 1
-    combined = all_output(result)
-    assert "language backstop" in combined
-    assert "scam" not in combined.lower()
-    assert not (screen_env / "cases").exists()
+    assert result.exit_code == 0, result.output
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    memo = (case_dir / "memo.md").read_text(encoding="utf-8")
+    assert "1 Scam Passage" in memo
+    spec = importlib.util.spec_from_file_location(
+        "check_language", Path(__file__).parent.parent / "scripts" / "check_language.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.main([str(case_dir / "memo.md")]) == 0
 
 
 def test_language_gate_exhaustion_memo_survives_the_backstop(

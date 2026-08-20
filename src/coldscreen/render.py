@@ -15,6 +15,7 @@ from typing import Any
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 
+from .language import collapse_whitespace
 from .models import OGL_ATTRIBUTION, CaseFile, Finding
 from .rubric import TRIGGER_INDEX
 
@@ -140,14 +141,44 @@ def _trigger_lines(triggered: list[str]) -> list[dict[str, str]]:
     return lines
 
 
+def _collapse_pre_table_fields(casefile: CaseFile) -> CaseFile:
+    """One-line rationale, enforcement note, and enforcement notes for render.
+
+    A hand-edited multiline rationale must not be able to mint a claims-table
+    heading line on --render-only. Collapse is idempotent on already-stored
+    one-line fields, so fixture snapshots stay byte-identical.
+    """
+    updates: dict[str, Any] = {}
+    if casefile.verdict is not None:
+        updates["verdict"] = casefile.verdict.model_copy(
+            update={"rationale": collapse_whitespace(casefile.verdict.rationale)}
+        )
+    if casefile.verdict_enforcement:
+        updates["verdict_enforcement"] = collapse_whitespace(casefile.verdict_enforcement)
+    if casefile.synthesis is not None:
+        updates["synthesis"] = casefile.synthesis.model_copy(
+            update={
+                "enforcement_notes": [
+                    collapse_whitespace(note) for note in casefile.synthesis.enforcement_notes
+                ]
+            }
+        )
+    if not updates:
+        return casefile
+    return casefile.model_copy(update=updates)
+
+
 def render_memo(casefile: CaseFile, synthesis_failure: str | None = None) -> str:
     """Render memo.md content from a CaseFile.
 
     synthesis_failure is set by the CLI when synthesis was attempted and
     failed cleanly this run: the memo then states the failure instead of
     implying that no model was configured. It is run state, not casefile
-    state, so it is never persisted.
+    state, so it is never persisted. Pre-table model fields are collapsed
+    here so a hand-edited multiline rationale cannot inject the
+    claims-table heading.
     """
+    casefile = _collapse_pre_table_fields(casefile)
     by_severity: dict[str, list[Finding]] = {"red": [], "amber": [], "info": []}
     for finding in casefile.findings:
         by_severity[finding.severity].append(finding)
