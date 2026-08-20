@@ -40,12 +40,15 @@ line-by-line across the file. The CI casefile-field scan does not take
 claim texts: those fields are tool prose, same polarity as the synthesis
 per-field gate. Claim texts themselves are trustworthy only because the
 claims stage verifies each one is a real substring of its declared
-source section (after normalize_for_match on both sides) before storing
-it, and scripts/check_language.py re-verifies stored claims against the
-sibling evidence files before honoring them on a memo; the script
-re-verifies identity names against the registry evidence files the same
-way, and that identity set is the one exemption the casefile-field scan
-applies.
+source section (after normalize_for_match on both sides) and has
+substance (two or more whitespace tokens after that same normalize)
+before storing it, and scripts/check_language.py re-verifies stored
+claims against the sibling evidence files before honoring them on a
+memo. Single-token claim texts are never exemption spans: the in-process
+backstop and the CI claim_exemptions helper ignore them even if a
+hand-edited casefile still contains them. The script re-verifies
+identity names against the registry evidence files the same way, and
+that identity set is the one exemption the casefile-field scan applies.
 Occurrence discovery advances by the full match length, so overlapping
 occurrences of a self-similar quote can never union into coverage of
 text that was never quoted as a whole.
@@ -132,6 +135,17 @@ def normalize_for_match(text: str) -> str:
     """
     folded = text.translate(_QUOTE_DASH_FOLD)
     return " ".join(folded.split()).casefold()
+
+
+def claim_text_has_substance(text: str) -> bool:
+    """True when, after normalize_for_match, the text has two or more tokens.
+
+    Empty, whitespace-only, and single-token strings do not have substance.
+    Storage, the in-process backstop, and CI claim_exemptions share this
+    helper so a one-word quote cannot become an exemption span. Identity
+    names are not claims; do not apply this to them.
+    """
+    return len(normalize_for_match(text).split()) >= 2
 
 
 def registry_identity_names(casefile: CaseFile) -> tuple[str, ...]:

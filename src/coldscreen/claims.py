@@ -8,12 +8,15 @@ labels on offer, so a claim cannot cite a page that was never provided.
 Every claim text is then VERIFIED as a quotation: after normalize_for_match
 on both sides it must be a substring of its declared source section's
 extracted text, or it is dropped with a counted finding and never stored.
+A verified quotation is stored only when it also has substance: two or
+more whitespace tokens after the same normalize. Thin quotations are
+dropped and counted separately; they never become exemption spans.
 Stored claim texts are the only strings the language gates ever exempt, so
-this verification is the trust boundary of the whole exemption design.
-Claim ids are assigned by CODE (CLM-001 style, in output order after the
-drop), never taken from the model. Unfalsifiable puffery is kept with
-checkable False; dropping it would hide exactly the vocabulary a screen
-should surface.
+verification plus substance is the trust boundary of the whole exemption
+design. Claim ids are assigned by CODE (CLM-001 style, in output order
+after both drop classes), never taken from the model. Unfalsifiable
+puffery is kept with checkable False; dropping it would hide exactly the
+vocabulary a screen should surface.
 
 Parse failures are re-prompted within the same retry budget as synthesis,
 then fail cleanly: no claims are ever fabricated by this tool. A failed
@@ -41,7 +44,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from .ch_client import FetchRecord
 from .config import Settings
 from .deck import DeckExtraction, deck_record
-from .language import normalize_for_match
+from .language import claim_text_has_substance, normalize_for_match
 from .models import Claim, ClaimsExtraction, CompanyProfile, Evidence, Finding
 from .providers import Message, ModelProvider
 from .site import SiteFetchResult
@@ -233,22 +236,25 @@ def _extract_claims(
     profile: CompanyProfile,
     sections: list[Section],
     provider: ModelProvider,
-) -> tuple[list[Claim], int, int]:
+) -> tuple[list[Claim], int, int, int]:
     """The model loop: schema-constrained extraction with parse retries,
-    then quotation verification before anything is stored.
+    then quotation verification and a substance check before anything is
+    stored.
 
     A claim's text is stored ONLY when, after normalize_for_match on both
     sides, it is a substring of the extracted text of its DECLARED source
-    section. This is the trust boundary for the language-gate exemption:
+    section AND it has two or more whitespace tokens after that same
+    normalize. This is the trust boundary for the language-gate exemption:
     stored claim texts render verbatim in the memo table and act as span
-    exemptions there, so a model must not be able to mint one. Claims that
-    fail verification are dropped and counted, never retried and never
-    stored; ids are assigned after the drop so CLM numbering stays
-    contiguous over what actually exists.
+    exemptions there, so a model must not be able to mint one, and a
+    single-word quote must not become an exemption span. Claims that fail
+    verification or substance are dropped and counted separately, never
+    retried and never stored; ids are assigned after both drop classes so
+    CLM numbering stays contiguous over what actually exists.
 
-    Returns (claims, parse_retries, dropped_count). Raises ValueError with
-    the last parse error when the budget is exhausted; the caller wraps it
-    with stage context.
+    Returns (claims, parse_retries, dropped_count, dropped_thin_count).
+    Raises ValueError with the last parse error when the budget is
+    exhausted; the caller wraps it with stage context.
     """
     prompt = load_prompt()
     labels = [section.source for section in sections]
@@ -268,6 +274,7 @@ def _extract_claims(
             claims: list[Claim] = []
             seen: set[tuple[str, str]] = set()
             dropped = 0
+            dropped_thin = 0
             for raw_claim in parsed.claims:
                 text = normalize_claim_text(raw_claim.text)
                 if not text:
@@ -280,6 +287,9 @@ def _extract_claims(
                 if not normalized or normalized not in normalized_sections[raw_claim.source]:
                     dropped += 1
                     continue
+                if not claim_text_has_substance(text):
+                    dropped_thin += 1
+                    continue
                 claims.append(
                     Claim(
                         id=f"CLM-{len(claims) + 1:03d}",
@@ -289,7 +299,7 @@ def _extract_claims(
                         checkable=raw_claim.checkable,
                     )
                 )
-            return claims, parse_retries, dropped
+            return claims, parse_retries, dropped, dropped_thin
         if parse_retries >= MAX_PARSE_RETRIES:
             raise ValueError(parse_error)
         parse_retries += 1
@@ -566,7 +576,7 @@ def run_claims_stage(
         return result
 
     try:
-        claims, parse_retries, dropped = _extract_claims(profile, sections, provider)
+        claims, parse_retries, dropped, dropped_thin = _extract_claims(profile, sections, provider)
     except ValueError as error:
         raise ClaimsExtractionError(
             "claims extraction failed: the model did not produce valid output"
@@ -579,6 +589,7 @@ def run_claims_stage(
     result.extraction.performed = True
     result.extraction.parse_retries = parse_retries
     result.extraction.dropped_claims = dropped
+    result.extraction.dropped_thin_claims = dropped_thin
     checkable = sum(1 for c in claims if c.checkable)
     result.findings.append(
         Finding(
@@ -609,6 +620,23 @@ def run_claims_stage(
                     f"{dropped} claim(s) were dropped because their text was not"
                     " found in the extracted source material. Only verbatim"
                     " quotations of the deck or site text are stored."
+                ),
+                evidence=_outcome_evidence(result, deck_rec, site, now),
+            )
+        )
+    if dropped_thin:
+        # Fixed text plus a count: the dropped texts are model-controlled
+        # strings, so they never appear anywhere, not even in this finding.
+        result.findings.append(
+            Finding(
+                id="EXT-009",
+                stage=STAGE,
+                severity="info",
+                confidence="confirmed",
+                statement=(
+                    f"{dropped_thin} claim(s) were dropped because their text"
+                    " had only one word after normalization. Stored claims"
+                    " must contain two or more words."
                 ),
                 evidence=_outcome_evidence(result, deck_rec, site, now),
             )
