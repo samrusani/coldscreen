@@ -193,6 +193,7 @@ def test_screen_company_writes_a_case_and_reports_no_synthesis(
     case_dir = mcp_env / "cases" / "fabricated-widgets-ltd-99999999"
     assert Path(payload["case_dir"]) == case_dir.resolve()
     assert (case_dir / "casefile.json").is_file()
+    assert (case_dir / "fetch_log.json").is_file()
     assert (case_dir / "evidence" / "index.json").is_file()
     assert payload["memo"] == (case_dir / "memo.md").read_text(encoding="utf-8")
     assert "No synthesis: no model configured" in payload["memo"]
@@ -406,6 +407,36 @@ def test_overwrite_refuses_a_symlinked_memo_and_leaves_the_victim_untouched(
     assert "symbolic link" in text
     assert "Traceback" not in text
     assert victim.read_text(encoding="utf-8") == "do not touch\n"
+
+
+def test_overwrite_refuses_a_symlinked_fetch_log_and_leaves_the_case_intact(
+    mcp_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    """A link at fetch_log.json is refused before any other owned file moves."""
+    mock_company_routes(respx_mock)
+    structured(call_tool("screen_company", {"query": "99999999"}))
+    case_dir = mcp_env / "cases" / "fabricated-widgets-ltd-99999999"
+
+    memo_before = (case_dir / "memo.md").read_bytes()
+    casefile_before = (case_dir / "casefile.json").read_bytes()
+    index_before = (case_dir / "evidence" / "index.json").read_bytes()
+
+    victim = mcp_env / "elsewhere" / "precious.json"
+    victim.parent.mkdir(parents=True)
+    victim.write_bytes(b"do not touch\n")
+    (case_dir / "fetch_log.json").unlink()
+    (case_dir / "fetch_log.json").symlink_to(victim)
+
+    result = call_tool("screen_company", {"query": "99999999", "overwrite": True})
+    assert result.is_error is True
+    text = error_text(result)
+    assert "symbolic link" in text
+    assert "Traceback" not in text
+    assert victim.read_bytes() == b"do not touch\n"
+    assert (case_dir / "memo.md").read_bytes() == memo_before
+    assert (case_dir / "casefile.json").read_bytes() == casefile_before
+    assert (case_dir / "evidence" / "index.json").read_bytes() == index_before
+    assert (case_dir / "fetch_log.json").is_symlink()
 
 
 def test_overwrite_refuses_a_symlinked_evidence_directory(

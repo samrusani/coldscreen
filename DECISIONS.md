@@ -195,6 +195,15 @@ Identity exemption: yes, and only after the same sibling registry-evidence re-ve
 
 The synthesis per-field gate, the whole-memo backstop, the claims verifier, and rubric.md were not changed. Committed fixture casefiles and snapshot memos were not edited.
 
+### 2026-08-20: per-run fetch log is a separate file, not an index expansion
+`evidence/index.json` stays a file manifest (name, file, url, status, retrieved_at). A new `fetch_log.json` at the case directory root is the run log: one array row per `NamedRecord`, same order as the index. Required fields: `name`, `url`, `params` (the existing `sanitize_params` dict), `status`, `retrieved_at`, `from_cache`. No bodies, no `file` pointer, no headers, no key or Authorization material. `sanitize_params` is the only filter.
+
+The log is written from `write_case` through `write_case_text` (`O_NOFOLLOW`). Before any write, and before overwrite clears `evidence/`, the tool-owned group (`casefile.json`, `memo.md`, `fetch_log.json`, `evidence/index.json`) is `refuse_symlink`'d so a link at one name cannot leave a half-updated case.
+
+`--no-write` writes no case directory and therefore no fetch log, and does not print the log. `coldscreen rerun` does not fetch and does not write, rewrite, or delete `fetch_log.json`. A new screen with `--overwrite` rewrites the log for that run. Duration, attempt count, and retry rows were not added: `FetchRecord` has no duration field, and tenacity retries that never became a persisted record stay out of scope.
+
+No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Committed fixtures were not given a historical log. `scripts/check_language.py` default targets were not expanded: the log is not tool prose.
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.

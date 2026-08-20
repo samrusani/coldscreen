@@ -128,6 +128,7 @@ def test_screen_writes_the_full_case_directory(
 
     index = json.loads((evidence_dir / "index.json").read_text(encoding="utf-8"))
     assert {entry["name"] for entry in index} == expected_evidence
+    assert (case_dir / "fetch_log.json").is_file()
 
     casefile = CaseFile.model_validate_json(
         (case_dir / "casefile.json").read_text(encoding="utf-8")
@@ -218,6 +219,7 @@ def test_no_write_prints_casefile_json_and_creates_no_case_directory(
     assert "Case directory written" not in all_output(result)
     assert "Case directory was not written" in result.stderr
     assert not (screen_env / "cases").exists()
+    assert not any(screen_env.rglob("fetch_log.json"))
 
 
 def test_json_and_no_write_print_the_casefile_once(
@@ -492,6 +494,7 @@ def test_overwrite_with_no_write_does_not_touch_an_existing_case(
     assert first.exit_code == 0, first.output
     case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
     marker = (case_dir / "memo.md").read_bytes()
+    before_log = (case_dir / "fetch_log.json").read_bytes()
     user_note = case_dir / "my-notes.txt"
     user_note.write_text("keep me", encoding="utf-8")
 
@@ -501,6 +504,7 @@ def test_overwrite_with_no_write_does_not_touch_an_existing_case(
     assert user_note.read_text(encoding="utf-8") == "keep me"
     assert (case_dir / "casefile.json").is_file()
     assert (case_dir / "evidence").is_dir()
+    assert (case_dir / "fetch_log.json").read_bytes() == before_log
 
 
 def test_overwrite_flag_replaces_the_case_directory_and_clears_stale_evidence(
@@ -520,6 +524,7 @@ def test_overwrite_flag_replaces_the_case_directory_and_clears_stale_evidence(
     assert not stale.exists()  # tool-owned evidence dir is replaced wholesale
     assert user_note.read_text(encoding="utf-8") == "keep me"  # user files survive
     assert (case_dir / "memo.md").is_file()
+    assert (case_dir / "fetch_log.json").is_file()
 
 
 def test_sanctions_stage_failure_keeps_the_case_directory_and_exits_one(
@@ -679,6 +684,44 @@ def test_nonexistent_config_path_is_an_error(
     # typer reports option validation as a usage error, exit code 2.
     assert result.exit_code == 2
     assert "Invalid value for '--config'" in flat_output(result)
+
+
+def test_screen_writes_fetch_log_matching_the_evidence_index(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    mock_company_routes(respx_mock)
+    result = runner.invoke(app, ["screen", "Fabricated Widgets Ltd"])
+    assert result.exit_code == 0, result.output
+
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    log_path = case_dir / "fetch_log.json"
+    log = json.loads(log_path.read_text(encoding="utf-8"))
+    index = json.loads((case_dir / "evidence" / "index.json").read_text(encoding="utf-8"))
+    assert [row["name"] for row in log] == [entry["name"] for entry in index]
+    required = {"name", "url", "params", "status", "retrieved_at", "from_cache"}
+    for row in log:
+        assert required <= set(row)
+        assert isinstance(row["params"], dict)
+        assert isinstance(row["from_cache"], bool)
+        assert "body" not in row
+        assert "file" not in row
+    assert SECRET not in log_path.read_text(encoding="utf-8")
+    assert SECRET.encode() not in log_path.read_bytes()
+
+
+def test_rerun_leaves_fetch_log_byte_identical(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    # No routes: rerun must stay offline and must not rewrite the log.
+    case_dir = tmp_path / "case-fabricated-widgets-ltd-99999999"
+    shutil.copytree(FIXTURE_CASE_DIR, case_dir)
+    log_path = case_dir / "fetch_log.json"
+    marker = b'[{"name": "staged-marker", "from_cache": false}]\n'
+    log_path.write_bytes(marker)
+
+    result = runner.invoke(app, ["rerun", str(case_dir)])
+    assert result.exit_code == 0, result.output
+    assert log_path.read_bytes() == marker
 
 
 def test_the_api_key_never_reaches_disk_or_output(
@@ -1322,6 +1365,29 @@ def test_no_write_still_puts_http_cache_for_a_later_hit(
         (case_dir / "evidence" / "registry_profile.json").read_text(encoding="utf-8")
     )
     assert evidence["from_cache"] is True
+
+
+def test_fetch_log_records_cache_hits_on_companies_house_rows(
+    screen_env: Path, respx_mock: respx.MockRouter
+) -> None:
+    mock_company_routes(respx_mock)
+    first = runner.invoke(app, ["screen", "99999999", "--no-write"])
+    assert first.exit_code == 0, first.output
+    calls_after_first = len(respx_mock.calls)
+    assert calls_after_first >= 1
+
+    second = runner.invoke(app, ["screen", "99999999"])
+    assert second.exit_code == 0, second.output
+    assert len(respx_mock.calls) == calls_after_first
+    case_dir = screen_env / "cases" / "fabricated-widgets-ltd-99999999"
+    log = json.loads((case_dir / "fetch_log.json").read_text(encoding="utf-8"))
+    ch_rows = [
+        row
+        for row in log
+        if row["url"].startswith("https://api.company-information.service.gov.uk")
+    ]
+    assert ch_rows
+    assert all(row["from_cache"] is True for row in ch_rows)
 
 
 @pytest.fixture
