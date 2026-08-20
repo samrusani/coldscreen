@@ -609,6 +609,9 @@ def test_rerun_reassesses_stored_claims_without_reextracting(
     case_dir = replay_env / "case-golden"
     case_dir.mkdir()
     shutil.copyfile(GOLDEN_DIR / "casefile.json", case_dir / "casefile.json")
+    # Rerun re-verifies stored claims against sibling evidence before they
+    # are exemption spans. The golden puffery quote contains a banned word.
+    shutil.copytree(GOLDEN_DIR / "evidence", case_dir / "evidence")
     route = respx_mock.post(OLLAMA_CHAT_URL).mock(
         side_effect=[ollama_reply(canned_response(GOLDEN_DIR, "synthesis_response.json"))]
     )

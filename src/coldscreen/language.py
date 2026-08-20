@@ -5,9 +5,10 @@ never state or imply intent, dishonesty, or criminality. This module is the
 one place the banned list and the matching rules live. Every enforcement
 point imports find_banned_terms, so none of them can drift: the mechanical
 gate over model output (coldscreen.synthesis), the whole-memo backstop that
-runs before any memo reaches disk (coldscreen.pipeline), and the CI gate over
-rendered memos and the tool-authored fields of casefile.json
-(scripts/check_language.py).
+runs before any memo reaches disk (coldscreen.pipeline), and the CI and
+operator gate over rendered memos and the tool-authored fields of
+casefile.json (coldscreen.check_language, also `coldscreen check-language`;
+scripts/check_language.py is a checkout wrapper).
 
 Three exemptions, all narrow and all span-level:
 
@@ -50,24 +51,30 @@ prose, same polarity as the synthesis per-field gate. Claim texts
 themselves are trustworthy only because the claims stage verifies each
 one is a real substring of its declared source section (after
 normalize_for_match on both sides) and has substance (two or more
-whitespace tokens after that same normalize) before storing it, and
-scripts/check_language.py re-verifies stored claims against the sibling
-evidence files, each against its declared source label, before honoring
-them on a memo. Single-token claim texts are never exemption spans: the
-in-process backstop and the CI claim_exemptions helper ignore them even
-if a hand-edited casefile still contains them. The script re-verifies
-identity names and the other code-fetched classes against sibling
-evidence the same way, and that re-verified set is the exemption the
-casefile-field scan applies. Occurrence discovery advances by the full
-match length, so overlapping occurrences of a self-similar quote can
-never union into coverage of text that was never quoted as a whole.
+whitespace tokens after that same normalize) before storing it.
+claim_quote_is_verified is the shared re-check: CI and the on-disk
+rerun path both honor a stored claim only when that predicate is true
+against the sibling evidence-section map (evidence_sections). Screen
+and in-memory tests that call language_backstop_failure without an
+evidence dir keep the substance-only filter; claims were just verified
+against in-memory sections, and evidence files may not exist yet
+(--no-write). Missing or empty evidence on rerun means no claim-quote
+exemptions. Single-token claim texts are never exemption spans. CI
+also re-verifies identity names and the other code-fetched classes
+against sibling evidence, and that re-verified set is the exemption
+the casefile-field scan applies. Occurrence discovery advances by the
+full match length, so overlapping occurrences of a self-similar quote
+can never union into coverage of text that was never quoted as a whole.
 """
 
 from __future__ import annotations
 
+import json
 import re
-from collections.abc import Iterable
-from typing import TYPE_CHECKING
+from collections.abc import Iterable, Mapping
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 if TYPE_CHECKING:  # imported for typing only; language stays dependency-light
     from .models import CaseFile
@@ -138,9 +145,9 @@ def normalize_for_match(text: str) -> str:
     unicode quote and dash variants fold to ASCII. Used by the claims stage
     to verify a claim's text really appears in its declared source section
     before it is stored (and so before it can ever act as a language-gate
-    exemption), and by scripts/check_language.py to re-verify stored claims
-    against the sibling evidence files. Both sides of every containment
-    check go through this one function, so the two verifiers cannot drift.
+    exemption), and by claim_quote_is_verified to re-check stored claims
+    against sibling evidence. Both sides of every containment check go
+    through this one function, so storage, rerun, and CI cannot drift.
     """
     folded = text.translate(_QUOTE_DASH_FOLD)
     return " ".join(folded.split()).casefold()
@@ -150,11 +157,98 @@ def claim_text_has_substance(text: str) -> bool:
     """True when, after normalize_for_match, the text has two or more tokens.
 
     Empty, whitespace-only, and single-token strings do not have substance.
-    Storage, the in-process backstop, and CI claim_exemptions share this
-    helper so a one-word quote cannot become an exemption span. Identity
-    names are not claims; do not apply this to them.
+    Storage, the substance-only backstop path, and claim_quote_is_verified
+    share this helper so a one-word quote cannot become an exemption span.
+    Identity names are not claims; do not apply this to them.
     """
     return len(normalize_for_match(text).split()) >= 2
+
+
+def claim_quote_is_verified(text: object, source: object, sections: Mapping[str, str]) -> bool:
+    """True when text is a substantive quotation of its declared section.
+
+    Honor the text only when all of these hold: text and source are
+    non-empty strings, claim_text_has_substance(text), sections has that
+    exact source label, and normalize_for_match(text) is a substring of
+    normalize_for_match(sections[source]). Missing source, unknown label,
+    empty section, no substance, or a hit only in a different section:
+    False. CI claim_exemptions and the on-disk rerun backstop share this
+    predicate so they cannot drift.
+    """
+    if not isinstance(text, str) or not isinstance(source, str):
+        return False
+    if not text or not source.strip():
+        return False
+    if not claim_text_has_substance(text):
+        return False
+    section = sections.get(source)
+    if not section:
+        return False
+    normalized = normalize_for_match(text)
+    if not normalized:
+        return False
+    return normalized in normalize_for_match(section)
+
+
+def _load_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _display_path(url: str) -> str:
+    return urlsplit(url).path or "/"
+
+
+def _site_source_label(url: str) -> str:
+    return f"site {_display_path(url)}"
+
+
+def _site_record_url(payload: dict[str, Any], body: dict[str, Any]) -> str | None:
+    """Requested URL for a site_text record. Never final_url."""
+    url = body.get("url")
+    if isinstance(url, str):
+        return url
+    top = payload.get("url")
+    if isinstance(top, str):
+        return top
+    return None
+
+
+def evidence_sections(evidence_dir: Path) -> dict[str, str]:
+    """Label-to-text map from sibling evidence files.
+
+    Deck pages become deck p.{key}. Site records become site {path} from
+    the requested URL (body.url if a string, else the record url; never
+    final_url) via urlsplit(url).path or "/". Duplicate labels concatenate.
+    Unreadable files contribute nothing. Missing or empty evidence yields
+    an empty map: no claim-quote exemptions. This is the one deck/site
+    mapping; CI and the on-disk rerun path both call it.
+    """
+    if not evidence_dir.is_dir():
+        return {}
+    chunks: dict[str, list[str]] = {}
+    for candidate in sorted(evidence_dir.glob("*.json")):
+        payload = _load_json(candidate)
+        if not isinstance(payload, dict):
+            continue
+        body = payload.get("body")
+        if not isinstance(body, dict):
+            continue
+        kind = body.get("kind")
+        if kind == "deck_text":
+            pages = body.get("pages")
+            if isinstance(pages, dict):
+                for key, text in pages.items():
+                    if isinstance(key, str) and isinstance(text, str):
+                        chunks.setdefault(f"deck p.{key}", []).append(text)
+        elif kind == "site_text" and isinstance(body.get("text"), str):
+            url = _site_record_url(payload, body)
+            if url is None:
+                continue
+            chunks.setdefault(_site_source_label(url), []).append(body["text"])
+    return {label: "\n".join(texts) for label, texts in chunks.items()}
 
 
 def collapse_whitespace(text: str) -> str:

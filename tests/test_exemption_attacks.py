@@ -17,7 +17,7 @@ the case directory.
 
 from __future__ import annotations
 
-import importlib.util
+import json
 import shutil
 from pathlib import Path
 from types import ModuleType
@@ -39,8 +39,8 @@ from .fakes import assessment_json, claim_json, claims_json, synthesis_json
 DECK_PATH = FIXTURES_DIR / "deck_fabricated_widgets.pdf"
 GOLDEN_DIR = FIXTURES_DIR / "golden"
 OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
-SCRIPT_PATH = Path(__file__).parent.parent / "scripts" / "check_language.py"
 PUFFERY_QUOTE = "Our platform eliminates fraud in widget procurement"
+PLANTED_TWO_TOKEN = "a fraud"
 
 runner = CliRunner()
 
@@ -85,11 +85,9 @@ CLEAN_SYNTHESIS = synthesis_json(
 
 
 def load_check_language() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("check_language", SCRIPT_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    from coldscreen import check_language
+
+    return check_language
 
 
 @pytest.fixture
@@ -371,3 +369,90 @@ def test_hand_tamper_short_claim_fails_render_only_backstop_when_prose_is_clean(
     assert "fraud" not in combined.lower()
     written = CaseFile.model_validate_json((case_dir / "casefile.json").read_text(encoding="utf-8"))
     assert language_backstop_failure(render_memo(written), written) is not None
+
+
+def _plant_claim(case_dir: Path, text: str, source: str) -> CaseFile:
+    casefile = CaseFile.model_validate_json(
+        (case_dir / "casefile.json").read_text(encoding="utf-8")
+    )
+    claims = list(casefile.claims)
+    claims[0] = claims[0].model_copy(update={"text": text, "source": source})
+    planted = casefile.model_copy(update={"claims": claims})
+    _write_casefile(case_dir, planted)
+    return planted
+
+
+def test_hand_tamper_two_token_claim_not_in_evidence_fails_render_only(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    """A hand-edited two-token claim that sibling evidence does not carry
+    is not an in-process exemption on rerun."""
+    case_dir = tmp_path / "hand-tampered-two-token"
+    shutil.copytree(GOLDEN_DIR, case_dir)
+    before_casefile = (case_dir / "casefile.json").read_bytes()
+    _plant_claim(case_dir, PLANTED_TWO_TOKEN, "deck p.2")
+    after_plant = (case_dir / "casefile.json").read_bytes()
+    assert after_plant != before_casefile
+    (case_dir / "memo.md").unlink()
+    result = runner.invoke(app, ["rerun", str(case_dir), "--render-only"])
+    combined = all_output(result)
+    assert result.exit_code == 1
+    assert "language backstop" in combined
+    assert not (case_dir / "memo.md").exists()
+    assert "fraud" not in combined.lower()
+    assert (case_dir / "casefile.json").read_bytes() == after_plant
+
+
+def test_hand_tamper_honest_puffery_still_passes_render_only(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    """The same plant of a real golden quotation still passes render-only."""
+    case_dir = tmp_path / "hand-tampered-honest-quote"
+    shutil.copytree(GOLDEN_DIR, case_dir)
+    _plant_claim(case_dir, PUFFERY_QUOTE, "deck p.2")
+    result = runner.invoke(app, ["rerun", str(case_dir), "--render-only"])
+    combined = all_output(result)
+    assert result.exit_code == 0, combined
+    assert "language backstop" not in combined
+    assert (case_dir / "memo.md").is_file()
+    assert PUFFERY_QUOTE in (case_dir / "memo.md").read_text(encoding="utf-8")
+
+
+def test_missing_evidence_on_rerun_drops_claim_quote_exemptions(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    """Missing evidence/ on a claims-bearing rerun: no claim-quote
+    exemption, so a banned word in the table fails closed."""
+    case_dir = tmp_path / "missing-evidence-rerun"
+    shutil.copytree(GOLDEN_DIR, case_dir)
+    shutil.rmtree(case_dir / "evidence")
+    (case_dir / "memo.md").unlink()
+    result = runner.invoke(app, ["rerun", str(case_dir), "--render-only"])
+    combined = all_output(result)
+    assert result.exit_code == 1
+    assert "language backstop" in combined
+    assert not (case_dir / "memo.md").exists()
+    assert "fraud" not in combined.lower()
+
+
+def test_label_aware_wrong_deck_page_fails_render_only(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    """A deck p.2 claim whose text lives only on page 1 is not an
+    in-process exemption on rerun."""
+    case_dir = tmp_path / "wrong-page-rerun"
+    shutil.copytree(GOLDEN_DIR, case_dir)
+    deck_path = case_dir / "evidence" / "deck_text.json"
+    payload = json.loads(deck_path.read_text(encoding="utf-8"))
+    pages = payload["body"]["pages"]
+    assert PLANTED_TWO_TOKEN not in pages.get("2", "")
+    pages["1"] = f"{pages['1']}\n{PLANTED_TWO_TOKEN}"
+    deck_path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    _plant_claim(case_dir, PLANTED_TWO_TOKEN, "deck p.2")
+    (case_dir / "memo.md").unlink()
+    result = runner.invoke(app, ["rerun", str(case_dir), "--render-only"])
+    combined = all_output(result)
+    assert result.exit_code == 1
+    assert "language backstop" in combined
+    assert not (case_dir / "memo.md").exists()
+    assert "fraud" not in combined.lower()

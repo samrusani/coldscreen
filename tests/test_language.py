@@ -2,10 +2,10 @@
 
 Quoted data is the one exemption on memos: the casefile's stored claim
 texts are the company's own words and pass the memo gate span-exactly;
-everything around them stays gated. scripts/check_language.py builds those
+everything around them stays gated. coldscreen.check_language builds those
 exemptions from the sibling casefile.json of each memo it scans, after
 re-verifying each claim against its declared source label in sibling
-evidence.
+evidence. scripts/check_language.py is a thin wrapper.
 
 The same script also parses casefile.json and scans the tool-authored
 fields. Identity exemptions apply there after the same evidence
@@ -26,8 +26,10 @@ import pytest
 from coldscreen.casedir import load_casefile
 from coldscreen.language import (
     REGISTERED_OFFICE_ADDRESS_KEYS,
+    claim_quote_is_verified,
     claim_text_has_substance,
     code_fetched_exemption_texts,
+    evidence_sections,
     find_banned_terms,
     find_banned_terms_in_memo,
     normalize_for_match,
@@ -54,11 +56,9 @@ CLAIMS_TABLE_HEADER = "| # | Claim (source) | Public record | Status |"
 
 
 def load_script() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("check_language", SCRIPT_PATH)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    from coldscreen import check_language
+
+    return check_language
 
 
 def test_freshly_rendered_fixture_memo_is_clean() -> None:
@@ -189,6 +189,35 @@ def test_claim_text_has_substance_requires_two_tokens() -> None:
     assert claim_text_has_substance("we fight fraud") is True
     assert claim_text_has_substance("") is False
     assert claim_text_has_substance("   \n\t  ") is False
+
+
+def test_claim_quote_is_verified_is_label_and_substance_aware() -> None:
+    sections = {
+        "deck p.1": "Slide one mentions a fraud on this page only.",
+        "deck p.2": "Slide two has no banned two-token phrase.",
+    }
+    assert claim_quote_is_verified("a fraud", "deck p.1", sections) is True
+    assert claim_quote_is_verified("a fraud", "deck p.2", sections) is False
+    assert claim_quote_is_verified("a fraud", "deck p.99", sections) is False
+    assert claim_quote_is_verified("fraud", "deck p.1", sections) is False
+    assert claim_quote_is_verified("", "deck p.1", sections) is False
+    assert claim_quote_is_verified("a fraud", "", sections) is False
+    assert claim_quote_is_verified("a fraud", "deck p.1", {}) is False
+
+
+def test_language_backstop_without_evidence_dir_uses_substance_only() -> None:
+    """Screen / in-memory polarity: no evidence dir means substance filter
+    only. A two-token planted claim is still an exemption span until
+    rerun passes a path."""
+    casefile = load_casefile(GOLDEN_DIR)
+    claims = list(casefile.claims)
+    claims[0] = claims[0].model_copy(update={"text": "a fraud", "source": "deck p.2"})
+    planted = casefile.model_copy(update={"claims": claims})
+    memo = render_memo(planted)
+    assert "a fraud" in memo
+    assert language_backstop_failure(memo, planted) is None
+    assert language_backstop_failure(memo, planted, GOLDEN_DIR / "evidence") is not None
+    assert evidence_sections(GOLDEN_DIR / "evidence")["deck p.2"]
 
 
 def test_blank_exempt_texts_exempt_nothing() -> None:
@@ -1496,3 +1525,17 @@ def test_every_memo_interpolation_is_classified() -> None:
     assert residuals == {'f.description or ""'}
     kinds = set(_MEMO_INTERPOLATION_CLASS.values())
     assert kinds <= {"covered", "url", "safe", "prose", "residual"}
+
+
+def test_check_language_main_is_importable() -> None:
+    from coldscreen.check_language import main
+
+    assert callable(main)
+
+
+def test_wrapper_script_exits_0_on_fixture_memo() -> None:
+    spec = importlib.util.spec_from_file_location("check_language_wrapper", SCRIPT_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.main([str(FIXTURE_CASE_DIR / "memo.md")]) == 0
