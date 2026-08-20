@@ -18,7 +18,9 @@ existing "no target files found" message. Explicit paths work from a
 wheel. An explicit argv path named casefile.json is scanned as a
 casefile. An explicit memo.md is still scanned as memo text.
 
-Memos and templates are scanned line by line. A casefile.json is parsed as
+Memos and templates are scanned with find_banned_terms_in_memo. Each of
+the three pieces (before the claims-table region, inside it, and after
+it) is matched as a string, not line by line. A casefile.json is parsed as
 JSON and only these tool-authored string fields are scanned, when present
 and a string:
 
@@ -46,9 +48,8 @@ is not a hit. Extra unknown keys are ignored.
 Quoted-data exemption (memos only): a memo's claims table quotes the
 company's own deck and site words verbatim, and those may legitimately
 contain banned vocabulary. When a memo.md has a sibling casefile.json, its
-stored claim texts are candidates for span-level exemption on this
-line-by-line memo scan. The in-process backstop scopes those same
-claim texts to the claims-table region; this scan does not. But
+stored claim texts are candidates for span-level exemption inside the
+claims-table region, the same bounds the in-process backstop uses. But
 casefile.json is an editable file, so a claim text is honored ONLY
 after claim_quote_is_verified against the sibling evidence-section map
 (evidence_sections): the same helper and the same deck/site mapping the
@@ -56,9 +57,10 @@ on-disk rerun backstop uses. A text that has fewer than two tokens
 after normalize_for_match is never an exemption, even when evidence
 would re-verify it. Missing source, unknown label, or a hit only in a
 different section: no exemption. No evidence, no exemption: a
-hand-tampered casefile cannot widen this scan. The CI memo scan is
-still line-by-line across the whole file. Prose outside the exact
-verified quoted strings stays fully gated.
+hand-tampered casefile cannot widen this scan. A missing heading, a
+heading without a template opener, or a missing closer leaves the
+region empty, so claim-quote exemptions apply nowhere. Prose outside the
+exact verified quoted strings stays fully gated.
 
 That claim-quote exemption does not apply to the casefile fields above.
 A record_note or narrative that repeats a verified claim's banned wording
@@ -93,8 +95,9 @@ map. Disqualification detail is not re-verified here (residual: the
 rendered string is reconstructed from dates, not copied from the body).
 No evidence, no exemption. The casefile-field scan uses this same
 widened re-verified set and still applies no claim-quote exemption.
-Media query-category search terms are not exempted. The memo scan stays
-line-by-line across the whole file.
+Media query-category search terms are not exempted. The memo scan
+applies the re-verified code-fetched set to the whole memo; claim-quote
+exemptions stay inside the claims-table region.
 
 Unreadable or invalid JSON on a casefile that is itself a scan target
 fails closed: an error is printed to stderr and the process exits 1. A
@@ -122,6 +125,7 @@ from .language import (
     claim_quote_is_verified,
     evidence_sections,
     find_banned_terms,
+    find_banned_terms_in_memo,
     normalize_for_match,
 )
 
@@ -596,15 +600,21 @@ def scan_casefile(path: Path) -> list[tuple[str, str]] | None:
     return hits
 
 
-def scan_file(path: Path) -> list[tuple[int, str]]:
-    """Return (line number, matched term) pairs for one file."""
-    hits: list[tuple[int, str]] = []
-    exempt_texts = claim_exemptions(path) + code_fetched_exemptions(path)
+def scan_file(path: Path) -> list[str]:
+    """Return matched banned terms for one memo or template.
+
+    Uses find_banned_terms_in_memo so claim-quote exemptions are
+    region-scoped and matching is not line-by-line. Claim texts still
+    come from claim_exemptions (re-verified, substance-filtered).
+    Code-fetched strings still come from code_fetched_exemptions
+    (re-verified) and apply to the whole memo.
+    """
     text = path.read_text(encoding="utf-8", errors="replace")
-    for line_number, line in enumerate(text.splitlines(), start=1):
-        for term in find_banned_terms(line, exempt_texts):
-            hits.append((line_number, term))
-    return hits
+    return find_banned_terms_in_memo(
+        text,
+        claim_texts=claim_exemptions(path),
+        identity_names=code_fetched_exemptions(path),
+    )
 
 
 def main(argv: list[str]) -> int:
@@ -642,8 +652,8 @@ def main(argv: list[str]) -> int:
                 print(f"{target}:{field_path}: banned term {term!r}", file=sys.stderr)
                 failed = True
             continue
-        for line_number, term in scan_file(target):
-            print(f"{target}:{line_number}: banned term {term!r}", file=sys.stderr)
+        for term in scan_file(target):
+            print(f"{target}: banned term {term!r}", file=sys.stderr)
             failed = True
     if failed:
         return 1

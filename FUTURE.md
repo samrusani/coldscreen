@@ -23,7 +23,6 @@ Deferred from the pre-launch hardening review:
 Deferred language-control leftovers after the 2026-08-20 heading and rendered-string sprint (AUD-001 / AUD-002). Do not start these from this note; they need their own work orders:
 
 - AUD-004: track `uv.lock`.
-- AUD-005: scope the CI memo scan's claim-quote exemptions to the rendered claims-table region. The in-process backstop already does this; `scan_file` is still line-by-line.
 
 Ideas deferred from the weekend 3 build and review:
 
