@@ -31,6 +31,5 @@ Ideas deferred from the weekend 3 build and review:
 
 Tooling ideas deferred from the weekend 1 build:
 
-- A per-run fetch log file in the case directory, beyond the evidence index timestamps.
 - Live Companies House charges page-size maxima, whether the live charges list honors query fields the official spec still omits, and live 429 response headers. The client now walks charges pages and honors Retry-After in tests; those live facts stay UNVERIFIED. Do not trip the production 429 window to find out.
 - Document a Companies House sandbox recipe (reachable today via the base URL setting) once a test key exists.

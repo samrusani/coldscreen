@@ -36,6 +36,7 @@ from .casedir import (
     UnsafeCasePath,
     case_dir_name,
     load_casefile,
+    refuse_owned_case_files,
     refuse_symlink,
     validate_company_number,
     write_case,
@@ -651,6 +652,9 @@ def run_screen(
     if not no_write:
         evidence_dir = case_dir / "evidence"
         try:
+            # Refuse the whole owned group before clearing evidence/, so a
+            # link at fetch_log.json cannot leave a half-updated case.
+            refuse_owned_case_files(case_dir)
             if overwrite and evidence_dir.is_dir():
                 # Replacing a case: stale evidence files from the previous run
                 # must not linger next to the new index. Only the tool-owned

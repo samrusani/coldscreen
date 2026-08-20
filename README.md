@@ -45,7 +45,7 @@ With a deck and a website:
 coldscreen screen 01234567 --deck pitch.pdf --site https://example.com
 ```
 
-Output lands in `cases/acme-holdings-01234567/`: the memo, plus every piece of raw evidence as JSON with source URLs and retrieval timestamps.
+Output lands in `cases/acme-holdings-01234567/`: the memo, a `fetch_log.json` of URLs, sanitized params, timestamps, and cache flags (no bodies, no keys), plus every piece of raw evidence as JSON with source URLs and retrieval timestamps.
 
 Registry pages are cached locally for up to seven days. To refetch and update that cache:
 

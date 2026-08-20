@@ -50,7 +50,7 @@ The differentiation is the methodology (rubric, claims-vs-evidence discipline, m
  [7] synthesis ............. claims vs evidence, rubric, verdict, questions
    |
    v
- [8] render ................ memo.md + evidence bundle in case directory
+ [8] render ................ memo.md + fetch_log.json + evidence bundle in case directory
 ```
 
 Stages 1 to 5 are deterministic (HTTP + parsing). Stage 6 uses the model for extraction over provided text. Stage 7 is the only reasoning stage. Stage 8 is templating.
@@ -77,6 +77,7 @@ Stages 1 to 5 are deterministic (HTTP + parsing). Stage 6 uses the model for ext
 cases/acme-holdings-01234567/
   memo.md
   casefile.json
+  fetch_log.json
   evidence/
     registry_profile.json
     officers.json
@@ -189,7 +190,7 @@ Every write into a case directory refuses to follow a symbolic link at the name 
 
 - SQLite HTTP cache keyed by URL + params, default TTL 7 days. Reruns are near-free.
 - Respect Companies House rate limits (verify the current limits in their docs; do not hardcode a guessed number).
-- Every fetch is logged with a timestamp. The case directory doubles as an audit pack: memo plus raw evidence plus tool version.
+- Every fetch is logged with a timestamp in `fetch_log.json` at the case directory root: name, url, sanitized params, status, retrieved_at, and from_cache. The evidence index remains a file manifest. The case directory doubles as an audit pack: memo plus raw evidence plus the fetch log plus tool version.
 
 ## 11. Testing
 
@@ -260,5 +261,5 @@ Properties that are structural rather than incidental:
 - **stdout discipline.** Human status and logs go to stderr on this path; the transport owns stdout.
 - **No key surface.** Neither tool schema has a field that could carry key material. Keys are read from the server process environment, and a missing one is a recoverable error naming the variable.
 - **No silent disambiguation.** Where the CLI can prompt a person, the MCP path cannot, so an ambiguous name returns `status: "ambiguous"` with the candidate list and writes nothing. The caller re-calls with `company_number`.
-- **Confined writes.** `rerun_case` resolves `case_dir` and refuses anything outside the configured output directory, because on this path the path comes from a host rather than a person's shell. Confining the directory is not sufficient by itself: the tool-owned names inside it are written through `casedir.write_case_text`, which opens with `O_NOFOLLOW` so a symbolic link at `memo.md`, `casefile.json`, or an evidence file is refused rather than followed out of the directory. The case directory and `evidence/` are refused if they are links. This applies to every path that writes a case, CLI included.
+- **Confined writes.** `rerun_case` resolves `case_dir` and refuses anything outside the configured output directory, because on this path the path comes from a host rather than a person's shell. Confining the directory is not sufficient by itself: the tool-owned names inside it are written through `casedir.write_case_text`, which opens with `O_NOFOLLOW` so a symbolic link at `memo.md`, `casefile.json`, `fetch_log.json`, or an evidence file is refused rather than followed out of the directory. The case directory and `evidence/` are refused if they are links. This applies to every path that writes a case, CLI included.
 - **Tests stay offline.** The server is exercised through the SDK's in-memory client under `pytest-socket --disable-socket`, so the MCP surface is covered without a socket.

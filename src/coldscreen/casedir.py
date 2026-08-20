@@ -1,16 +1,16 @@
 """Case directory writer.
 
-The case directory is the audit pack: memo.md, casefile.json, and every raw
-API response under evidence/ with an index.json manifest. Params are
-sanitized before persistence as a belt and braces measure; the API key
-travels only in the Authorization header and never reaches params, but any
-key that looks credential-shaped is stripped anyway.
+The case directory is the audit pack: memo.md, casefile.json, fetch_log.json,
+and every raw API response under evidence/ with an index.json manifest.
+Params are sanitized before persistence as a belt and braces measure; the
+API key travels only in the Authorization header and never reaches params,
+but any key that looks credential-shaped is stripped anyway.
 
 Every write goes through `write_case_text`, which refuses to follow a
 symbolic link at the name it is writing. Confining the case directory is not
 enough on its own: the tool-owned names inside it (memo.md, casefile.json,
-evidence/*.json) can each be replaced by a link pointing anywhere the
-process can write, and an ordinary write follows it.
+fetch_log.json, evidence/*.json) can each be replaced by a link pointing
+anywhere the process can write, and an ordinary write follows it.
 """
 
 from __future__ import annotations
@@ -65,6 +65,31 @@ def refuse_symlink(path: Path, kind: str) -> None:
         raise _symlink_refusal(path, kind)
 
 
+# Names write_case replaces on every screen. Checked as a group so a link at
+# one of them cannot leave the others half-updated.
+_OWNED_CASE_FILES = (
+    ("casefile.json", "casefile"),
+    ("memo.md", "memo file"),
+    ("fetch_log.json", "fetch log"),
+)
+
+
+def refuse_owned_case_files(case_dir: Path, *, rewrite_index: bool = True) -> None:
+    """Refuse the tool-owned names a case write will replace.
+
+    Call this before any write (and before clearing evidence/ on overwrite)
+    so a link at fetch_log.json or another owned name cannot leave a
+    half-updated case.
+    """
+    refuse_symlink(case_dir, "case directory")
+    evidence_dir = case_dir / "evidence"
+    refuse_symlink(evidence_dir, "evidence directory")
+    for filename, kind in _OWNED_CASE_FILES:
+        refuse_symlink(case_dir / filename, kind)
+    if rewrite_index:
+        refuse_symlink(evidence_dir / "index.json", "evidence index")
+
+
 def write_case_text(path: Path, text: str) -> None:
     """Write one tool-owned file, refusing a symbolic link at the final name.
 
@@ -109,20 +134,33 @@ def sanitize_params(params: dict[str, str]) -> dict[str, str]:
     return {k: v for k, v in params.items() if not _CREDENTIAL_PARAM_RE.search(k)}
 
 
+def fetch_log_row(named: NamedRecord) -> dict[str, Any]:
+    """One fetch-log object for a named record. No body, no keys."""
+    record = named.record
+    return {
+        "name": named.name,
+        "url": record.url,
+        "params": sanitize_params(record.params),
+        "status": record.status,
+        "retrieved_at": record.retrieved_at.isoformat(),
+        "from_cache": record.from_cache,
+    }
+
+
 def write_case(
     case_dir: Path,
     casefile: CaseFile,
     records: list[NamedRecord],
     memo: str,
 ) -> Path:
-    """Write memo.md, casefile.json, and evidence/ under case_dir.
+    """Write memo.md, casefile.json, fetch_log.json, and evidence/ under case_dir.
 
-    Refuses any tool-owned name that is a symbolic link, directory or file.
-    Callers confine `case_dir` itself; this keeps the writes inside it.
+    Refuses any tool-owned name that is a symbolic link, directory or file,
+    as a group, before the first write. Callers confine `case_dir` itself;
+    this keeps the writes inside it.
     """
-    refuse_symlink(case_dir, "case directory")
+    refuse_owned_case_files(case_dir)
     evidence_dir = case_dir / "evidence"
-    refuse_symlink(evidence_dir, "evidence directory")
     evidence_dir.mkdir(parents=True, exist_ok=True)
 
     index: list[dict[str, Any]] = []
@@ -152,6 +190,10 @@ def write_case(
         )
 
     write_case_text(evidence_dir / "index.json", json.dumps(index, indent=2) + "\n")
+    write_case_text(
+        case_dir / "fetch_log.json",
+        json.dumps([fetch_log_row(named) for named in records], indent=2) + "\n",
+    )
     write_case_text(case_dir / "casefile.json", casefile.model_dump_json(indent=2) + "\n")
     write_case_text(case_dir / "memo.md", memo)
     return case_dir
