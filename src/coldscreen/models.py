@@ -29,6 +29,19 @@ OGL_ATTRIBUTION = (
     "Open Government Licence v3.0. Source: Companies House."
 )
 
+# Keys the memo office line is built from. language.py and
+# scripts/check_language.py copy this list; pin tests keep the copies honest.
+REGISTERED_OFFICE_ADDRESS_KEYS: tuple[str, ...] = (
+    "care_of",
+    "premises",
+    "address_line_1",
+    "address_line_2",
+    "locality",
+    "region",
+    "postal_code",
+    "country",
+)
+
 
 class Evidence(BaseModel):
     """A pointer to a persisted public source: where it came from and when."""
@@ -171,19 +184,7 @@ class CompanyProfile(_RegistryModel):
 
     @property
     def registered_office_display(self) -> str:
-        parts = [
-            self.registered_office_address.get(key)
-            for key in (
-                "care_of",
-                "premises",
-                "address_line_1",
-                "address_line_2",
-                "locality",
-                "region",
-                "postal_code",
-                "country",
-            )
-        ]
+        parts = [self.registered_office_address.get(key) for key in REGISTERED_OFFICE_ADDRESS_KEYS]
         return ", ".join(str(p) for p in parts if p)
 
 

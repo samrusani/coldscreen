@@ -239,6 +239,21 @@ No evidence-schema change: labels are reconstructed, not stored on new writes. F
 
 No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Committed fixture casefiles and snapshot memos were not edited.
 
+### 2026-08-20: heading injection and code-fetched rendered strings
+`_claims_table_region` used to start on the first exact `## Claims vs evidence` line. Verdict rationale is model text and was interpolated with newlines intact above that heading. A rationale whose middle line was the heading became the region start; the real table then got identity-only exemptions and the golden puffery quote failed the backstop.
+
+Fix: collapse pre-table fields (`verdict.rationale`, `verdict_enforcement`, each `synthesis.enforcement_notes` entry) with `" ".join(text.split())` at synthesis store and at render. Do not return character bounds from `render_memo`. Additionally, accept a start heading only when the next non-blank line is a template-controlled opener (the stock intro sentence, the table header, a `Not performed:` prefix, or one of the two empty-claims sentences). A heading without an opener is skipped. Missing start or missing closer still yields None.
+
+The exemption set was names only. The template also prints office display, network company names, media `source_domain`, and claim source labels. Those strings now join `code_fetched_exemption_texts` (identity names remain the name subset). The backstop and the synthesis per-field gate use that widened set. Claim texts stay region-scoped on the backstop and zero on the per-field gate. `QUERY_CATEGORIES` search terms are not exempted. Filing descriptions are residual, not exempted. Disqualification detail is in the in-process set; CI does not re-verify it this sprint because the rendered string is reconstructed from dates, not copied from the evidence body.
+
+CI re-verifies each new class against sibling evidence: office from profile `registered_office_address` (display reconstructed with the copied join), network names from appointment `appointed_to` plus profile `company_name`, media domains from `kind == "search_results"` (`source_domain` or derived from url), claim source labels only when they are a key in `_evidence_sections`. No evidence, no exemption. The casefile-field scan uses the same re-verified set. `scan_file` stays line-by-line.
+
+`tests/test_cli.py` `test_language_backstop_blocks_a_poisoned_memo_on_screen` planted `1 Scam Passage` and expected abort. That encoded the hole. It is inverted and renamed: a registry-fetched office with a banned word must screen, write the memo, pass the backstop, and pass `check_language`. A separate test keeps model prose `scam` failing the per-field gate.
+
+AUD-003 (re-verify stored claims on rerun), AUD-004 (`uv.lock`), AUD-005 (CI memo region-scope), and AUD-006 (ship `check_language.py` with the wheel) were not started.
+
+No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Committed fixture casefiles and snapshot memos were not edited.
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.
