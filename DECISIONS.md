@@ -37,7 +37,7 @@ Decisions made during the fix pass, with reasons:
 - Non-200 responses on linked or list resources are persisted as evidence files with their status codes, so the audit pack shows, for example, the insolvency 404 itself. Terminal errors that abort a screen write no case directory, so they have no audit pack to appear in.
 - The test clock seam (FIRSTPASS_SCREENED_AT) is now visible: the casefile carries a clock_override flag and the memo footer states when timestamps were injected. An audit pack cannot be silently backdated with one environment variable.
 - The fixture company number moved from 09999999 to 99999999 because the former falls in an allocated Companies House range and could be pasted against the live API.
-- uv.lock is not tracked. This is a distributable package, CI installs from pyproject, and the lockfile would only add churn.
+- uv.lock is not tracked. This is a distributable package, CI installs from pyproject, and the lockfile would only add churn. Superseded 2026-08-20: the lock is tracked so CI checks are reproducible; package and audit stay unlocked.
 
 ### 2026-08-18: weekend 2 pre-build verification (FtM properties, disqualification schemas)
 FollowTheMoney property names for OpenSanctions match queries verified from the canonical schema YAML: Person queries use name/firstName/lastName/birthDate/nationality (partial birth dates like "1951" officially accepted); Company queries use name/jurisdiction/registrationNumber/incorporationDate. Properties not belonging to the queried schema are silently dropped, so people are queried as Person and the subject as Company, never as a generic LegalEntity. Companies House disqualified-officers schemas verified: search items carry the name as one unstructured title string and a scalar date_of_birth (unlike the officers list's month/year object); the natural detail resource has structured forename/surname and disqualifications with disqualified_from/disqualified_until. Design consequence: a disqualification only becomes a red R3 candidate when the name matches strongly (normalized name plus DOB month and year) AND the disqualification is currently active (disqualified_until on or after the screening date); expired or name-only matches are informational. Sources: followthemoney.tech, github.com/opensanctions/followthemoney schema YAML, opensanctions.org/docs, developer-specs.company-information.service.gov.uk, retrieved 2026-08-18.
@@ -273,6 +273,15 @@ No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. C
 `scan_file` (memo.md and templates, not casefile.json) now calls `find_banned_terms_in_memo` with `claim_exemptions` and `code_fetched_exemptions`. There is not a second region splitter. Each piece is scanned as a string, so a line-split `con artist` is a hit. Casefile field scanning is unchanged: tool-authored fields, code-fetched only, no claim-quote. AUD-004 (`uv.lock`) was not started.
 
 No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Committed fixture casefiles and snapshot memos were not edited.
+
+### 2026-08-20: uv.lock is tracked; CI checks install locked
+The 2026-08-18 "uv.lock is not tracked" bullet is superseded. CI checks used to `uv pip install -e ".[dev]"`, which resolves afresh every run, so two checkouts of the same commit could get different transitive versions. `uv.lock` is now tracked. The checks job runs `uv lock --check` then `uv sync --locked --extra dev --python` the matrix version. `--extra dev` is the optional-dependency extra in `[project.optional-dependencies]`; do not write `--dev`, which is uv's default dependency group and this project does not have one. No `[dependency-groups]` were added.
+
+The lock was generated with uv 0.11.6, universal resolution, `requires-python = ">=3.11"`. All three CI jobs pin `astral-sh/setup-uv` `version:` to 0.11.6. The action SHA comments are unchanged. No cache flags.
+
+`package` and `audit` stay unlocked by design: they still build the wheel and `uv pip install` it into a clean venv. That proves what a user resolves from the wheel, not the maintainer lock. Users still `pip install .`.
+
+No live Companies House, OpenSanctions, Tavily, Bolagsverket, data.sec.gov, or any model calls in this sprint. The only network use was `uv lock` / PyPI.
 
 ## Section 16 verification log
 
