@@ -228,6 +228,17 @@ The same helper filters exemptions on the in-process backstop and on CI `claim_e
 
 No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Committed fixture casefiles and snapshot memos were not edited.
 
+### 2026-08-20: CI claim re-verification is per declared source label
+`scripts/check_language.py` used to join every deck page and every `site_text` body into one corpus. A hand-edited claim sourced as `deck p.2` was honored if the text appeared on page 1 or on the site. That flattened-corpus hole is closed.
+
+The helper now builds a label-to-text map. Deck `body.pages` keys become `deck p.{key}` (`pages["2"]` is `deck p.2`; no zero-padding). Site records become `site {path}` where `path` is `urlsplit(url).path or "/"`, using `body.url` if it is a string else the record url, never `final_url`. That is the same `_display_path` rule the claims stage used on the requested URL. The script copies the two-line helper and does not import `coldscreen.site`. If two records map to the same label, their texts concatenate.
+
+A claim is honored only when `source` is a non-empty string, the map has that exact label, the text has substance, and the normalized text is a substring of that section. Missing source, blank source, unknown label, empty section, or a hit only in a different section: no exemption. The substance filter stays.
+
+No evidence-schema change: labels are reconstructed, not stored on new writes. Fixtures stayed byte-identical. Quotation verification in `claims.py`, the in-process backstop, `find_banned_terms`, and `scan_file`'s line-by-line whole-memo behavior were not changed. The leftover is scoping the CI memo scan to the claims-table region.
+
+No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Committed fixture casefiles and snapshot memos were not edited.
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.

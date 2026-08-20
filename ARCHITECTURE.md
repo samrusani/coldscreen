@@ -221,7 +221,7 @@ Recommendation: **MIT** for the code. Maximum reach, minimum friction, and the s
 - FCRA: prohibit use for employment, credit, or tenancy decisions in the docs.
 - GDPR: officer and PSC data is personal data from public registers. Legitimate interest is the usual basis for this kind of processing; ship a short `PRIVACY.md`, and any hosted deployment must handle erasure requests.
 - Companies House data reuse terms: verify the current terms before launch.
-- Defamation posture: memos state record and confidence. Language rules in the synthesis prompt forbid accusatory phrasing; this is a technical control, not just a docs note. Stored claims must be more than one word. The in-process whole-memo backstop scopes claim-quote exemptions to the rendered claims table. CI also scans the tool-authored statement fields on casefile.json.
+- Defamation posture: memos state record and confidence. Language rules in the synthesis prompt forbid accusatory phrasing; this is a technical control, not just a docs note. Stored claims must be more than one word. The in-process whole-memo backstop scopes claim-quote exemptions to the rendered claims table. CI re-verifies a claim against its declared source evidence, not the joined pack, and also scans the tool-authored statement fields on casefile.json.
 - No scraping behind authentication, ever.
 
 ## 16. Verify before build

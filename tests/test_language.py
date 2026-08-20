@@ -4,7 +4,8 @@ Quoted data is the one exemption on memos: the casefile's stored claim
 texts are the company's own words and pass the memo gate span-exactly;
 everything around them stays gated. scripts/check_language.py builds those
 exemptions from the sibling casefile.json of each memo it scans, after
-re-verifying against sibling evidence.
+re-verifying each claim against its declared source label in sibling
+evidence.
 
 The same script also parses casefile.json and scans the tool-authored
 fields. Identity exemptions apply there after the same evidence
@@ -30,6 +31,7 @@ from coldscreen.language import (
 )
 from coldscreen.models import MediaItem, MediaScreening
 from coldscreen.render import render_memo
+from coldscreen.site import SitePage, _display_path
 
 from .conftest import FIXTURES_DIR
 
@@ -241,10 +243,11 @@ def test_check_language_honors_only_evidence_verified_claim_exemptions(tmp_path:
     # Casefile alone is NOT enough: it is an editable file, so with no
     # evidence to verify against, the scan stays strict.
     (case_dir / "casefile.json").write_text(
-        json.dumps({"claims": [{"id": "CLM-001", "text": QUOTED}]}), encoding="utf-8"
+        json.dumps({"claims": [{"id": "CLM-001", "text": QUOTED, "source": "deck p.2"}]}),
+        encoding="utf-8",
     )
     assert module.main([str(memo)]) == 1
-    # With the evidence carrying the text, the quotation verifies: clean.
+    # With the evidence carrying the text on the declared page, clean.
     _write_evidence(case_dir, {"2": f"Slide two. {QUOTED}. More slide two."})
     assert module.main([str(memo)]) == 0
     # The exemption never covers prose outside the quotation.
@@ -264,7 +267,7 @@ def test_claim_exemptions_ignore_thin_texts_even_when_verified(tmp_path: Path) -
     memo = case_dir / "memo.md"
     memo.write_text('| 1 | "fraud" (deck p.2) |  | not checkable |\n', encoding="utf-8")
     (case_dir / "casefile.json").write_text(
-        json.dumps({"claims": [{"id": "CLM-001", "text": "fraud"}]}),
+        json.dumps({"claims": [{"id": "CLM-001", "text": "fraud", "source": "deck p.2"}]}),
         encoding="utf-8",
     )
     _write_evidence(case_dir, {"2": "Slide two mentions fraud in the deck copy."})
@@ -284,8 +287,8 @@ def test_check_language_ignores_a_tampered_claim_not_in_evidence(tmp_path: Path)
         json.dumps(
             {
                 "claims": [
-                    {"id": "CLM-001", "text": "a total scam operation"},
-                    {"id": "CLM-002", "text": QUOTED},
+                    {"id": "CLM-001", "text": "a total scam operation", "source": "deck p.1"},
+                    {"id": "CLM-002", "text": QUOTED, "source": "deck p.2"},
                 ]
             }
         ),
@@ -303,7 +306,8 @@ def test_check_language_site_text_records_also_verify(tmp_path: Path) -> None:
     memo = case_dir / "memo.md"
     memo.write_text(f'| 1 | "{QUOTED}" (site /about) |  | not checkable |\n', encoding="utf-8")
     (case_dir / "casefile.json").write_text(
-        json.dumps({"claims": [{"id": "CLM-001", "text": QUOTED}]}), encoding="utf-8"
+        json.dumps({"claims": [{"id": "CLM-001", "text": QUOTED, "source": "site /about"}]}),
+        encoding="utf-8",
     )
     evidence_dir = case_dir / "evidence"
     evidence_dir.mkdir()
@@ -312,12 +316,160 @@ def test_check_language_site_text_records_also_verify(tmp_path: Path) -> None:
             {
                 "name": "site_001",
                 "url": "https://widgets.example/about",
-                "body": {"kind": "site_text", "text": f"About us. {QUOTED}."},
+                "body": {
+                    "kind": "site_text",
+                    "url": "https://widgets.example/about",
+                    "text": f"About us. {QUOTED}.",
+                },
             }
         ),
         encoding="utf-8",
     )
     assert module.main([str(memo)]) == 0
+
+
+def test_claim_sourced_deck_p2_does_not_use_page_one(tmp_path: Path) -> None:
+    """A deck p.2 claim whose text lives only on page 1 is not exempt."""
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text(f'| 1 | "{QUOTED}" (deck p.2) |  | not checkable |\n', encoding="utf-8")
+    (case_dir / "casefile.json").write_text(
+        json.dumps({"claims": [{"id": "CLM-001", "text": QUOTED, "source": "deck p.2"}]}),
+        encoding="utf-8",
+    )
+    _write_evidence(case_dir, {"1": f"Slide one. {QUOTED}."})
+    assert module.claim_exemptions(memo) == ()
+    assert module.main([str(memo)]) == 1
+
+
+def test_claim_sourced_deck_p2_does_not_use_site_text(tmp_path: Path) -> None:
+    """A deck p.2 claim whose text lives only in site_text is not exempt."""
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text(f'| 1 | "{QUOTED}" (deck p.2) |  | not checkable |\n', encoding="utf-8")
+    (case_dir / "casefile.json").write_text(
+        json.dumps({"claims": [{"id": "CLM-001", "text": QUOTED, "source": "deck p.2"}]}),
+        encoding="utf-8",
+    )
+    evidence_dir = case_dir / "evidence"
+    evidence_dir.mkdir()
+    (evidence_dir / "site_001.json").write_text(
+        json.dumps(
+            {
+                "name": "site_001",
+                "url": "https://widgets.example/about",
+                "body": {
+                    "kind": "site_text",
+                    "url": "https://widgets.example/about",
+                    "text": f"About us. {QUOTED}.",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert module.claim_exemptions(memo) == ()
+    assert module.main([str(memo)]) == 1
+
+
+def test_claim_sourced_site_about_does_not_use_homepage(tmp_path: Path) -> None:
+    """A site /about claim whose text lives only on site / is not exempt."""
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text(f'| 1 | "{QUOTED}" (site /about) |  | not checkable |\n', encoding="utf-8")
+    (case_dir / "casefile.json").write_text(
+        json.dumps({"claims": [{"id": "CLM-001", "text": QUOTED, "source": "site /about"}]}),
+        encoding="utf-8",
+    )
+    evidence_dir = case_dir / "evidence"
+    evidence_dir.mkdir()
+    (evidence_dir / "site_001.json").write_text(
+        json.dumps(
+            {
+                "name": "site_001",
+                "url": "https://widgets.example",
+                "body": {
+                    "kind": "site_text",
+                    "url": "https://widgets.example",
+                    "text": f"Home. {QUOTED}.",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert module.claim_exemptions(memo) == ()
+    assert module.main([str(memo)]) == 1
+
+
+def test_claim_without_source_gets_no_exemption(tmp_path: Path) -> None:
+    """A claim with no source key is not exempt, even when the text is
+    in the evidence."""
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text(f'| 1 | "{QUOTED}" (deck p.2) |  | not checkable |\n', encoding="utf-8")
+    (case_dir / "casefile.json").write_text(
+        json.dumps({"claims": [{"id": "CLM-001", "text": QUOTED}]}),
+        encoding="utf-8",
+    )
+    _write_evidence(case_dir, {"2": f"Slide two. {QUOTED}."})
+    assert module.claim_exemptions(memo) == ()
+    assert module.main([str(memo)]) == 1
+
+
+def test_reconstructed_site_label_matches_sitepage_display_path() -> None:
+    """The CI helper copies the site path rule; it must match SitePage."""
+    module = load_script()
+    about = "https://placid-meridian.example/about"
+    home = "https://placid-meridian.example"
+    assert module._display_path(about) == _display_path(about)
+    assert (
+        module._site_source_label(about)
+        == SitePage(url=about, path=_display_path(about), status=200, text="").source_label
+    )
+    assert module._site_source_label(home) == "site /"
+    homepage = SitePage(url=home, path=_display_path(home), status=200, text="")
+    assert homepage.source_label == "site /"
+
+
+def test_claim_exemptions_use_requested_url_not_final_url(tmp_path: Path) -> None:
+    """A redirect landing on /about must not honor a site /about claim
+    when the requested URL was the homepage. The claims stage labeled
+    the request, not the landing."""
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text(f'| 1 | "{QUOTED}" (site /about) |  | not checkable |\n', encoding="utf-8")
+    (case_dir / "casefile.json").write_text(
+        json.dumps({"claims": [{"id": "CLM-001", "text": QUOTED, "source": "site /about"}]}),
+        encoding="utf-8",
+    )
+    evidence_dir = case_dir / "evidence"
+    evidence_dir.mkdir()
+    (evidence_dir / "site_001.json").write_text(
+        json.dumps(
+            {
+                "name": "site_001",
+                "url": "https://widgets.example",
+                "body": {
+                    "kind": "site_text",
+                    "url": "https://widgets.example",
+                    "final_url": "https://widgets.example/about",
+                    "text": f"About us. {QUOTED}.",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert module.claim_exemptions(memo) == ()
+    assert module.main([str(memo)]) == 1
 
 
 def test_check_language_ignores_a_corrupt_sibling_casefile(tmp_path: Path) -> None:
@@ -608,7 +760,7 @@ def test_check_language_ignores_verified_claim_text_on_tmp_casefile(
     path = _write_tmp_casefile(
         case_dir,
         {
-            "claims": [{"id": "CLM-001", "text": QUOTED}],
+            "claims": [{"id": "CLM-001", "text": QUOTED, "source": "deck p.2"}],
             "narrative": "See CLM-001.",
         },
     )
@@ -626,7 +778,7 @@ def test_check_language_record_note_copying_claim_is_a_hit(tmp_path: Path) -> No
     path = _write_tmp_casefile(
         case_dir,
         {
-            "claims": [{"id": "CLM-001", "text": QUOTED}],
+            "claims": [{"id": "CLM-001", "text": QUOTED, "source": "deck p.2"}],
             "assessments": [
                 {
                     "claim_id": "CLM-001",
