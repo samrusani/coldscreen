@@ -254,6 +254,19 @@ AUD-003 (re-verify stored claims on rerun), AUD-004 (`uv.lock`), AUD-005 (CI mem
 
 No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Committed fixture casefiles and snapshot memos were not edited.
 
+### 2026-08-20: rerun re-verifies stored claims; check-language ships in the wheel
+`run_rerun` / `--render-only` used to honor every stored claim that passed `claim_text_has_substance`. A hand-edited two-token claim such as `a fraud` that was not in sibling evidence was an in-process exemption span, even though CI `claim_exemptions` already rejected it.
+
+One shared predicate `claim_quote_is_verified(text, source, sections)` now sits in `coldscreen.language`. One shared loader `evidence_sections` builds the same deck / site map CI already used (`deck p.{key}` from `body.pages`; `site {path}` from `body.url` if a string else the record url, never `final_url`). There is not a second mapping.
+
+`language_backstop_failure(memo, casefile, evidence_dir=None)`: `None` keeps the substance-only filter (screen, and in-memory unit tests). A path re-verifies. `run_rerun` passes `case_dir / "evidence"`. Missing or empty evidence means no claim-quote exemptions. Code-fetched exemptions stay on the casefile. `--render-only` does not rewrite `casefile.json`. Claims are not re-extracted. `_extract_claims` was not changed.
+
+The scanner implementation moved to `src/coldscreen/check_language.py` so it ships in the wheel. `scripts/check_language.py` is a thin wrapper. The shipped command is `coldscreen check-language [PATH ...]`, not a second top-level console script. Default targets stay checkout-oriented. The package job runs `coldscreen check-language` on the copied demo-case memo after wheel install and expects exit 0.
+
+AUD-004 (`uv.lock`) and AUD-005 (CI memo region-scope / line-split) were not started.
+
+No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Committed fixture casefiles and snapshot memos were not edited.
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.

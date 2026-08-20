@@ -30,7 +30,7 @@ OGL_ATTRIBUTION = (
 )
 
 # Keys the memo office line is built from. language.py and
-# scripts/check_language.py copy this list; pin tests keep the copies honest.
+# coldscreen.check_language copy this list; pin tests keep the copies honest.
 REGISTERED_OFFICE_ADDRESS_KEYS: tuple[str, ...] = (
     "care_of",
     "premises",

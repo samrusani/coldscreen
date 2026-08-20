@@ -1492,3 +1492,23 @@ def test_cache_stats_corrupt_file_is_unreadable(cache_cli_env: Path) -> None:
     assert "unreadable" in combined
     assert "entries: unreadable" in result.output
     assert path.read_bytes() == b"this is not a sqlite database at all"
+
+
+def test_check_language_help_works() -> None:
+    result = runner.invoke(app, ["check-language", "--help"], color=True)
+    assert result.exit_code == 0
+    combined = flat_output(result)
+    assert "check-language" in combined
+    assert "memo" in combined.lower() or "casefile" in combined.lower()
+
+
+def test_check_language_cli_fails_on_banned_word(tmp_path: Path) -> None:
+    bad = tmp_path / "memo.md"
+    bad.write_text("The filing pattern is a fraud inquiry.\n", encoding="utf-8")
+    result = runner.invoke(app, ["check-language", str(bad)])
+    assert result.exit_code == 1
+
+
+def test_check_language_cli_passes_on_fixture_memo() -> None:
+    result = runner.invoke(app, ["check-language", str(FIXTURE_CASE_DIR / "memo.md")])
+    assert result.exit_code == 0

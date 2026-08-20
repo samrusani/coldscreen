@@ -1,4 +1,5 @@
-"""Typer CLI: `coldscreen screen`, `coldscreen rerun`, `coldscreen cache`, `coldscreen mcp`.
+"""Typer CLI: `coldscreen screen`, `coldscreen rerun`, `coldscreen cache`,
+`coldscreen check-language`, `coldscreen mcp`.
 
 The flows themselves live in `coldscreen.pipeline`, which is interface-free
 and returns structured results. This module is the adapter: it parses
@@ -6,6 +7,7 @@ options, loads settings, resolves the provider, calls the pipeline, and maps
 the result to exit codes and to stdout or stderr. `coldscreen mcp` hands the
 same pipeline to an MCP stdio server (optional extra). `coldscreen cache`
 prints, stats, or clears the local HTTP cache and needs no API key.
+`coldscreen check-language` scans memos and casefile statements.
 
 screen resolves the input to one company, runs the deterministic stages
 (registry, network expansion, sanctions, adverse media), extracts claims
@@ -414,6 +416,30 @@ def rerun(
         typer.echo(result.message, err=True)
         raise typer.Exit(code=1)
     typer.echo(f"Memo re-rendered: {result.memo_path}")
+
+
+@app.command("check-language")
+def check_language(
+    paths: Annotated[
+        list[Path] | None,
+        typer.Argument(
+            help=(
+                "Memo, casefile, or template files to scan. With no paths,"
+                " scans checkout defaults under cases/, tests/fixtures/,"
+                " and src/coldscreen/templates/."
+            ),
+        ),
+    ] = None,
+) -> None:
+    """Scan memos and casefile statements for accusatory language.
+
+    With no paths, scans checkout defaults. Explicit paths work from an
+    installed wheel. Exit 1 on a hit or an unreadable casefile target.
+    """
+    from .check_language import main as run_check_language
+
+    argv = [str(path) for path in paths] if paths else []
+    raise typer.Exit(code=run_check_language(argv))
 
 
 def _load_mcp_server_builder() -> Callable[[], Any] | None:

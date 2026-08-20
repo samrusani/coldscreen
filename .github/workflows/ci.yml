@@ -94,6 +94,10 @@ jobs:
           "$RUNNER_TEMP/pkg-env/bin/coldscreen" rerun "$RUNNER_TEMP/demo-case" --render-only
           diff "$RUNNER_TEMP/demo-case/memo.md" tests/fixtures/case-fabricated-widgets-ltd-99999999/memo.md
 
+      - name: Language check from the installed package
+        run: |
+          "$RUNNER_TEMP/pkg-env/bin/coldscreen" check-language "$RUNNER_TEMP/demo-case/memo.md"
+
   audit:
     # pip-audit over the environment created by installing the built wheel:
     # exactly the dependency set a user resolves. Blocking by default.

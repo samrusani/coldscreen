@@ -22,10 +22,8 @@ Deferred from the pre-launch hardening review:
 
 Deferred language-control leftovers after the 2026-08-20 heading and rendered-string sprint (AUD-001 / AUD-002). Do not start these from this note; they need their own work orders:
 
-- AUD-003: re-verify stored claims on rerun against sibling evidence, so a hand-edited casefile cannot keep a quote the evidence does not carry.
 - AUD-004: track `uv.lock`.
 - AUD-005: scope the CI memo scan's claim-quote exemptions to the rendered claims-table region. The in-process backstop already does this; `scan_file` is still line-by-line.
-- AUD-006: ship `scripts/check_language.py` with the wheel so `check-language` is available after install, not only from a checkout.
 
 Ideas deferred from the weekend 3 build and review:
 

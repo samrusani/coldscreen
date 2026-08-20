@@ -64,8 +64,10 @@ from .deck import DeckError, DeckExtraction, extract_deck
 from .findings import build_findings
 from .http_cache import HttpCache
 from .language import (
+    claim_quote_is_verified,
     claim_text_has_substance,
     code_fetched_exemption_texts,
+    evidence_sections,
     find_banned_terms_in_memo,
 )
 from .media import MediaStageResult, TavilyProvider, run_media
@@ -204,7 +206,9 @@ def close_provider(prepared: PreparedProvider | None) -> None:
         close()
 
 
-def language_backstop_failure(memo: str, casefile: CaseFile) -> str | None:
+def language_backstop_failure(
+    memo: str, casefile: CaseFile, evidence_dir: Path | None = None
+) -> str | None:
     """Whole-memo language gate: the last line of defense before disk.
 
     Every rendered memo passes through here on every path (screen, rerun,
@@ -220,13 +224,32 @@ def language_backstop_failure(memo: str, casefile: CaseFile) -> str | None:
     casefile still contains them: they are not exemption spans. On a hit
     the caller writes nothing and the returned message reports a count
     only: the terms themselves never reach the output either.
+
+    When evidence_dir is None (screen, and in-memory unit tests),
+    claim-quote exemptions are stored claims that pass
+    claim_text_has_substance. Claims were just verified against
+    in-memory sections on screen; evidence files may not exist yet
+    (--no-write). When evidence_dir is a path (run_rerun), a claim is
+    an exemption only if claim_quote_is_verified against the sibling
+    evidence-section map. Missing or empty evidence means no
+    claim-quote exemptions. Code-fetched exemptions stay on the
+    casefile; CI re-verifies those separately.
     """
+    if evidence_dir is None:
+        claim_texts = tuple(
+            claim.text for claim in casefile.claims if claim_text_has_substance(claim.text)
+        )
+    else:
+        sections = evidence_sections(evidence_dir)
+        claim_texts = tuple(
+            claim.text
+            for claim in casefile.claims
+            if claim_quote_is_verified(claim.text, claim.source, sections)
+        )
     count = len(
         find_banned_terms_in_memo(
             memo,
-            claim_texts=tuple(
-                claim.text for claim in casefile.claims if claim_text_has_substance(claim.text)
-            ),
+            claim_texts=claim_texts,
             identity_names=code_fetched_exemption_texts(casefile),
         )
     )
@@ -728,6 +751,10 @@ def run_rerun(
     Nothing is fetched and no claim is re-extracted: synthesis re-assesses
     the STORED claims. With no prepared provider only the memo is
     re-rendered. Fully offline except for the model call itself.
+    Stored claim texts are re-verified against sibling evidence before
+    they are exemption spans. --render-only does not rewrite
+    casefile.json. Missing or empty evidence means no claim-quote
+    exemptions.
     """
     casefile_path = case_dir / "casefile.json"
     synthesized = False
@@ -750,7 +777,7 @@ def run_rerun(
     # Render and gate the memo BEFORE touching any file, so a backstop hit
     # leaves the existing casefile and memo exactly as they were.
     memo = render_memo(casefile)
-    backstop = language_backstop_failure(memo, casefile)
+    backstop = language_backstop_failure(memo, casefile, case_dir / "evidence")
     if backstop is not None:
         return RerunResult(status="failure", message=backstop, case_dir=case_dir)
     # Both names are tool-owned and both are refused if they have become
