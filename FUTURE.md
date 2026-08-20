@@ -24,7 +24,6 @@ Ideas deferred from the weekend 3 build and review:
 
 - OCR fallback for image-only decks; the gap is currently recorded explicitly as a finding.
 - Fuzzy quotation matching for claim verification, with a strict-verbatim default; per-claim provenance offsets into the extracted text for a stronger audit trail.
-- Scope the whole-memo language backstop's exemptions to the rendered claims-table region, closing the hand-tampered-casefile residual on render-only reruns.
 - A minimum-substance rule for stored claims so single-word quotes cannot become exemption spans.
 - Sitemap-based about-page discovery and a configurable path token list for site extraction.
 - Label-aware claim re-verification in the language check script (mapping site evidence back to source labels).

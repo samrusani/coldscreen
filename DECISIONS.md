@@ -204,6 +204,17 @@ The log is written from `write_case` through `write_case_text` (`O_NOFOLLOW`). B
 
 No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Committed fixtures were not given a historical log. `scripts/check_language.py` default targets were not expanded: the log is not tool prose.
 
+### 2026-08-20: whole-memo claim-quote exemptions stay inside the claims table
+`language_backstop_failure` used to apply stored claim texts as exemption spans across the entire rendered memo. The per-field synthesis gate already gives model prose zero claim-quote exemption, but `--render-only` (and `rerun` with no model) skips synthesis. A hand-edited `casefile.json` could plant a short claim, or copy a stored claim phrase into narrative, and the backstop would treat every matching span as quoted data.
+
+The in-process backstop now splits the memo at the template heading. The claims-table region starts at the first line that is exactly `## Claims vs evidence` and ends at the next line that starts with `## ` (that closer is not part of the region). Claim texts plus registry identity names are exempt inside that region. Identity names stay exempt before and after it. If the start heading is missing, or that heading has no following `## ` closer, the region is empty and claim-quote exemptions apply nowhere. If the heading appears more than once, only the first start/closer pair is used.
+
+The close is region-level, not cell-level. A hand-edited `record_note` that copies a claim's banned wording and still sits inside the table region can still be span-exempt there. That residual is accepted for this sprint.
+
+`scripts/check_language.py` memo line scanning is unchanged: it may still apply claim exemptions line-by-line across the whole memo. Label-aware CI re-verification stays in FUTURE.md. The synthesis per-field gate is unchanged (identity only). Quotation verification and match-length span advancement are unchanged. Pipe-escape in `_claim_rows` stays fail-closed: a claim that contains both `|` and a banned word is stored as the raw text and rendered escaped, so it no longer span-matches and the backstop fails closed. This sprint does not exempt the escaped form. A minimum-substance rule for stored claims is a different FUTURE bullet and was not added.
+
+No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Committed fixture casefiles and snapshot memos were not edited.
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.

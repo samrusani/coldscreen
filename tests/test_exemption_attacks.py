@@ -18,26 +18,47 @@ the case directory.
 from __future__ import annotations
 
 import importlib.util
+import shutil
 from pathlib import Path
 from types import ModuleType
 
 import httpx
 import pytest
 import respx
-from typer.testing import CliRunner
+from typer.testing import CliRunner, Result
 
 from coldscreen.cli import app
 from coldscreen.language import find_banned_terms
 from coldscreen.models import CaseFile
+from coldscreen.pipeline import language_backstop_failure
 
 from .conftest import FIXTURES_DIR, mock_company_routes
 from .fakes import assessment_json, claim_json, claims_json, synthesis_json
 
 DECK_PATH = FIXTURES_DIR / "deck_fabricated_widgets.pdf"
+GOLDEN_DIR = FIXTURES_DIR / "golden"
 OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
 SCRIPT_PATH = Path(__file__).parent.parent / "scripts" / "check_language.py"
+PUFFERY_QUOTE = "Our platform eliminates fraud in widget procurement"
 
 runner = CliRunner()
+
+
+def all_output(result: Result) -> str:
+    """stdout plus stderr, tolerant of click versions that separate them."""
+    text = result.output
+    try:
+        text += result.stderr
+    except (ValueError, AttributeError):
+        pass
+    return text
+
+
+def _write_casefile(case_dir: Path, casefile: CaseFile) -> None:
+    (case_dir / "casefile.json").write_text(
+        casefile.model_dump_json(indent=2) + "\n", encoding="utf-8"
+    )
+
 
 # Genuine deck quotations (verbatim from the fixture deck) for the happy
 # parts of each attack scenario.
@@ -269,3 +290,77 @@ def test_attack_4_planted_phrase_reused_in_narrative_fails_closed(
     memo = (case_dir(attack_env) / "memo.md").read_text(encoding="utf-8")
     assert find_banned_terms(memo) == []
     assert load_check_language().main([str(case_dir(attack_env) / "memo.md")]) == 0
+
+
+# -- render-only hand-tamper: claim-quote exemptions stay in the table ------------
+
+
+def test_hand_tamper_short_claim_fails_render_only_backstop(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    """A hand-edited short claim cannot whitelist the same word in narrative."""
+    case_dir = tmp_path / "hand-tampered-short"
+    shutil.copytree(GOLDEN_DIR, case_dir)
+    casefile = CaseFile.model_validate_json(
+        (case_dir / "casefile.json").read_text(encoding="utf-8")
+    )
+    claims = list(casefile.claims)
+    claims[0] = claims[0].model_copy(update={"text": "fraud"})
+    _write_casefile(
+        case_dir,
+        casefile.model_copy(
+            update={
+                "claims": claims,
+                "narrative": "The public record shows fraud in the filing pattern.",
+            }
+        ),
+    )
+    (case_dir / "memo.md").unlink()
+    result = runner.invoke(app, ["rerun", str(case_dir), "--render-only"])
+    combined = all_output(result)
+    assert result.exit_code == 1
+    assert "language backstop" in combined
+    assert not (case_dir / "memo.md").exists()
+    assert "fraud" not in combined.lower()
+
+
+def test_hand_tamper_full_phrase_in_prose_fails_render_only_backstop(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    """Copying a stored claim phrase into narrative is no longer a whole-memo exempt span."""
+    case_dir = tmp_path / "hand-tampered-phrase"
+    shutil.copytree(GOLDEN_DIR, case_dir)
+    casefile = CaseFile.model_validate_json(
+        (case_dir / "casefile.json").read_text(encoding="utf-8")
+    )
+    assert PUFFERY_QUOTE in [c.text for c in casefile.claims]
+    _write_casefile(case_dir, casefile.model_copy(update={"narrative": PUFFERY_QUOTE}))
+    before_memo = (case_dir / "memo.md").read_bytes()
+    result = runner.invoke(app, ["rerun", str(case_dir), "--render-only"])
+    combined = all_output(result)
+    assert result.exit_code == 1
+    assert "language backstop" in combined
+    assert (case_dir / "memo.md").read_bytes() == before_memo
+    assert "fraud" not in combined.lower()
+
+
+def test_hand_tamper_short_claim_passes_when_prose_is_clean(
+    tmp_path: Path, respx_mock: respx.MockRouter
+) -> None:
+    """The short claim may render in the table when narrative stays clean."""
+    case_dir = tmp_path / "hand-tampered-positive"
+    shutil.copytree(GOLDEN_DIR, case_dir)
+    casefile = CaseFile.model_validate_json(
+        (case_dir / "casefile.json").read_text(encoding="utf-8")
+    )
+    claims = list(casefile.claims)
+    claims[0] = claims[0].model_copy(update={"text": "fraud"})
+    tampered = casefile.model_copy(update={"claims": claims})
+    _write_casefile(case_dir, tampered)
+    (case_dir / "memo.md").unlink()
+    result = runner.invoke(app, ["rerun", str(case_dir), "--render-only"])
+    assert result.exit_code == 0, result.output
+    memo = (case_dir / "memo.md").read_text(encoding="utf-8")
+    assert '"fraud"' in memo
+    written = CaseFile.model_validate_json((case_dir / "casefile.json").read_text(encoding="utf-8"))
+    assert language_backstop_failure(memo, written) is None
