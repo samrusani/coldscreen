@@ -43,10 +43,11 @@ claims stage verifies each one is a real substring of its declared
 source section (after normalize_for_match on both sides) and has
 substance (two or more whitespace tokens after that same normalize)
 before storing it, and scripts/check_language.py re-verifies stored
-claims against the sibling evidence files before honoring them on a
-memo. Single-token claim texts are never exemption spans: the in-process
-backstop and the CI claim_exemptions helper ignore them even if a
-hand-edited casefile still contains them. The script re-verifies
+claims against the sibling evidence files, each against its declared
+source label, before honoring them on a memo. Single-token claim
+texts are never exemption spans: the in-process backstop and the CI
+claim_exemptions helper ignore them even if a hand-edited casefile
+still contains them. The script re-verifies
 identity names against the registry evidence files the same way, and
 that identity set is the one exemption the casefile-field scan applies.
 Occurrence discovery advances by the full match length, so overlapping

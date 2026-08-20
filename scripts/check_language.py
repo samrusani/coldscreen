@@ -44,13 +44,17 @@ stored claim texts are candidates for span-level exemption on this
 line-by-line memo scan. The in-process backstop scopes those same
 claim texts to the claims-table region; this script does not. But
 casefile.json is an editable file, so a claim text is honored ONLY
-after re-verification against the sibling evidence: normalized
-(whitespace, case, unicode quotes and dashes), it must be a substring
-of the extracted source text persisted in evidence/deck_text.json or
-the evidence/site_*.json records. A text that has fewer than two
-tokens after normalize_for_match is never an exemption, even when
-evidence would re-verify it. No evidence, no exemption: a
-hand-tampered casefile cannot widen this scan.
+after re-verification against its declared source label in the sibling
+evidence, not a joined corpus: normalized (whitespace, case, unicode
+quotes and dashes), it must be a substring of that label's extracted
+text. Deck pages map as deck p.{key} from body.pages. Site records map
+as site {path} where path is urlsplit(url).path or "/", using body.url
+if it is a string else the record url, never final_url. A text that
+has fewer than two tokens after normalize_for_match is never an
+exemption, even when evidence would re-verify it. Missing source,
+unknown label, or a hit only in a different section: no exemption.
+No evidence, no exemption: a hand-tampered casefile cannot widen this
+scan. The CI memo scan is still line-by-line across the whole file.
 Prose outside the exact verified quoted strings stays fully gated.
 
 That claim-quote exemption does not apply to the casefile fields above.
@@ -85,6 +89,7 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 try:
     from coldscreen.language import (
@@ -129,42 +134,72 @@ def _load_json(path: Path) -> Any:
         return None
 
 
-def _evidence_corpus(evidence_dir: Path) -> str:
-    """Extracted source text from the sibling evidence files.
+def _display_path(url: str) -> str:
+    return urlsplit(url).path or "/"
 
-    deck_text.json contributes its per-page texts; every site_*.json record
-    of kind site_text contributes its extracted text. Anything unreadable
-    contributes nothing.
+
+def _site_source_label(url: str) -> str:
+    return f"site {_display_path(url)}"
+
+
+def _site_record_url(payload: dict[str, Any], body: dict[str, Any]) -> str | None:
+    """Requested URL for a site_text record. Never final_url."""
+    url = body.get("url")
+    if isinstance(url, str):
+        return url
+    top = payload.get("url")
+    if isinstance(top, str):
+        return top
+    return None
+
+
+def _evidence_sections(evidence_dir: Path) -> dict[str, str]:
+    """Label-to-text map from sibling evidence files.
+
+    Deck pages become deck p.{key}. Site records become site {path} from
+    the requested URL (body.url if a string, else the record url; never
+    final_url) via urlsplit(url).path or "/". Duplicate labels concatenate.
+    Unreadable files contribute nothing.
     """
     if not evidence_dir.is_dir():
-        return ""
-    chunks: list[str] = []
+        return {}
+    chunks: dict[str, list[str]] = {}
     for candidate in sorted(evidence_dir.glob("*.json")):
         payload = _load_json(candidate)
-        body = payload.get("body") if isinstance(payload, dict) else None
+        if not isinstance(payload, dict):
+            continue
+        body = payload.get("body")
         if not isinstance(body, dict):
             continue
         kind = body.get("kind")
         if kind == "deck_text":
             pages = body.get("pages")
             if isinstance(pages, dict):
-                chunks.extend(str(text) for text in pages.values())
+                for key, text in pages.items():
+                    if isinstance(key, str) and isinstance(text, str):
+                        chunks.setdefault(f"deck p.{key}", []).append(text)
         elif kind == "site_text" and isinstance(body.get("text"), str):
-            chunks.append(body["text"])
-    return "\n".join(chunks)
+            url = _site_record_url(payload, body)
+            if url is None:
+                continue
+            chunks.setdefault(_site_source_label(url), []).append(body["text"])
+    return {label: "\n".join(texts) for label, texts in chunks.items()}
 
 
 def claim_exemptions(path: Path) -> tuple[str, ...]:
     """Verified claim texts from the sibling casefile.json, when one exists.
 
     Each stored claim text is honored only when it has substance (two or
-    more tokens after normalize_for_match) and its normalized form appears
-    in the normalized extracted source material persisted under the sibling
-    evidence directory: the same quotation check the claims stage applied
-    before storing it. A single-token text is dropped even when evidence
-    would re-verify it. Missing or unreadable casefile, missing evidence, or
-    a text that fails re-verification all yield no exemption for it: the
-    scan runs at full strictness, which is the fail-closed direction.
+    more tokens after normalize_for_match), its source is a non-empty
+    string naming a reconstructed evidence label, and its normalized form
+    is a substring of that declared section only: not a joined corpus.
+    Deck labels are deck p.{page key}. Site labels are site {path} from
+    the requested URL path. A missing source, unknown label, empty
+    section, or a hit only in a different section yields no exemption
+    for that claim. A single-token text is dropped even when evidence
+    would re-verify it. Missing or unreadable casefile, missing evidence,
+    or a text that fails re-verification all yield no exemption for it:
+    the scan runs at full strictness, which is the fail-closed direction.
     """
     casefile_path = path.parent / "casefile.json"
     if not casefile_path.is_file():
@@ -173,24 +208,26 @@ def claim_exemptions(path: Path) -> tuple[str, ...]:
     claims = data.get("claims") if isinstance(data, dict) else None
     if not isinstance(claims, list):
         return ()
-    texts = [
-        claim["text"]
-        for claim in claims
-        if isinstance(claim, dict) and isinstance(claim.get("text"), str)
-    ]
-    if not texts:
+    sections = _evidence_sections(path.parent / "evidence")
+    if not sections:
         return ()
-    corpus = normalize_for_match(_evidence_corpus(path.parent / "evidence"))
-    if not corpus:
-        return ()
-    verified = tuple(
-        text
-        for text in texts
-        if claim_text_has_substance(text)
-        and normalize_for_match(text)
-        and normalize_for_match(text) in corpus
-    )
-    return verified
+    verified: list[str] = []
+    for claim in claims:
+        if not isinstance(claim, dict):
+            continue
+        text = claim.get("text")
+        source = claim.get("source")
+        if not isinstance(text, str) or not isinstance(source, str) or not source.strip():
+            continue
+        section = sections.get(source)
+        if not section:
+            continue
+        if not claim_text_has_substance(text):
+            continue
+        normalized = normalize_for_match(text)
+        if normalized and normalized in normalize_for_match(section):
+            verified.append(text)
+    return tuple(verified)
 
 
 def _casefile_identity_names(data: Any) -> list[str]:
