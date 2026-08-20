@@ -65,7 +65,10 @@ class Claim(BaseModel):
     (CLM-001 style), text is the company's own words as extracted from the
     deck or site, source names where they appeared ("deck p.4", "site
     /about"). Unfalsifiable puffery is kept with checkable False, never
-    dropped. Because text is quoted data, the whole-memo backstop exempts
+    dropped. Text is stored only when it verifies as a quotation and has
+    two or more whitespace tokens after normalize_for_match; a one-word
+    quote is not a claims-vs-evidence row and is not an exemption span.
+    Because stored text is quoted data, the whole-memo backstop exempts
     it (span-level, exact match) only inside the rendered claims-table
     region; see coldscreen.language.
     """
@@ -388,6 +391,8 @@ class ClaimsExtraction(BaseModel):
     deck_sha256 ties the casefile to the exact deck bytes without ever
     persisting the binary, and truncated records that the combined text hit
     the max_claims_chars cap (the finding states the numbers).
+    dropped_claims counts verification failures; dropped_thin_claims counts
+    verified quotations that still failed the two-token substance rule.
     """
 
     performed: bool
@@ -405,6 +410,12 @@ class ClaimsExtraction(BaseModel):
     # their declared source section and were therefore never stored. The
     # count also appears as an explicit finding.
     dropped_claims: int = 0
+    # Verified quotations that still failed the two-token substance rule
+    # and were never stored. Counted separately from dropped_claims so
+    # EXT-007 stays about text not found in the source. Omitted from JSON
+    # when zero so casefiles written before the field existed stay
+    # byte-identical on a no-drop replay.
+    dropped_thin_claims: int = Field(default=0, exclude_if=lambda v: v == 0)
     skipped_reason: str | None = None
 
 

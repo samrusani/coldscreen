@@ -20,7 +20,8 @@ from coldscreen.claims import (
 )
 from coldscreen.config import Settings
 from coldscreen.deck import DeckExtraction, extract_deck
-from coldscreen.models import CompanyProfile
+from coldscreen.language import find_banned_terms
+from coldscreen.models import ClaimsExtraction, CompanyProfile
 from coldscreen.site import SiteFetchResult, SitePage
 
 from .conftest import FIXTURES_DIR
@@ -360,6 +361,8 @@ def test_fabricated_claim_text_is_dropped_with_a_counted_finding() -> None:
     )
     joined = " ".join(f.statement for f in stage.findings)
     assert "disqualified" not in joined  # the dropped text never surfaces
+    assert stage.extraction.dropped_thin_claims == 0
+    assert all(f.id != "EXT-009" for f in stage.findings)
 
 
 def test_verification_is_against_the_declared_source_section_only() -> None:
@@ -371,6 +374,7 @@ def test_verification_is_against_the_declared_source_section_only() -> None:
     stage, _provider = run_stage(deck=deck_extraction(), responses=responses)
     assert stage.claims == []
     assert stage.extraction.dropped_claims == 1
+    assert stage.extraction.dropped_thin_claims == 0
 
 
 def test_verification_folds_case_whitespace_quotes_and_dashes() -> None:
@@ -389,13 +393,76 @@ def test_verification_folds_case_whitespace_quotes_and_dashes() -> None:
     stage, _provider = run_stage(deck=deck_extraction(), responses=responses)
     assert [c.text for c in stage.claims] == ["operating SINCE 2015"]
     assert stage.extraction.dropped_claims == 1
+    assert stage.extraction.dropped_thin_claims == 0
 
 
 def test_no_drops_means_no_ext007_finding() -> None:
     responses = [claims_json([claim_json("Operating since 2015", "deck p.2", "history", True)])]
     stage, _provider = run_stage(deck=deck_extraction(), responses=responses)
     assert stage.extraction.dropped_claims == 0
+    assert stage.extraction.dropped_thin_claims == 0
     assert all(f.id != "EXT-007" for f in stage.findings)
+    assert all(f.id != "EXT-009" for f in stage.findings)
+
+
+def test_verified_single_word_claim_is_dropped_as_thin() -> None:
+    """A model-returned "fraud" whose text is in the deck is not stored.
+    Substance drop is EXT-009 only; verification is not involved."""
+    responses = [
+        claims_json(
+            [
+                claim_json("Operating since 2015", "deck p.2", "history", True),
+                claim_json("fraud", "deck p.2", "other", True),
+            ]
+        )
+    ]
+    stage, _provider = run_stage(deck=deck_extraction(), responses=responses)
+    assert [c.text for c in stage.claims] == ["Operating since 2015"]
+    assert [c.id for c in stage.claims] == ["CLM-001"]
+    assert stage.extraction.dropped_thin_claims == 1
+    assert stage.extraction.dropped_claims == 0
+    ids = {f.id: f for f in stage.findings}
+    assert "EXT-009" in ids
+    assert "EXT-007" not in ids
+    assert (
+        ids["EXT-009"].statement == "1 claim(s) were dropped because their text had only one word"
+        " after normalization. Stored claims must contain two or more words."
+    )
+    assert find_banned_terms(ids["EXT-009"].statement) == []
+    assert ids["EXT-009"].evidence
+    joined = " ".join(f.statement for f in stage.findings)
+    assert "fraud" not in joined.lower()
+    assert all("fraud" not in claim.text.lower() for claim in stage.claims)
+
+
+def test_verified_multiword_claim_with_banned_word_is_stored() -> None:
+    puffery = "Our platform eliminates fraud in widget procurement"
+    responses = [claims_json([claim_json(puffery, "deck p.2", "other", False)])]
+    stage, _provider = run_stage(deck=deck_extraction(), responses=responses)
+    assert [c.text for c in stage.claims] == [puffery]
+    assert stage.extraction.dropped_thin_claims == 0
+    assert stage.extraction.dropped_claims == 0
+    assert all(f.id != "EXT-009" for f in stage.findings)
+
+
+def test_single_word_fabrication_is_verification_drop_not_thin() -> None:
+    """A single-word claim that is not in the deck fails quotation first."""
+    responses = [claims_json([claim_json("xyzzy", "deck p.2", "other", True)])]
+    stage, _provider = run_stage(deck=deck_extraction(), responses=responses)
+    assert stage.claims == []
+    assert stage.extraction.dropped_claims == 1
+    assert stage.extraction.dropped_thin_claims == 0
+    ids = {f.id: f for f in stage.findings}
+    assert "EXT-007" in ids
+    assert "EXT-009" not in ids
+
+
+def test_dropped_thin_claims_defaults_to_zero_and_omits_from_json() -> None:
+    loaded = ClaimsExtraction.model_validate({"performed": True})
+    assert loaded.dropped_thin_claims == 0
+    assert "dropped_thin_claims" not in loaded.model_dump()
+    counted = ClaimsExtraction(performed=True, dropped_thin_claims=2)
+    assert counted.model_dump()["dropped_thin_claims"] == 2
 
 
 def test_section_dataclass_is_frozen() -> None:

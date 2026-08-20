@@ -3,7 +3,7 @@ executed through the real CLI, plus the properties that now stop them.
 
 Shapes (from the weekend 3 adversarial review):
 1. A fabricated accusatory "claim" never present in the deck.
-2. A single-word claim ("fraud") used as a memo-wide exemption.
+2. A single-word claim ("fraud") used as an exemption primitive.
 3. A record_note that reuses a claim substring to launder vocabulary.
 4. A hostile phrase planted as a claim and repeated verbatim in the
    narrative.
@@ -31,6 +31,7 @@ from coldscreen.cli import app
 from coldscreen.language import find_banned_terms
 from coldscreen.models import CaseFile
 from coldscreen.pipeline import language_backstop_failure
+from coldscreen.render import render_memo
 
 from .conftest import FIXTURES_DIR, mock_company_routes
 from .fakes import assessment_json, claim_json, claims_json, synthesis_json
@@ -169,9 +170,9 @@ def test_attack_1_fabricated_claim_never_renders(
 def test_attack_2_single_word_claim_cannot_whitelist_prose(
     attack_env: Path, respx_mock: respx.MockRouter
 ) -> None:
-    """ "fraud" IS a word the deck contains, so a single-word claim survives
-    quotation verification. It still buys the model nothing: prose fields
-    are gated with zero exemptions, so the run fails closed."""
+    """ "fraud" is a word the deck contains, but a single-word claim is
+    not stored. Dirty narrative still fails the per-field gate. The
+    failure memo must not contain the word."""
     mock_company_routes(respx_mock)
     dirty = synthesis_json(
         "red",
@@ -192,21 +193,24 @@ def test_attack_2_single_word_claim_cannot_whitelist_prose(
     combined = result.output
     assert "banned term(s)" in combined
 
-    # The audit pack survives; the failure memo carries no verdict and no
-    # narrative, and the single stored claim renders only in the table.
+    # The audit pack survives; the failure memo carries no verdict, no
+    # narrative, and no stored single-word claim.
     casefile = CaseFile.model_validate_json(
         (case_dir(attack_env) / "casefile.json").read_text(encoding="utf-8")
     )
     assert casefile.verdict is None
     assert casefile.narrative is None
-    assert [c.text for c in casefile.claims] == ["fraud"]
+    assert casefile.claims == []
+    assert casefile.claims_extraction is not None
+    assert casefile.claims_extraction.dropped_thin_claims == 1
+    assert casefile.claims_extraction.dropped_claims == 0
+    assert any(f.id == "EXT-009" for f in casefile.findings)
+    assert all(f.id != "EXT-007" for f in casefile.findings)
     memo = (case_dir(attack_env) / "memo.md").read_text(encoding="utf-8")
     assert "committing fraud" not in memo
+    assert "fraud" not in memo.lower()
     assert "Synthesis was attempted and failed" in memo
-    # Whole-memo scan with the stored claim as exemption: the only hit-free
-    # reading is the table cell; nothing else in the memo says the word.
-    assert find_banned_terms(memo, ("fraud",)) == []
-    assert memo.count("fraud") == 1  # exactly the quoted table cell
+    assert find_banned_terms(memo) == []
 
 
 # -- attack 3: record_note reuses a claim substring ---------------------------------
@@ -344,10 +348,11 @@ def test_hand_tamper_full_phrase_in_prose_fails_render_only_backstop(
     assert "fraud" not in combined.lower()
 
 
-def test_hand_tamper_short_claim_passes_when_prose_is_clean(
+def test_hand_tamper_short_claim_fails_render_only_backstop_when_prose_is_clean(
     tmp_path: Path, respx_mock: respx.MockRouter
 ) -> None:
-    """The short claim may render in the table when narrative stays clean."""
+    """A planted single-word claim is not an exemption: the table cell is
+    a hit even when narrative stays clean."""
     case_dir = tmp_path / "hand-tampered-positive"
     shutil.copytree(GOLDEN_DIR, case_dir)
     casefile = CaseFile.model_validate_json(
@@ -359,8 +364,10 @@ def test_hand_tamper_short_claim_passes_when_prose_is_clean(
     _write_casefile(case_dir, tampered)
     (case_dir / "memo.md").unlink()
     result = runner.invoke(app, ["rerun", str(case_dir), "--render-only"])
-    assert result.exit_code == 0, result.output
-    memo = (case_dir / "memo.md").read_text(encoding="utf-8")
-    assert '"fraud"' in memo
+    combined = all_output(result)
+    assert result.exit_code == 1
+    assert "language backstop" in combined
+    assert not (case_dir / "memo.md").exists()
+    assert "fraud" not in combined.lower()
     written = CaseFile.model_validate_json((case_dir / "casefile.json").read_text(encoding="utf-8"))
-    assert language_backstop_failure(memo, written) is None
+    assert language_backstop_failure(render_memo(written), written) is not None

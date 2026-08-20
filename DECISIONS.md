@@ -215,6 +215,19 @@ The close is region-level, not cell-level. A hand-edited `record_note` that copi
 
 No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Committed fixture casefiles and snapshot memos were not edited.
 
+### 2026-08-20: two-token substance bar for stored claims
+A one-word quote that appears in the deck used to survive quotation verification and become an exemption span. After the claims-table-region scope that span was table-only, but it still whitelisted every matching cell, including a hand-edited `record_note`. That is an exemption primitive, not a useful claims-vs-evidence row.
+
+The bar is two or more whitespace tokens after `normalize_for_match`. Empty, whitespace-only, and single-token strings fail. There is no character minimum and no special case for the banned list. Identity names are not claims and do not use this helper. Residual: `"a fraud"` is two tokens and can still be an exemption span.
+
+Verification runs first. A single-word fabrication that is not in the source is EXT-007 only (`dropped_claims`). A single-word quotation that is in the source is EXT-009 only (`dropped_thin_claims`). Folding substance drops into EXT-007 would make that finding lie. EXT-009 is a count plus a fixed reason; the dropped text never appears; the statement itself has no banned terms; evidence comes from `_outcome_evidence`.
+
+`dropped_thin_claims` defaults to 0 so older casefiles load. When the count is 0 the field is omitted from JSON (`Field(exclude_if=...)`) so committed snapshot casefiles stay byte-identical on a no-drop replay. That helper needs Pydantic 2.12; the project floor is now `pydantic>=2.12` so a 2.7-2.11 install cannot silently ignore the omit and rewrite `0` into every no-drop casefile. CLM ids are assigned after both drop classes.
+
+The same helper filters exemptions on the in-process backstop and on CI `claim_exemptions`, even if a hand-edited casefile still contains a thin claim. A planted `"fraud"` claim with clean prose now fails the render-only backstop because the table cell is no longer an exempt span. `find_banned_terms`, match-length advancement, the claims-table region split, the per-field gate, and quotation verification were not changed.
+
+No live Companies House, OpenSanctions, Tavily, or model calls in this sprint. Committed fixture casefiles and snapshot memos were not edited.
+
 ## Section 16 verification log
 
 Findings are recorded here as verification completes, each with source URL and retrieval date.

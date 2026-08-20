@@ -47,7 +47,9 @@ casefile.json is an editable file, so a claim text is honored ONLY
 after re-verification against the sibling evidence: normalized
 (whitespace, case, unicode quotes and dashes), it must be a substring
 of the extracted source text persisted in evidence/deck_text.json or
-the evidence/site_*.json records. No evidence, no exemption: a
+the evidence/site_*.json records. A text that has fewer than two
+tokens after normalize_for_match is never an exemption, even when
+evidence would re-verify it. No evidence, no exemption: a
 hand-tampered casefile cannot widen this scan.
 Prose outside the exact verified quoted strings stays fully gated.
 
@@ -85,10 +87,18 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from coldscreen.language import find_banned_terms, normalize_for_match
+    from coldscreen.language import (
+        claim_text_has_substance,
+        find_banned_terms,
+        normalize_for_match,
+    )
 except ImportError:  # running from a checkout without the package installed
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-    from coldscreen.language import find_banned_terms, normalize_for_match
+    from coldscreen.language import (
+        claim_text_has_substance,
+        find_banned_terms,
+        normalize_for_match,
+    )
 
 
 CASEFILE_NAME = "casefile.json"
@@ -147,10 +157,12 @@ def _evidence_corpus(evidence_dir: Path) -> str:
 def claim_exemptions(path: Path) -> tuple[str, ...]:
     """Verified claim texts from the sibling casefile.json, when one exists.
 
-    Each stored claim text is honored only when its normalized form appears
+    Each stored claim text is honored only when it has substance (two or
+    more tokens after normalize_for_match) and its normalized form appears
     in the normalized extracted source material persisted under the sibling
     evidence directory: the same quotation check the claims stage applied
-    before storing it. Missing or unreadable casefile, missing evidence, or
+    before storing it. A single-token text is dropped even when evidence
+    would re-verify it. Missing or unreadable casefile, missing evidence, or
     a text that fails re-verification all yield no exemption for it: the
     scan runs at full strictness, which is the fail-closed direction.
     """
@@ -172,7 +184,11 @@ def claim_exemptions(path: Path) -> tuple[str, ...]:
     if not corpus:
         return ()
     verified = tuple(
-        text for text in texts if normalize_for_match(text) and normalize_for_match(text) in corpus
+        text
+        for text in texts
+        if claim_text_has_substance(text)
+        and normalize_for_match(text)
+        and normalize_for_match(text) in corpus
     )
     return verified
 

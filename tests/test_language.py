@@ -22,7 +22,12 @@ from typing import Any
 import pytest
 
 from coldscreen.casedir import load_casefile
-from coldscreen.language import find_banned_terms, find_banned_terms_in_memo, normalize_for_match
+from coldscreen.language import (
+    claim_text_has_substance,
+    find_banned_terms,
+    find_banned_terms_in_memo,
+    normalize_for_match,
+)
 from coldscreen.models import MediaItem, MediaScreening
 from coldscreen.render import render_memo
 
@@ -161,6 +166,16 @@ def test_normalize_for_match_folds_case_whitespace_quotes_and_dashes() -> None:
     assert normalize_for_match("  a\n\tb  ") == "a b"
 
 
+def test_claim_text_has_substance_requires_two_tokens() -> None:
+    assert claim_text_has_substance("fraud") is False
+    assert claim_text_has_substance("Fraud") is False
+    assert claim_text_has_substance("  FRAUD\n") is False
+    assert claim_text_has_substance("debt free") is True
+    assert claim_text_has_substance("we fight fraud") is True
+    assert claim_text_has_substance("") is False
+    assert claim_text_has_substance("   \n\t  ") is False
+
+
 def test_blank_exempt_texts_exempt_nothing() -> None:
     assert find_banned_terms("a scam, plainly", ("", "  ")) == ["scam"]
 
@@ -237,6 +252,23 @@ def test_check_language_honors_only_evidence_verified_claim_exemptions(tmp_path:
         f'| 1 | "{QUOTED}" (deck p.2) |  | not checkable |\nPlain fraud in prose.\n',
         encoding="utf-8",
     )
+    assert module.main([str(memo)]) == 1
+
+
+def test_claim_exemptions_ignore_thin_texts_even_when_verified(tmp_path: Path) -> None:
+    """A planted single-word claim that re-verifies against evidence is
+    still not an exemption: the CI helper returns no such span."""
+    module = load_script()
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+    memo = case_dir / "memo.md"
+    memo.write_text('| 1 | "fraud" (deck p.2) |  | not checkable |\n', encoding="utf-8")
+    (case_dir / "casefile.json").write_text(
+        json.dumps({"claims": [{"id": "CLM-001", "text": "fraud"}]}),
+        encoding="utf-8",
+    )
+    _write_evidence(case_dir, {"2": "Slide two mentions fraud in the deck copy."})
+    assert module.claim_exemptions(memo) == ()
     assert module.main([str(memo)]) == 1
 
 

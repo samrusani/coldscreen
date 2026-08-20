@@ -63,7 +63,11 @@ from .config import (
 from .deck import DeckError, DeckExtraction, extract_deck
 from .findings import build_findings
 from .http_cache import HttpCache
-from .language import find_banned_terms_in_memo, registry_identity_names
+from .language import (
+    claim_text_has_substance,
+    find_banned_terms_in_memo,
+    registry_identity_names,
+)
 from .media import MediaStageResult, TavilyProvider, run_media
 from .models import CaseFile, CompanyCandidate, Officer
 from .providers import ModelProvider, ProviderError, get_provider, parse_model_spec
@@ -211,14 +215,17 @@ def language_backstop_failure(memo: str, casefile: CaseFile) -> str | None:
     only inside the rendered claims-table region) and the registry
     identity names (registered name, previous names, officer and PSC
     names), which are registry data the memo must be able to spell out
-    anywhere. On a hit the caller writes nothing and the returned message
-    reports a count only: the terms themselves never reach the output
-    either.
+    anywhere. Single-token claim texts are ignored even if a hand-edited
+    casefile still contains them: they are not exemption spans. On a hit
+    the caller writes nothing and the returned message reports a count
+    only: the terms themselves never reach the output either.
     """
     count = len(
         find_banned_terms_in_memo(
             memo,
-            claim_texts=tuple(claim.text for claim in casefile.claims),
+            claim_texts=tuple(
+                claim.text for claim in casefile.claims if claim_text_has_substance(claim.text)
+            ),
             identity_names=registry_identity_names(casefile),
         )
     )
