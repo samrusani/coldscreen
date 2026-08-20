@@ -12,7 +12,6 @@ cases/
 .coldscreen_cache/
 
 # python
-uv.lock
 __pycache__/
 *.py[cod]
 .venv/

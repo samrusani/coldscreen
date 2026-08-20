@@ -27,13 +27,12 @@ jobs:
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           python-version: ${{ matrix.python-version }}
+          version: "0.11.6"
 
-      - name: Install project with dev dependencies
-        # setup-uv provisions a .venv of its own, so clear it rather than
-        # failing on "already exists".
+      - name: Install project with the locked dev extra
         run: |
-          uv venv --clear --python ${{ matrix.python-version }}
-          uv pip install -e ".[dev]"
+          uv lock --check
+          uv sync --locked --extra dev --python ${{ matrix.python-version }}
 
       - name: Ruff lint
         run: uv run ruff check .
@@ -71,6 +70,7 @@ jobs:
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           python-version: "3.12"
+          version: "0.11.6"
 
       - name: Build the wheel
         run: uv build --wheel
@@ -109,6 +109,7 @@ jobs:
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           python-version: "3.12"
+          version: "0.11.6"
 
       - name: Build the wheel
         run: uv build --wheel

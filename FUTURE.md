@@ -20,10 +20,6 @@ Deferred from the pre-launch hardening review:
 - Residual: unseen future model phrasing can still miss the stage-honesty phrase set, and an honest gap sentence that uses a clean-claim substring without a not-run marker still fails closed. Observed not-run miss classes are in the tuples; a same-field not-run marker suppresses a clean-claim substring. The set stays deliberately narrow so honest gap sentences still pass.
 - Switch the pinned transport off the private httpx `_pool._network_backend` assignment when `HTTPTransport` grows a public constructor hook for a custom httpcore `NetworkBackend`. Until then the assignment stays, the isinstance guard fails closed, and the hermetic HTTP and TLS tests hold the wiring. See the 2026-08-19 DECISIONS entry.
 
-Deferred language-control leftovers after the 2026-08-20 heading and rendered-string sprint (AUD-001 / AUD-002). Do not start these from this note; they need their own work orders:
-
-- AUD-004: track `uv.lock`.
-
 Ideas deferred from the weekend 3 build and review:
 
 - OCR fallback for image-only decks; the gap is currently recorded explicitly as a finding.

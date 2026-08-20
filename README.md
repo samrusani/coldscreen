@@ -199,7 +199,7 @@ Connecting this server to a hosted MCP host means memo content, including office
 
 ## Contributing
 
-Issues and PRs welcome. A new jurisdiction is valuable when it is a real company register that can force an adapter contract. That interface is not extracted yet; do not send a Protocol wrapper around the UK client. See `ARCHITECTURE.md` section 17 and `DECISIONS.md`.
+Issues and PRs welcome. A new jurisdiction is valuable when it is a real company register that can force an adapter contract. That interface is not extracted yet; do not send a Protocol wrapper around the UK client. See `ARCHITECTURE.md` section 17 and `DECISIONS.md`. Maintainers use `uv sync --locked --extra dev`; `uv.lock` is tracked. Users still `pip install .`.
 
 ## License
 
